@@ -2,6 +2,10 @@
 
 Folder-based persistent command history for [pi](https://github.com/badlogic/pi-mono). Recall previous commands with `shift+up`/`shift+down` across sessions — as long as you're in the same folder, your full command history is always available.
 
+## Fork Source
+
+This package is maintained as a fork of <https://github.com/ross-jill-ws/pi-command-history>.
+
 ## Install
 
 ```bash

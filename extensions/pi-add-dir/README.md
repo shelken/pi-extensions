@@ -12,6 +12,10 @@ Add directories from outside your current working directory to a pi session. The
 
 Skills from external directories are registered natively as `/skill:name` commands via pi's `resources_discover` event.
 
+## Fork Source
+
+This package is maintained as a fork of <https://github.com/itisbryan/pi-add-dir>.
+
 ---
 
 <p align="center">
