@@ -9,7 +9,12 @@
     "type": "git",
     "url": "https://github.com/bruno-garcia/pi-co-authored-by"
   },
-  "keywords": ["pi-package", "git", "co-authored-by", "pi-extension"],
+  "keywords": [
+    "pi-package",
+    "git",
+    "co-authored-by",
+    "pi-extension"
+  ],
   "files": [
     "extensions/co-authored-by.ts",
     "lib/commit.ts",
@@ -17,17 +22,20 @@
     "LICENSE"
   ],
   "peerDependencies": {
-    "@earendil-works/pi-coding-agent": ">=0.74.1"
-  },
-  "devDependencies": {
-    "@earendil-works/pi-coding-agent": "^0.74.1",
-    "vitest": "^4.0.0"
+    "@earendil-works/pi-coding-agent": "*"
   },
   "pi": {
-    "extensions": ["./extensions"]
+    "extensions": [
+      "./extensions"
+    ]
   },
   "scripts": {
     "test": "vitest run",
     "test:watch": "vitest"
+  },
+  "peerDependenciesMeta": {
+    "@earendil-works/pi-coding-agent": {
+      "optional": true
+    }
   }
 }

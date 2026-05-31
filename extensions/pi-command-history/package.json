@@ -26,5 +26,10 @@
     "extensions": [
       "extensions/index.ts"
     ]
+  },
+  "peerDependenciesMeta": {
+    "@earendil-works/pi-coding-agent": {
+      "optional": true
+    }
   }
 }

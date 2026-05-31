@@ -19,5 +19,9 @@
 - 保持修改范围小；不做顺手重构。
 - 文档不写本机绝对路径、账号、token 或隐私信息。
 - pi core 依赖使用 `@earendil-works/*` 和 `typebox`，不要重新引入旧 `@mariozechner/*` 或 `@sinclair/typebox`。
+- pi core/typebox 运行依赖只写在子包 `peerDependencies`，版本统一用 `*`，并在 `peerDependenciesMeta` 标为 optional。
+- pi core/typebox、TypeScript、Vitest、ESLint 等开发依赖统一放根 `devDependencies`，使用精确版本；子包不重复声明 devDeps。
+- 子包如有真实运行依赖，保留在该子包 `dependencies`，不要提升到根目录伪共享。
+- 更新依赖使用根脚本 `bun run deps:update`；想先检查时用 `bun run deps:update:dry`，不要手写一串包名逐个升级。
 - fork 子包尽量保留原结构；只做当前 pi 版本兼容和本人需要的行为改动。
-- 提交前至少运行 `bun run check`；有子包测试时运行对应 `bun --filter <package> test`。
+- 提交前至少运行 `bun run verify`；只改单个子包时可追加对应 `bun --filter <package> test`。
