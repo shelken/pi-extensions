@@ -1,0 +1,20 @@
+{
+  "name": "pi-debug-cache",
+  "version": "0.1.0",
+  "description": "Record pi system prompt hashes, diffs, and prompt cache usage per turn.",
+  "type": "module",
+  "keywords": [
+    "pi-package",
+    "pi-extension",
+    "prompt-cache",
+    "debugging"
+  ],
+  "pi": {
+    "extensions": [
+      "./index.ts"
+    ]
+  },
+  "peerDependencies": {
+    "@earendil-works/pi-coding-agent": "*"
+  }
+}

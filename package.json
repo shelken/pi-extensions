@@ -1,0 +1,39 @@
+{
+  "name": "@shelken/pi-extensions",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "packageManager": "bun@1.3.13",
+  "keywords": [
+    "pi-package",
+    "pi",
+    "extensions"
+  ],
+  "workspaces": [
+    "extensions/*"
+  ],
+  "scripts": {
+    "check": "tsc --noEmit"
+  },
+  "pi": {
+    "extensions": [
+      "./extensions/pi-auto-model-prompts/index.ts",
+      "./extensions/pi-debug-cache/index.ts",
+      "./extensions/pi-co-authored-by/extensions/co-authored-by.ts"
+    ]
+  },
+  "peerDependencies": {
+    "@earendil-works/pi-ai": "*",
+    "@earendil-works/pi-coding-agent": "*",
+    "@earendil-works/pi-tui": "*",
+    "typebox": "*"
+  },
+  "devDependencies": {
+    "@earendil-works/pi-ai": "*",
+    "@earendil-works/pi-coding-agent": "*",
+    "@earendil-works/pi-tui": "*",
+    "@types/node": "^25.0.0",
+    "typescript": "^6.0.0",
+    "typebox": "*"
+  }
+}

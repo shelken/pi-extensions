@@ -1,0 +1,33 @@
+{
+  "name": "pi-co-authored-by",
+  "version": "0.2.2",
+  "description": "A Pi extension that automatically appends Co-Authored-By and Generated-By git trailers to commit messages with the model name and pi version",
+  "author": "Bruno Garcia",
+  "license": "MIT",
+  "homepage": "https://github.com/bruno-garcia/pi-co-authored-by#readme",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/bruno-garcia/pi-co-authored-by"
+  },
+  "keywords": ["pi-package", "git", "co-authored-by", "pi-extension"],
+  "files": [
+    "extensions/co-authored-by.ts",
+    "lib/commit.ts",
+    "README.md",
+    "LICENSE"
+  ],
+  "peerDependencies": {
+    "@earendil-works/pi-coding-agent": ">=0.74.1"
+  },
+  "devDependencies": {
+    "@earendil-works/pi-coding-agent": "^0.74.1",
+    "vitest": "^4.0.0"
+  },
+  "pi": {
+    "extensions": ["./extensions"]
+  },
+  "scripts": {
+    "test": "vitest run",
+    "test:watch": "vitest"
+  }
+}

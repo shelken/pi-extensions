@@ -1,0 +1,20 @@
+{
+  "name": "pi-auto-model-prompts",
+  "version": "0.1.0",
+  "description": "Inject model-specific system prompts into pi turns from local Markdown files.",
+  "type": "module",
+  "keywords": [
+    "pi-package",
+    "pi-extension",
+    "system-prompt",
+    "prompt-cache"
+  ],
+  "pi": {
+    "extensions": [
+      "./index.ts"
+    ]
+  },
+  "peerDependencies": {
+    "@earendil-works/pi-coding-agent": "*"
+  }
+}
