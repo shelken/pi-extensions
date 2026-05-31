@@ -37,6 +37,13 @@
         "@earendil-works/pi-coding-agent": ">=0.74.1",
       },
     },
+    "extensions/pi-command-history": {
+      "name": "pi-command-history",
+      "version": "0.1.3",
+      "peerDependencies": {
+        "@earendil-works/pi-coding-agent": "*",
+      },
+    },
     "extensions/pi-debug-cache": {
       "name": "pi-debug-cache",
       "version": "0.1.0",
@@ -403,6 +410,8 @@
     "pi-auto-model-prompts": ["pi-auto-model-prompts@workspace:extensions/pi-auto-model-prompts"],
 
     "pi-co-authored-by": ["pi-co-authored-by@workspace:extensions/pi-co-authored-by"],
+
+    "pi-command-history": ["pi-command-history@workspace:extensions/pi-command-history"],
 
     "pi-debug-cache": ["pi-debug-cache@workspace:extensions/pi-debug-cache"],
 
