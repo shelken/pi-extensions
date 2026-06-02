@@ -11,6 +11,7 @@
 | `pi-co-authored-by` | `extensions/pi-co-authored-by/extensions/co-authored-by.ts` | agent 执行 `git commit` 时追加 commit trailer。 | 自管 |
 | `pi-command-history` | `extensions/pi-command-history/extensions/index.ts` | 按工作目录持久化输入历史，支持快捷键回填。 | Fork：<https://github.com/ross-jill-ws/pi-command-history> |
 | `pi-debug-cache` | `extensions/pi-debug-cache/index.ts` | 记录 system prompt hash、diff 和 prompt cache 调试信息。 | 自管 |
+| `pi-dynamic-models` | `extensions/pi-dynamic-models/index.ts` | 自动发现 provider 远端模型，并用 registry 补全模型参数。 | 自管 |
 
 新增、移除或改名任何子 package 时，必须同步更新本表和根 `package.json` 的 `pi.extensions`。
 

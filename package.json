@@ -1,6 +1,6 @@
 {
   "name": "@shelken/pi-extensions",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "type": "module",
   "packageManager": "bun@1.3.13",
@@ -15,7 +15,7 @@
   "scripts": {
     "check": "tsc --noEmit",
     "lint": "bun --filter pi-add-dir lint",
-    "test": "bun --filter pi-co-authored-by test && bun --filter pi-add-dir test",
+    "test": "bun --filter pi-co-authored-by test && bun --filter pi-add-dir test && bun --filter pi-dynamic-models test",
     "verify": "bun run check && bun run lint && bun run test",
     "deps:update": "bun update --latest --recursive && bun run verify",
     "deps:update:interactive": "bun update --latest --interactive --recursive && bun run verify",
@@ -25,6 +25,7 @@
     "extensions": [
       "./extensions/pi-auto-model-prompts/index.ts",
       "./extensions/pi-debug-cache/index.ts",
+      "./extensions/pi-dynamic-models/index.ts",
       "./extensions/pi-co-authored-by/extensions/co-authored-by.ts",
       "./extensions/pi-command-history/extensions/index.ts",
       "./extensions/pi-add-dir/extensions/pi-add-dir/index.ts"
