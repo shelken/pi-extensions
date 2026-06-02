@@ -54,6 +54,11 @@ describe("containsGitCommit", () => {
 		expect(containsGitCommit("git status --short")).toBe(false);
 		expect(containsGitCommit("")).toBe(false);
 	});
+
+	it("rejects non-commit git commands followed by unrelated commit text", () => {
+		expect(containsGitCommit("git diff -- README.md; echo commit")).toBe(false);
+		expect(containsGitCommit("git status --short && printf '%s\\n' commit")).toBe(false);
+	});
 });
 
 describe("wrapGitWithTrailers", () => {

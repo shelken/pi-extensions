@@ -6,7 +6,10 @@
 /** Check if a command may contain a direct `git commit` invocation. */
 export function containsGitCommit(cmd: string): boolean {
 	const normalized = cmd.replace(/\\\n/g, " ");
-	return /\bgit\b[\s\S]*\bcommit\b/.test(normalized);
+	// 变更原因：旧检测会被 `git diff ...; echo commit` 误触发，导致非提交命令也被注入 wrapper。
+	return /(?:^|[;&|]\s*)git(?:\s+(?:(?:-[cC]|--config-env|--exec-path|--git-dir|--work-tree|--namespace)(?:=|\s+)\S+|--bare|--no-pager|--paginate|--no-replace-objects|--literal-pathspecs|--glob-pathspecs|--noglob-pathspecs|--icase-pathspecs|--no-optional-locks))*\s+commit(?:\s|$)/.test(
+		normalized,
+	);
 }
 
 /** Build a bash command that appends trailers to direct `git commit` calls. */
