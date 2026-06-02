@@ -6,29 +6,26 @@
 
 ## 安装
 
-```bash
-# 方式一：通过 pi 安装公开 Git 仓库
-pi install git:github.com/shelken/pi-auto-model-prompts
+本插件作为 `pi-extensions` mono repo 的子包维护。通常只需要把仓库根目录作为 Pi package 加到 `settings.json` 的 `packages`，由根 `package.json` 的 `pi.extensions` 加载本插件入口。
 
-# 方式二：作为本地扩展路径加载（settings.json）
-# ~/.pi/agent/settings.json
+```json
 {
-  "extensions": [
-    "/path/to/pi-auto-model-prompts"
-  ]
+  "packages": ["/path/to/pi-extensions"]
 }
-
-# 方式三：手动复制到扩展目录
-cp -r pi-auto-model-prompts ~/.pi/agent/extensions/
 ```
 
-安装或修改 `settings.json` 后，在 pi 中 `/reload` 即可加载。
+修改 `settings.json` 后，在 Pi 中 `/reload` 即可加载。
 
 ## 配置
 
 插件默认启用。只要扩展被加载，并且项目或全局 prompt 目录存在匹配文件，就会自动注入。
 
-如需禁用，创建配置文件 `.pi/extensions/pi-auto-model-prompts/config.json`（项目级）或 `~/.pi/agent/extensions/pi-auto-model-prompts/config.json`（全局）：
+如需禁用，创建配置文件：
+
+- 项目级：`.pi/extensions/pi-auto-model-prompts/config.json`
+- 全局：`~/.pi/agent/extensions/pi-auto-model-prompts/config.json`
+
+内容示例：
 
 ```json
 {

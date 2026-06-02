@@ -24,29 +24,26 @@
 
 ## 安装
 
-```bash
-# 方式一：通过 pi 安装公开 Git 仓库
-pi install git:github.com/shelken/pi-debug-cache
+本插件作为 `pi-extensions` mono repo 的子包维护。通常只需要把仓库根目录作为 Pi package 加到 `settings.json` 的 `packages`，由根 `package.json` 的 `pi.extensions` 加载本插件入口。
 
-# 方式二：作为本地扩展路径加载（settings.json）
-# ~/.pi/agent/settings.json
+```json
 {
-  "extensions": [
-    "/path/to/pi-debug-cache"
-  ]
+  "packages": ["/path/to/pi-extensions"]
 }
-
-# 方式三：手动复制到扩展目录
-cp -r pi-debug-cache ~/.pi/agent/extensions/
 ```
 
-安装或修改 `settings.json` 后，在 pi 中 `/reload` 即可加载。
+修改 `settings.json` 后，在 Pi 中 `/reload` 即可加载。
 
 ## 配置
 
 插件默认关闭。启用后，也只会在第一次 `agent_end` 时创建记录；仅进入 pi 或打开 session 不会创建产物。
 
-如需启用，创建配置文件 `.pi/extensions/pi-debug-cache/config.json`（项目级）或 `~/.pi/agent/extensions/pi-debug-cache/config.json`（全局）：
+如需启用，创建配置文件：
+
+- 项目级：`.pi/extensions/pi-debug-cache/config.json`
+- 全局：`~/.pi/agent/extensions/pi-debug-cache/config.json`
+
+内容示例：
 
 ```json
 {
