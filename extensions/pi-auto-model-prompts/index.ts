@@ -9,6 +9,8 @@ interface Config {
   enabled: boolean;
 }
 
+const EXTENSION_NAME = "pi-auto-model-prompts";
+
 type Prompt =
   | { path: string; priority: number; kind: "exact"; modelId: string }
   | { path: string; priority: number; kind: "prefix"; prefix: string }
@@ -16,15 +18,17 @@ type Prompt =
 
 // --- 配置加载 ---
 
-function loadConfig(cwd: string): Config {
-  const paths = [
-    join(homedir(), ".pi", "agent", "auto-model-prompts.json"),
-    join(cwd, ".pi", "auto-model-prompts.json"),
+export function getConfigPaths(cwd: string, homeDir = homedir()): string[] {
+  return [
+    join(homeDir, ".pi", "agent", "extensions", EXTENSION_NAME, "config.json"),
+    join(cwd, ".pi", "extensions", EXTENSION_NAME, "config.json"),
   ];
+}
 
+function loadConfig(cwd: string): Config {
   const cfg: Config = { enabled: true };
 
-  for (const p of paths) {
+  for (const p of getConfigPaths(cwd)) {
     if (!existsSync(p)) continue;
     const parsed = JSON.parse(readFileSync(p, "utf-8"));
     if (typeof parsed.enabled === "boolean") cfg.enabled = parsed.enabled;

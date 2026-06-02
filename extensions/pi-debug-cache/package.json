@@ -1,8 +1,11 @@
 {
   "name": "pi-debug-cache",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Record pi system prompt hashes, diffs, and prompt cache usage per turn.",
   "type": "module",
+  "scripts": {
+    "test": "vitest run *.test.ts"
+  },
   "keywords": [
     "pi-package",
     "pi-extension",

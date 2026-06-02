@@ -8,6 +8,8 @@ interface Config {
   enabled: boolean;
 }
 
+const EXTENSION_NAME = "pi-debug-cache";
+
 interface PromptRecord {
   sequence: number;
   event: "agent_end";
@@ -43,14 +45,17 @@ const DEBUG_DIR = join(homedir(), ".pi", "agent", "debug-cache");
 const SESSIONS_DIR = join(DEBUG_DIR, "sessions");
 const LATEST_PATH = join(DEBUG_DIR, "latest.json");
 
-function loadConfig(cwd: string): Config {
-  const paths = [
-    join(homedir(), ".pi", "agent", "debug-cache.json"),
-    join(cwd, ".pi", "debug-cache.json"),
+export function getConfigPaths(cwd: string, homeDir = homedir()): string[] {
+  return [
+    join(homeDir, ".pi", "agent", "extensions", EXTENSION_NAME, "config.json"),
+    join(cwd, ".pi", "extensions", EXTENSION_NAME, "config.json"),
   ];
+}
+
+function loadConfig(cwd: string): Config {
   const config: Config = { enabled: false };
 
-  for (const path of paths) {
+  for (const path of getConfigPaths(cwd)) {
     if (!existsSync(path)) continue;
     const parsed = JSON.parse(readFileSync(path, "utf-8"));
     if (typeof parsed.enabled === "boolean") config.enabled = parsed.enabled;

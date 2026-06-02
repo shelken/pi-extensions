@@ -1,8 +1,11 @@
 {
   "name": "pi-auto-model-prompts",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Inject model-specific system prompts into pi turns from local Markdown files.",
   "type": "module",
+  "scripts": {
+    "test": "vitest run *.test.ts"
+  },
   "keywords": [
     "pi-package",
     "pi-extension",

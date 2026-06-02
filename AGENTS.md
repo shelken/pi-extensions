@@ -2,7 +2,8 @@
 
 ## 必做维护
 
-- 新增、移除或改名子 package 时，同步更新根 `README.md` 表格和根 `package.json` 的 `pi.extensions`。
+- 新增、移除或改名子 package 时，同步更新根 `README.md` 表格、根 `package.json` 的 `pi.extensions` 和根包版本。
+- 每次重要变更都要同步更新版本：子包行为、配置路径、公开入口或兼容性发生变化时更新对应子包版本；只改测试/文档且不影响发布内容时可不更新。
 - 子 package 如果来自 fork，必须在该子包 `README.md` 标明原始仓库链接。
 - 从独立仓库迁入后，验证通过再归档旧 GitHub 仓库；不要先归档。
 - 只迁移当前 `settings.json` 中启用且明确决定继续使用的扩展；待议项目保持独立。
@@ -16,6 +17,7 @@
 
 ## 统一规范
 
+- 所有插件配置文件没有特殊原因时，统一读取全局 `~/.pi/agent/extensions/<package>/config.json` 和项目级 `.pi/extensions/<package>/config.json`；项目级同名字段覆盖全局字段。
 - 保持修改范围小；不做顺手重构。
 - 文档不写本机绝对路径、账号、token 或隐私信息。
 - pi core 依赖使用 `@earendil-works/*` 和 `typebox`，不要重新引入旧 `@mariozechner/*` 或 `@sinclair/typebox`。

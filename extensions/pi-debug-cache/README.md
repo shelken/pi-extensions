@@ -46,7 +46,7 @@ cp -r pi-debug-cache ~/.pi/agent/extensions/
 
 插件默认关闭。启用后，也只会在第一次 `agent_end` 时创建记录；仅进入 pi 或打开 session 不会创建产物。
 
-如需启用，创建配置文件 `.pi/debug-cache.json`（项目级）或 `~/.pi/agent/debug-cache.json`（全局）：
+如需启用，创建配置文件 `.pi/extensions/pi-debug-cache/config.json`（项目级）或 `~/.pi/agent/extensions/pi-debug-cache/config.json`（全局）：
 
 ```json
 {

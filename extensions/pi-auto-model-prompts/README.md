@@ -28,7 +28,7 @@ cp -r pi-auto-model-prompts ~/.pi/agent/extensions/
 
 插件默认启用。只要扩展被加载，并且项目或全局 prompt 目录存在匹配文件，就会自动注入。
 
-如需禁用，创建配置文件 `.pi/auto-model-prompts.json`（项目级）或 `~/.pi/agent/auto-model-prompts.json`（全局）：
+如需禁用，创建配置文件 `.pi/extensions/pi-auto-model-prompts/config.json`（项目级）或 `~/.pi/agent/extensions/pi-auto-model-prompts/config.json`（全局）：
 
 ```json
 {
