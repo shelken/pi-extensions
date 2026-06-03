@@ -1,3 +1,17 @@
+export interface RegistryCost {
+  input?: number;
+  output?: number;
+  cache_read?: number;
+  cache_write?: number;
+}
+
+export interface PiCost {
+  input: number;
+  output: number;
+  cacheRead: number;
+  cacheWrite: number;
+}
+
 export interface RegistryModel {
   id: string;
   name?: string;
@@ -5,6 +19,7 @@ export interface RegistryModel {
   attachment?: boolean;
   modalities?: { input?: string[]; output?: string[] };
   limit?: { context?: number; output?: number };
+  cost?: RegistryCost;
 }
 
 export interface RegistryProvider {
@@ -211,4 +226,13 @@ export function toPiInput(
   return attachment && modalities?.includes("image")
     ? ["text", "image"]
     : ["text"];
+}
+
+export function toPiCost(cost?: RegistryCost): PiCost {
+  return {
+    input: cost?.input ?? 0,
+    output: cost?.output ?? 0,
+    cacheRead: cost?.cache_read ?? 0,
+    cacheWrite: cost?.cache_write ?? 0,
+  };
 }

@@ -20,6 +20,7 @@ import { homedir } from "node:os";
 import {
   flattenRegistry,
   lookupModel,
+  toPiCost,
   toPiInput,
   type RegistryData,
 } from "./src/matcher.ts";
@@ -332,6 +333,7 @@ export default async function (pi: ExtensionAPI) {
             name: `${id} (AUTO)`,
             reasoning: false,
             input: ["text"] as ("text" | "image")[],
+            cost: toPiCost(),
             contextWindow: 128_000,
             maxTokens: 16_384,
           };
@@ -344,6 +346,7 @@ export default async function (pi: ExtensionAPI) {
           name: `${model.name ?? id} (AUTO)`,
           reasoning: model.reasoning ?? false,
           input: toPiInput(model.modalities?.input, model.attachment),
+          cost: toPiCost(model.cost),
           contextWindow: model.limit?.context ?? 128_000,
           maxTokens: model.limit?.output ?? 16_384,
         };

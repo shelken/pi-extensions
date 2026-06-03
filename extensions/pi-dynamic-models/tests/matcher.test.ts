@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { flattenRegistry, lookupModel } from "../src/matcher.ts";
+import { flattenRegistry, lookupModel, toPiCost } from "../src/matcher.ts";
 
 function registry() {
   return flattenRegistry({
@@ -154,5 +154,23 @@ describe("dynamic model matcher", () => {
     const entry = lookupModel("openai/gpt-oss-120b:free", registry());
     expect(entry?.provider).toBe("openrouter");
     expect(entry?.sourceKey).toBe("openai/gpt-oss-120b:free");
+  });
+
+  it("maps registry cost fields to pi cost fields", () => {
+    expect(toPiCost({ input: 5, output: 30, cache_read: 0.5 })).toEqual({
+      input: 5,
+      output: 30,
+      cacheRead: 0.5,
+      cacheWrite: 0,
+    });
+  });
+
+  it("uses zero cost when registry cost is absent", () => {
+    expect(toPiCost()).toEqual({
+      input: 0,
+      output: 0,
+      cacheRead: 0,
+      cacheWrite: 0,
+    });
   });
 });
