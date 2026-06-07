@@ -19,8 +19,10 @@ jobs:
 
       - name: Publish workspace packages
         env:
-          BUN_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
+          echo "//registry.npmjs.org/:_authToken=$NPM_TOKEN" > ~/.npmrc
+
           for pkg in extensions/*/; do
             name=$(jq -r '.name // empty' "$pkg/package.json")
             private=$(jq -r '.private // false' "$pkg/package.json")
@@ -40,5 +42,5 @@ jobs:
             fi
 
             echo "Publishing $name@$current..."
-            (cd "$pkg" && bun publish --access public)
+            (cd "$pkg" && npm publish --access public)
           done
