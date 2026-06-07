@@ -18,6 +18,8 @@
 
 ## 统一规范
 
+- 所有子包默认 `private: true`；准备发布到 npm 时去掉该字段，加上 `@shelken/` scope 和 `publishConfig.access: public`。
+- 发布通过 push `v*` tag 触发 GitHub Actions workflow（`.github/workflows/publish.yml`），自动遍历非 private 子包比对版本后 publish。
 - 所有插件配置文件没有特殊原因时，统一读取全局 `~/.pi/agent/extensions/<package>/config.json` 和项目级 `.pi/extensions/<package>/config.json`；项目级同名字段覆盖全局字段。
 - 保持修改范围小；不做顺手重构。
 - 文档不写本机绝对路径、账号、token 或隐私信息。

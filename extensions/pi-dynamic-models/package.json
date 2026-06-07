@@ -1,8 +1,7 @@
 {
-  "name": "pi-dynamic-models",
+  "name": "@shelken/pi-dynamic-models",
   "version": "0.1.1",
   "type": "module",
-  "private": true,
   "main": "index.ts",
   "scripts": {
     "test": "vitest run tests/*.test.ts"
@@ -12,6 +11,9 @@
     "dynamic-models",
     "model-discovery"
   ],
+  "publishConfig": {
+    "access": "public"
+  },
   "peerDependencies": {
     "@earendil-works/pi-coding-agent": "*"
   },

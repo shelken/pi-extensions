@@ -31,5 +31,6 @@
     "@earendil-works/pi-coding-agent": {
       "optional": true
     }
-  }
+  },
+  "private": true
 }

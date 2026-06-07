@@ -1,0 +1,46 @@
+name: Publish
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+
+      - run: bun install --frozen-lockfile
+
+      - name: Publish workspace packages
+        env:
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          echo "//registry.npmjs.org/:_authToken=$NPM_TOKEN" > ~/.npmrc
+
+          for pkg in extensions/*/; do
+            name=$(jq -r '.name // empty' "$pkg/package.json")
+            private=$(jq -r '.private // false' "$pkg/package.json")
+
+            if [ -z "$name" ] || [ "$private" = "true" ]; then
+              echo "Skipping $pkg (no name or private)"
+              continue
+            fi
+
+            # 只发布版本高于 npm registry 的包
+            current=$(jq -r '.version' "$pkg/package.json")
+            published=$(npm view "$name" version 2>/dev/null || echo "none")
+
+            if [ "$current" = "$published" ]; then
+              echo "Skipping $name@$current (already published)"
+              continue
+            fi
+
+            echo "Publishing $name@$current..."
+            (cd "$pkg" && bun publish --access public)
+          done

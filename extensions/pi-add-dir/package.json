@@ -50,5 +50,6 @@
     "typebox": {
       "optional": true
     }
-  }
+  },
+  "private": true
 }
