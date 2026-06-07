@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.3.2] - 2026-06-08
+
+### Changed
+
+- `pi-dynamic-models`: 工厂函数不再阻塞扩展加载链，网络请求和同步 IO 移入 `session_start` hook。
+
 ## [0.3.0] - 2026-06-07
 
 ### Added
