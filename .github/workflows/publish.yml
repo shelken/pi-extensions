@@ -23,6 +23,8 @@ jobs:
       - run: bun install
 
       - name: Publish workspace packages
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
           for pkg in extensions/*/; do
             name=$(jq -r '.name // empty' "$pkg/package.json")
@@ -33,7 +35,6 @@ jobs:
               continue
             fi
 
-            # 只发布版本高于 npm registry 的包
             current=$(jq -r '.version' "$pkg/package.json")
             published=$(npm view "$name" version 2>/dev/null || echo "none")
 
@@ -43,5 +44,5 @@ jobs:
             fi
 
             echo "Publishing $name@$current..."
-            (cd "$pkg" && npm publish --access public --provenance)
+            (cd "$pkg" && npm publish --access public)
           done
