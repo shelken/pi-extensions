@@ -249,7 +249,7 @@ async function fetchRemoteModels(cfg: ProviderConfig): Promise<string[]> {
   return ids;
 }
 
-export default async function (pi: ExtensionAPI) {
+async function initModels(pi: ExtensionAPI) {
   const t0 = Date.now();
 
   try {
@@ -379,4 +379,8 @@ export default async function (pi: ExtensionAPI) {
   }
 
   log(`=== End (${Date.now() - t0}ms) ===`);
+}
+
+export default function (pi: ExtensionAPI) {
+  pi.on("session_start", () => { void initModels(pi).catch((err) => log(`Unhandled: ${err}`)); });
 }
