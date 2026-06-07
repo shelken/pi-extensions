@@ -36,6 +36,8 @@ function countOccurrences(text: string, needle: string): number {
 }
 
 describe("containsGitCommit", () => {
+	// === 基本检测 ===
+
 	it("detects direct git commit commands", () => {
 		expect(containsGitCommit('git commit -m "fix bug"')).toBe(true);
 	});
@@ -50,6 +52,54 @@ describe("containsGitCommit", () => {
 		).toBe(true);
 	});
 
+	// === RTK 重写: rtk 把 `git commit` 改成 `rtk git commit` ===
+
+	it("detects rtk-rewritten git commit", () => {
+		expect(containsGitCommit('rtk git commit -m "test"')).toBe(true);
+	});
+
+	it("detects rtk-rewritten git commit with global options", () => {
+		expect(containsGitCommit('rtk git -c commit.gpgsign=false commit -m "test"')).toBe(true);
+	});
+
+	// === 前导空格/缩进（LLM 可能生成带缩进的命令） ===
+
+	it("detects git commit with leading whitespace", () => {
+		expect(containsGitCommit('  git commit -m "test"')).toBe(true);
+	});
+
+	// === 多行命令（git 在第二行，\n 分隔） ===
+
+	it("detects git commit on a new line after another command", () => {
+		expect(containsGitCommit("cd /tmp\ngit commit -m test")).toBe(true);
+	});
+
+	// === -m heredoc 格式（LLM 用 $(cat <<'EOF'...) 传多行消息） ===
+
+	it("detects -m with heredoc command substitution", () => {
+		expect(containsGitCommit('git commit -m "$(cat <<\'EOF\'\ntest message\nEOF\n)"')).toBe(true);
+	});
+
+	// === -m heredoc 带 rtk 前缀 ===
+
+	it("detects rtk-rewritten -m with heredoc", () => {
+		expect(containsGitCommit('rtk git commit -m "$(cat <<\'EOF\'\ntest message\nEOF\n)"')).toBe(true);
+	});
+
+	// === shellCommandPrefix 场景 ===
+
+	it("detects git commit after shellCommandPrefix", () => {
+		const prefix = 'eval "$(\\${HOME}/.nix-profile/bin/direnv export bash 2>/dev/null)"; ';
+		expect(containsGitCommit(prefix + 'git commit -m "test"')).toBe(true);
+	});
+
+	it("detects rtk git commit after shellCommandPrefix", () => {
+		const prefix = 'eval "$(\\${HOME}/.nix-profile/bin/direnv export bash 2>/dev/null)"; ';
+		expect(containsGitCommit(prefix + 'rtk git commit -m "test"')).toBe(true);
+	});
+
+	// === 不能误匹配 ===
+
 	it("rejects commands without a commit", () => {
 		expect(containsGitCommit("git status --short")).toBe(false);
 		expect(containsGitCommit("")).toBe(false);
@@ -58,6 +108,14 @@ describe("containsGitCommit", () => {
 	it("rejects non-commit git commands followed by unrelated commit text", () => {
 		expect(containsGitCommit("git diff -- README.md; echo commit")).toBe(false);
 		expect(containsGitCommit("git status --short && printf '%s\\n' commit")).toBe(false);
+	});
+
+	it("rejects echo containing git commit", () => {
+		expect(containsGitCommit("echo git commit")).toBe(false);
+	});
+
+	it("rejects git log", () => {
+		expect(containsGitCommit("git log --oneline")).toBe(false);
 	});
 });
 
@@ -180,5 +238,36 @@ git log -1 --format=%B
 		expect(output).toContain("global option subject");
 		expect(output).toContain(CO_AUTHOR);
 		expect(output).toContain(GENERATED_BY);
+	});
+
+	// 变更原因：RTK 把 `git commit` 重写为 `rtk git commit`，wrapper 需要去掉 rtk 前缀才能拦截。
+	it("strips rtk prefix so git() wrapper can intercept", () => {
+		const wrapped = wrapGitWithTrailers('rtk git commit -m "test"', MODEL_NAME, PI_VERSION);
+		// 包装后的命令不应该以 rtk 开头（wrapper 定义后面的部分）
+		const cmdLine = wrapped.split("\n").pop()!;
+		expect(cmdLine).toMatch(/^git commit/);
+		expect(cmdLine).not.toMatch(/^rtk/);
+	});
+
+	// 变更原因：RTK 改写后的命令可能以 `export RTK_DB_PATH=...;` 开头，
+	// `rtk` 在命令中间。wrapper 必须去掉 rtk 前缀才能拦截。
+	it("strips rtk prefix when RTK_DB_PATH export precedes the command", () => {
+		const rtkCmd = "export RTK_DB_PATH='/tmp/test.db'; cd /tmp && rtk git commit -m \"test\"";
+		const wrapped = wrapGitWithTrailers(rtkCmd, MODEL_NAME, PI_VERSION);
+		const cmdLine = wrapped.split("\n").pop()!;
+		expect(cmdLine).toContain("git commit");
+		expect(cmdLine).not.toMatch(/\brtk\s+git\b/);
+		expect(cmdLine).toMatch(/^export RTK_DB_PATH=/);
+	});
+
+	// 变更原因：RTK 会把复合命令里的所有 git 调用都加上 rtk 前缀，
+	// replaceAll 必须去掉所有 rtk git 前缀。
+	it("strips all rtk prefixes in compound commands", () => {
+		const rtkCmd = "cd /tmp && rtk git add . && rtk git commit -m \"test\"";
+		const wrapped = wrapGitWithTrailers(rtkCmd, MODEL_NAME, PI_VERSION);
+		const cmdLine = wrapped.split("\n").pop()!;
+		expect(cmdLine).toContain("git add .");
+		expect(cmdLine).toContain("git commit");
+		expect(cmdLine).not.toMatch(/\brtk\s+git\b/);
 	});
 });

@@ -31,3 +31,9 @@
 - 更新依赖使用根脚本 `bun run deps:update`；想先检查时用 `bun run deps:update:dry`，不要手写一串包名逐个升级。
 - fork 子包尽量保留原结构；只做当前 pi 版本兼容和本人需要的行为改动。
 - 提交前至少运行 `bun run verify`；只改单个子包时可追加对应 `bun --filter <package> test`。
+
+## RTK 交互规则
+
+- RTK 改写复合命令时会给**所有** `git` 调用加 `rtk` 前缀（例如 `rtk git add . && rtk git commit -m "..."`），不只是 `git commit`。
+- 去掉 rtk 前缀时必须用 `replaceAll`，不能用 `replace`（只替换第一个匹配）。
+- pi-rtk-optimizer（加载顺序靠前）先改写命令，co-authored-by（加载顺序靠后）再包装；两者通过 `event.input.command` 串联，顺序不可颠倒。

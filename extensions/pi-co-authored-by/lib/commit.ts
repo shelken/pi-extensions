@@ -7,7 +7,8 @@
 export function containsGitCommit(cmd: string): boolean {
 	const normalized = cmd.replace(/\\\n/g, " ");
 	// 变更原因：旧检测会被 `git diff ...; echo commit` 误触发，导致非提交命令也被注入 wrapper。
-	return /(?:^|[;&|]\s*)git(?:\s+(?:(?:-[cC]|--config-env|--exec-path|--git-dir|--work-tree|--namespace)(?:=|\s+)\S+|--bare|--no-pager|--paginate|--no-replace-objects|--literal-pathspecs|--glob-pathspecs|--noglob-pathspecs|--icase-pathspecs|--no-optional-locks))*\s+commit(?:\s|$)/.test(
+	// 变更原因：RTK 会把 `git commit` 重写为 `rtk git commit`，需要匹配 rtk 前缀。
+	return /(?:^|[;&|\n])\s*(?:rtk\s+)?git(?:\s+(?:(?:-[cC]|--config-env|--exec-path|--git-dir|--work-tree|--namespace)(?:=|\s+)\S+|--bare|--no-pager|--paginate|--no-replace-objects|--literal-pathspecs|--glob-pathspecs|--noglob-pathspecs|--icase-pathspecs|--no-optional-locks))*\s+commit(?:\s|$)/.test(
 		normalized,
 	);
 }
@@ -21,7 +22,11 @@ export function wrapGitWithTrailers(
 	const coAuthor = `Co-Authored-By: ${modelName} <noreply@pi.dev>`;
 	const generatedBy = `Generated-By: pi ${piVersion}`;
 
-	return `${buildGitWrapper(coAuthor, generatedBy)}\n${cmd}`;
+	// 变更原因：RTK 把 `git commit` 重写为 `rtk git commit`，`rtk` 是外部命令，
+	// `git()` wrapper 拦截不到。去掉 rtk 前缀让 wrapper 生效。
+	const effectiveCmd = cmd.replaceAll(/(^|[;&|\n\s])rtk\s+git\b/g, "$1git");
+
+	return `${buildGitWrapper(coAuthor, generatedBy)}\n${effectiveCmd}`;
 }
 
 function shellQuote(value: string): string {
@@ -91,3 +96,4 @@ function buildGitWrapper(coAuthor: string, generatedBy: string): string {
   command git "\${__pi_git_original[@]}"
 )`;
 }
+

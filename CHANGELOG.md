@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.3] - 2026-06-08
+
+### Fixed
+
+- `pi-co-authored-by`: RTK 改写复合命令时 `cmd.replace()` 只替换第一个 `rtk git`，导致后续 `rtk git commit` 未被拦截，trailer 丢失。改用 `replaceAll`。
+- `pi-co-authored-by`: `containsGitCommit` regex 增加 `rtk` 可选前缀匹配。
+
 ## [0.3.2] - 2026-06-08
 
 ### Changed
