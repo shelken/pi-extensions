@@ -7,7 +7,12 @@
     "noEmit": true,
     "allowImportingTsExtensions": true,
     "skipLibCheck": true,
-    "types": ["node"]
+    "types": ["node"],
+    "paths": {
+      "@plannotator/pi-extension/plannotator-browser": [
+        "./extensions/simple-plannotator/extensions/plannotator-browser.d.ts"
+      ]
+    }
   },
   "include": ["extensions/**/*.ts"],
   "exclude": [
