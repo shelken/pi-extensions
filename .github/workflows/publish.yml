@@ -42,5 +42,5 @@ jobs:
             fi
 
             echo "Publishing $name@$current..."
-            (cd "$pkg" && npm publish --provenance --access public)
+            (cd "$pkg" && npm publish --access public)
           done
