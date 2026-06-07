@@ -10,19 +10,20 @@ jobs:
   publish:
     runs-on: ubuntu-latest
     permissions:
+      id-token: write
       contents: read
     steps:
       - uses: actions/checkout@v4
       - uses: oven-sh/setup-bun@v2
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          registry-url: "https://registry.npmjs.org"
 
       - run: bun install
 
       - name: Publish workspace packages
-        env:
-          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
-          echo "//registry.npmjs.org/:_authToken=$NPM_TOKEN" > ~/.npmrc
-
           for pkg in extensions/*/; do
             name=$(jq -r '.name // empty' "$pkg/package.json")
             private=$(jq -r '.private // false' "$pkg/package.json")
@@ -42,5 +43,5 @@ jobs:
             fi
 
             echo "Publishing $name@$current..."
-            (cd "$pkg" && npm publish --access public)
+            (cd "$pkg" && npm publish --access public --provenance)
           done
