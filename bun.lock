@@ -49,7 +49,7 @@
     },
     "extensions/pi-co-authored-by": {
       "name": "pi-co-authored-by",
-      "version": "0.2.3",
+      "version": "0.2.5",
       "peerDependencies": {
         "@earendil-works/pi-coding-agent": "*",
       },

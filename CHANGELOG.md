@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.4] - 2026-06-08
+
+### Fixed
+
+- `pi-co-authored-by`: RTK 前缀清理只作用于真实 shell 命令位置，避免改写 commit message 参数里的普通 `rtk git` 文本。
+- `pi-co-authored-by`: `containsGitCommit` 和注入的 `git()` wrapper 共用 git global option 列表，避免两边支持范围漂移。
+
 ## [0.3.3] - 2026-06-08
 
 ### Fixed

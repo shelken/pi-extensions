@@ -3,14 +3,49 @@
  * Separated from the pi extension API for testability.
  */
 
+// 变更原因：检测逻辑和注入 wrapper 必须共用同一组选项，避免两边支持范围漂移。
+const GIT_GLOBAL_OPTIONS_WITH_VALUE = [
+	"-c",
+	"-C",
+	"--config-env",
+	"--exec-path",
+	"--git-dir",
+	"--work-tree",
+	"--namespace",
+] as const;
+
+const GIT_GLOBAL_FLAG_OPTIONS = [
+	"--bare",
+	"--no-pager",
+	"--paginate",
+	"--no-replace-objects",
+	"--literal-pathspecs",
+	"--glob-pathspecs",
+	"--noglob-pathspecs",
+	"--icase-pathspecs",
+	"--no-optional-locks",
+] as const;
+
+const GIT_GLOBAL_VALUE_OPTION_PATTERN = `(?:${GIT_GLOBAL_OPTIONS_WITH_VALUE.map(escapeRegex).join("|")})(?:=|\\s+)\\S+`;
+const GIT_GLOBAL_FLAG_OPTION_PATTERN = `(?:${GIT_GLOBAL_FLAG_OPTIONS.map(escapeRegex).join("|")})`;
+const GIT_GLOBAL_OPTION_PATTERN = `(?:${GIT_GLOBAL_VALUE_OPTION_PATTERN}|${GIT_GLOBAL_FLAG_OPTION_PATTERN})`;
+const GIT_COMMIT_COMMAND_PATTERN = new RegExp(
+	`(?:^|[;&|\\n])\\s*(?:rtk\\s+)?git(?:\\s+${GIT_GLOBAL_OPTION_PATTERN})*\\s+commit(?:\\s|$)`,
+);
+const BASH_GIT_GLOBAL_OPTIONS_WITH_VALUE = buildBashWordList(
+	GIT_GLOBAL_OPTIONS_WITH_VALUE,
+);
+const BASH_GIT_GLOBAL_FLAG_OPTIONS = buildBashWordList(GIT_GLOBAL_FLAG_OPTIONS);
+const BASH_ATTACHED_GIT_GLOBAL_OPTION_CONDITION = GIT_GLOBAL_OPTIONS_WITH_VALUE.map(
+	toBashAttachedValueCondition,
+).join(" || ");
+
 /** Check if a command may contain a direct `git commit` invocation. */
 export function containsGitCommit(cmd: string): boolean {
 	const normalized = cmd.replace(/\\\n/g, " ");
 	// 变更原因：旧检测会被 `git diff ...; echo commit` 误触发，导致非提交命令也被注入 wrapper。
 	// 变更原因：RTK 会把 `git commit` 重写为 `rtk git commit`，需要匹配 rtk 前缀。
-	return /(?:^|[;&|\n])\s*(?:rtk\s+)?git(?:\s+(?:(?:-[cC]|--config-env|--exec-path|--git-dir|--work-tree|--namespace)(?:=|\s+)\S+|--bare|--no-pager|--paginate|--no-replace-objects|--literal-pathspecs|--glob-pathspecs|--noglob-pathspecs|--icase-pathspecs|--no-optional-locks))*\s+commit(?:\s|$)/.test(
-		normalized,
-	);
+	return GIT_COMMIT_COMMAND_PATTERN.test(normalized);
 }
 
 /** Build a bash command that appends trailers to direct `git commit` calls. */
@@ -22,9 +57,8 @@ export function wrapGitWithTrailers(
 	const coAuthor = `Co-Authored-By: ${modelName} <noreply@pi.dev>`;
 	const generatedBy = `Generated-By: pi ${piVersion}`;
 
-	// 变更原因：RTK 把 `git commit` 重写为 `rtk git commit`，`rtk` 是外部命令，
-	// `git()` wrapper 拦截不到。去掉 rtk 前缀让 wrapper 生效。
-	const effectiveCmd = cmd.replaceAll(/(^|[;&|\n\s])rtk\s+git\b/g, "$1git");
+	// 变更原因：RTK 的外部命令会绕过 `git()` wrapper；只还原真实命令位置，避免改写提交参数里的普通文本。
+	const effectiveCmd = cmd.replaceAll(/(^|[;&|\n]\s*)rtk\s+git\b/g, "$1git");
 
 	return `${buildGitWrapper(coAuthor, generatedBy)}\n${effectiveCmd}`;
 }
@@ -33,13 +67,26 @@ function shellQuote(value: string): string {
 	return `'${value.replace(/'/g, `'\\''`)}'`;
 }
 
+function escapeRegex(value: string): string {
+	return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function buildBashWordList(values: readonly string[]): string {
+	return ` ${values.join(" ")} `;
+}
+
+function toBashAttachedValueCondition(option: string): string {
+	if (option.startsWith("--")) return `"$1" == ${option}=*`;
+	return `"$1" == ${option}?*`;
+}
+
 function buildGitWrapper(coAuthor: string, generatedBy: string): string {
 	return `git() (
   set +u
   local -a __pi_git_original=("$@")
   local -a __pi_git_globals=()
-  local __pi_git_value_globals=" -c -C --config-env --exec-path --git-dir --work-tree --namespace "
-  local __pi_git_flag_globals=" --bare --no-pager --paginate --no-replace-objects --literal-pathspecs --glob-pathspecs --noglob-pathspecs --icase-pathspecs --no-optional-locks "
+  local __pi_git_value_globals="${BASH_GIT_GLOBAL_OPTIONS_WITH_VALUE}"
+  local __pi_git_flag_globals="${BASH_GIT_GLOBAL_FLAG_OPTIONS}"
 
   # 变更原因：case 分支终止符曾被执行环境改写成非法语法；用普通 if 链保持注入脚本可解析。
   while (($#)); do
@@ -52,7 +99,7 @@ function buildGitWrapper(coAuthor: string, generatedBy: string): string {
       fi
       __pi_git_globals+=("$1")
       shift
-    elif [[ "$1" == -c?* || "$1" == -C?* || "$1" == --config-env=* || "$1" == --exec-path=* || "$1" == --git-dir=* || "$1" == --work-tree=* || "$1" == --namespace=* ]]; then
+    elif [[ ${BASH_ATTACHED_GIT_GLOBAL_OPTION_CONDITION} ]]; then
       __pi_git_globals+=("$1")
       shift
     elif [[ "$__pi_git_flag_globals" == *" $1 "* ]]; then
