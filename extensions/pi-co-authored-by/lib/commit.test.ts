@@ -270,4 +270,12 @@ git log -1 --format=%B
 		expect(cmdLine).toContain("git commit");
 		expect(cmdLine).not.toMatch(/\brtk\s+git\b/);
 	});
+
+	// 变更原因：RTK 前缀清理只能作用于真实命令，不能改写用户提交参数里的普通文本。
+	it("preserves rtk git text inside commit arguments", () => {
+		const cmd = 'git commit -m "foo rtk git bar"';
+		const wrapped = wrapGitWithTrailers(cmd, MODEL_NAME, PI_VERSION);
+		const cmdLine = wrapped.split("\n").pop()!;
+		expect(cmdLine).toBe(cmd);
+	});
 });
