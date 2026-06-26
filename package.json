@@ -1,6 +1,6 @@
 {
   "name": "@shelken/pi-extensions",
-  "version": "0.3.3",
+  "version": "0.3.4",
   "private": true,
   "type": "module",
   "packageManager": "bun@1.3.13",
@@ -29,7 +29,8 @@
       "./extensions/pi-co-authored-by/extensions/co-authored-by.ts",
       "./extensions/pi-command-history/extensions/index.ts",
       "./extensions/pi-add-dir/extensions/pi-add-dir/index.ts",
-      "./extensions/simple-plannotator/extensions/index.ts"
+      "./extensions/simple-plannotator/extensions/index.ts",
+      "./extensions/pi-zed-provider/index.ts"
     ]
   },
   "peerDependencies": {
@@ -39,7 +40,7 @@
     "typebox": "*"
   },
   "devDependencies": {
-    "@earendil-works/pi-ai": "0.78.0",
+    "@earendil-works/pi-ai": "^0.80.2",
     "@earendil-works/pi-coding-agent": "0.78.0",
     "@earendil-works/pi-tui": "0.78.0",
     "@types/node": "25.9.1",
