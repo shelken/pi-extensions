@@ -17,6 +17,20 @@
 
 新增、移除或改名任何子 package 时，必须同步更新本表和根 `package.json` 的 `pi.extensions`。
 
+## 临时禁用某个插件
+
+不想完全删除子包目录，只想临时禁用时，在根 `package.json` 的 `pi.extensions` 中注释或删除对应入口行即可。例如禁用 `pi-debug-cache`：
+
+```diff
+  "pi": {
+    "extensions": [
+-     "./extensions/pi-debug-cache/index.ts",
+    ]
+  }
+```
+
+重新加载 pi 即可生效。
+
 ## 本地使用
 
 把本仓库作为本地 pi package 加到 `settings.json` 的 `packages`：
