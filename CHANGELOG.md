@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.3.5] - 2026-06-29
+
+### Changed
+
+- `pi-zed-provider` (0.1.3): 实测确认 `/frontend/billing/usage` 用 access_token 返回 401，删除无用请求 `fetchBillingUsage` 和 `ZedBillingUsageResponse` 类型。提取 `resolvePlanAndUsage` 共享函数，统一 `oauth-login.ts` 与 `index.ts` 的 plan/usage 提取逻辑。删除全代码库无调用的死代码：`logScope`、`debugLog`、debug 基础设施（`getDebug`/`safeJson`/`dump`/`dumpRequest`/`dumpResponse`）、`normalizeConfig`。
+
 ## [0.3.4] - 2026-06-08
 
 ### Fixed
