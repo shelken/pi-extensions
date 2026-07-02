@@ -59,6 +59,7 @@ const PREFERRED_PROVIDERS: Array<{ pattern: string; providers: string[] }> = [
 	{ pattern: "o3", providers: ["openai"] },
 	{ pattern: "claude", providers: ["anthropic"] },
 	{ pattern: "deepseek", providers: ["deepseek"] },
+	{ pattern: "grok", providers: ["xai"] },
 	{ pattern: "minimax-m", providers: ["minimax", "minimax-cn"] },
 	{ pattern: "minimax-", providers: ["minimax", "minimax-cn"] },
 	{ pattern: "kimi", providers: ["moonshotai", "moonshotai-cn"] },
