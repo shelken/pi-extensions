@@ -58,6 +58,7 @@ const LOG_DIR = join(AGENT_DIR, "logs");
 const LOG_FILE = join(LOG_DIR, "pi-dynamic-models.log");
 const REGISTRY_URL = "https://models.dev/api.json";
 const REGISTRY_CACHE_MAX_AGE_MS = 6 * 60 * 60 * 1000;
+const PROVIDER_CACHE_MAX_AGE_MS = 10 * 60 * 1000;
 
 let isDebug = false;
 
@@ -190,6 +191,14 @@ function writeProviderCache(providerName: string, cache: ProviderModelCache): vo
   writeFileSync(path, JSON.stringify(cache), "utf-8");
 }
 
+function isProviderCacheFresh(providerName: string): boolean {
+  try {
+    return Date.now() - statSync(providerCachePath(providerName)).mtimeMs < PROVIDER_CACHE_MAX_AGE_MS;
+  } catch {
+    return false;
+  }
+}
+
 function hashModelIds(ids: string[]): string {
   return createHash("md5").update([...ids].sort().join("\0")).digest("hex");
 }
@@ -235,18 +244,38 @@ function extractProviderConfig(
 }
 
 async function fetchRemoteModels(cfg: ProviderConfig): Promise<string[]> {
-  const url = `${cfg.baseUrl}/models`;
+  // baseUrl 可能带 /v1（openai 系）也可能不带（anthropic 系，models 端点实际在 /v1/models）。
+  // 优先用原样 baseUrl + /models；不含 /v1 时额外追加 /v1/models 作为首选候选，失败再回退无 v1。
+  const candidates: string[] = [];
+  if (/\/v1\/?$/.test(cfg.baseUrl)) {
+    candidates.push(`${cfg.baseUrl}/models`);
+  } else {
+    candidates.push(`${cfg.baseUrl}/v1/models`);
+    candidates.push(`${cfg.baseUrl}/models`);
+  }
   const headers: Record<string, string> = { Accept: "application/json" };
   if (cfg.apiKey) headers.Authorization = `Bearer ${cfg.apiKey}`;
 
-  log(`Fetching ${url} ...`);
-  const res = await fetch(url, { headers, signal: AbortSignal.timeout(10_000) });
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
-
-  const body = (await res.json()) as { data?: Array<{ id: string }> };
-  const ids = (body.data ?? []).map((model) => model.id);
-  log(`  → ${ids.length} models returned`);
-  return ids;
+  let lastErr: unknown;
+  for (const url of candidates) {
+    log(`Fetching ${url} ...`);
+    try {
+      const res = await fetch(url, { headers, signal: AbortSignal.timeout(10_000) });
+      if (!res.ok) {
+        lastErr = new Error(`HTTP ${res.status}`);
+        log(`  ✗ ${lastErr}, try next candidate`);
+        continue;
+      }
+      const body = (await res.json()) as { data?: Array<{ id: string }> };
+      const ids = (body.data ?? []).map((model) => model.id);
+      log(`  → ${ids.length} models returned`);
+      return ids;
+    } catch (e) {
+      lastErr = e;
+      log(`  ✗ unreachable: ${e}, try next candidate`);
+    }
+  }
+  throw lastErr instanceof Error ? lastErr : new Error("all candidates failed");
 }
 
 async function initModels(pi: ExtensionAPI) {
@@ -289,39 +318,51 @@ async function initModels(pi: ExtensionAPI) {
     log(`  flatten: ${Date.now() - t}ms, ${registry.size} entries`);
     t = Date.now();
 
-    for (const providerName of config.enableProviders) {
-      const providerCfg = extractProviderConfig(modelsJson, providerName);
-      if (!providerCfg) continue;
+    async function processProvider(
+      providerName: string,
+      providerCfg: ProviderConfig,
+      registry: ReturnType<typeof flattenRegistry>,
+    ) {
+      const pt = Date.now();
 
+      // 优先使用 fresh cache，跳过网络请求
       let discoveredIds: string[];
-      let modelsFromCache = false;
-      try {
-        discoveredIds = await fetchRemoteModels(providerCfg);
-        writeProviderCache(providerName, {
-          hash: hashModelIds(discoveredIds),
-          modelIds: discoveredIds,
-        });
-      } catch (err) {
-        log(`  ✗ unreachable: ${err}`);
-        const cached = readProviderCache(providerName);
-        if (!cached || cached.modelIds.length === 0) continue;
-        discoveredIds = cached.modelIds;
-        modelsFromCache = true;
-        log(`  → using cached model list (${discoveredIds.length} models)`);
+      let cacheSource: "fresh" | "stale" | null = null;
+
+      const freshCache = isProviderCacheFresh(providerName) ? readProviderCache(providerName) : null;
+      if (freshCache && freshCache.modelIds.length > 0) {
+        discoveredIds = freshCache.modelIds;
+        cacheSource = "fresh";
+        log(`  [${providerName}] cache hit (${discoveredIds.length} models, ${Date.now() - pt}ms)`);
+      } else {
+        try {
+          discoveredIds = await fetchRemoteModels(providerCfg);
+          writeProviderCache(providerName, {
+            hash: hashModelIds(discoveredIds),
+            modelIds: discoveredIds,
+          });
+        } catch (err) {
+          log(`  [${providerName}] ✗ unreachable: ${err}`);
+          const cached = readProviderCache(providerName);
+          if (!cached || cached.modelIds.length === 0) return null;
+          discoveredIds = cached.modelIds;
+          cacheSource = "stale";
+          log(`  [${providerName}] → fallback cache (${discoveredIds.length} models)`);
+        }
       }
 
       if (discoveredIds.length === 0) {
-        log("  ✗ returned 0 models");
-        continue;
+        log(`  [${providerName}] ✗ 0 models`);
+        return null;
       }
 
       const newIds = discoveredIds.filter((id) => !providerCfg.existingModels.has(id));
       if (newIds.length === 0) {
-        log(`  ✓ all ${discoveredIds.length} models already defined, nothing to add`);
-        continue;
+        log(`  [${providerName}] ✓ all ${discoveredIds.length} models already defined`);
+        return null;
       }
 
-      log(`  ${providerCfg.existingModels.size} existing + ${newIds.length} new (${discoveredIds.length} total)`);
+      log(`  [${providerName}] ${providerCfg.existingModels.size} existing + ${newIds.length} new`);
 
       let matchedCount = 0;
       const discoveredModels = newIds.map((id) => {
@@ -356,19 +397,34 @@ async function initModels(pi: ExtensionAPI) {
         return piModel;
       });
 
-      const existingRaw = modelsJson.providers[providerName]?.models ?? [];
-      const allModels = [...existingRaw, ...discoveredModels];
-
       log(
-        `  Registering provider "${providerName}" with ${allModels.length} models (${matchedCount} registry-matched, matching: ${Date.now() - t}ms)${modelsFromCache ? " (cached)" : ""}`,
+        `  [${providerName}] done: ${matchedCount} matched, ${Date.now() - pt}ms${cacheSource ? ` (${cacheSource} cache)` : ""}`,
       );
 
-      pi.registerProvider(providerName, {
-        baseUrl: providerCfg.baseUrl,
-        apiKey: providerCfg.apiKey ?? "none",
-        authHeader: !!providerCfg.apiKey,
-        api: providerCfg.api ?? "openai-completions",
-        models: allModels,
+      return {
+        name: providerName,
+        cfg: providerCfg,
+        discoveredModels,
+      };
+    }
+
+    const results = await Promise.all(
+      config.enableProviders.map(async (providerName) => {
+        const providerCfg = extractProviderConfig(modelsJson, providerName);
+        if (!providerCfg) return null;
+        return processProvider(providerName, providerCfg, registry);
+      }),
+    );
+
+    for (const result of results) {
+      if (!result) continue;
+      const existingRaw: any[] = modelsJson.providers[result.name]?.models ?? [];
+      pi.registerProvider(result.name, {
+        baseUrl: result.cfg.baseUrl,
+        apiKey: result.cfg.apiKey ?? "none",
+        authHeader: !!result.cfg.apiKey,
+        api: result.cfg.api ?? "openai-completions",
+        models: [...existingRaw, ...result.discoveredModels],
       });
     }
   } catch (err) {
