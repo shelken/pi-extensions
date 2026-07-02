@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.4.0] - 2026-07-02
+
+### Changed
+
+- `pi-auto-model-prompts` (0.2.0): 默认不再实时读取 prompt 文件。prompt 内容在 `session_start`（含 `/reload`）时读取一次并缓存，编辑 `.md` 后需 `/reload` 才生效，避免破坏 provider prompt cache。新增 `liveReload` 配置项（默认 `false`），设为 `true` 可恢复「下一轮消息立即生效」的旧行为。
+
 ## [0.3.5] - 2026-06-29
 
 ### Changed

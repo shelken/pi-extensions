@@ -2,7 +2,9 @@
 
 为不同模型自动注入不同的系统提示词。
 
-插件会在每次 `before_agent_start` 时读取当前模型匹配的 Markdown 文件，并将内容追加到本轮系统提示词末尾。文件内容不变时，最终系统提示词稳定；编辑文件后，下一次发送消息立即使用新内容。
+插件会在每次 `before_agent_start` 时读取当前模型匹配的 Markdown 文件，并将内容追加到本轮系统提示词末尾。
+
+**默认行为**：prompt 内容在 `session_start`（含 `/reload`）时读取一次并缓存，本轮 session 内固定。编辑文件后需要执行 `/reload` 才会生效。如果你希望改动立即生效（下一轮消息即反映），在配置中开启 `liveReload`。
 
 ## 安装
 
@@ -29,13 +31,15 @@
 
 ```json
 {
-  "enabled": false
+  "enabled": false,
+  "liveReload": false
 }
 ```
 
 | 字段 | 类型 | 默认值 | 说明 |
 |------|------|--------|------|
 | `enabled` | boolean | `true` | 是否启用自动注入 |
+| `liveReload` | boolean | `false` | 是否每次发消息实时读取 prompt 文件（开启后改文件下一轮立即生效，无需 `/reload`） |
 
 项目级配置会覆盖全局配置中的同名字段。
 
@@ -113,20 +117,22 @@
 ## 工作原理
 
 ```text
-session_start → 加载 enabled 配置
+session_start → 加载配置（enabled / liveReload）
+             → 若 enabled 且 liveReload=false：预读当前模型匹配的 prompt 并缓存
 
 before_agent_start:
-  1. enabled=false       → 跳过
-  2. 当前模型为空        → 跳过
-  3. 扫描项目 prompt 目录 → 匹配非空文件 → 注入到本轮 systemPrompt 末尾
-  4. 项目目录未命中      → 扫描全局 prompt 目录
+  1. enabled=false                → 跳过
+  2. 当前模型为空                  → 跳过
+  3. liveReload=true              → 实时扫描目录并读取匹配文件
+     liveReload=false             → 使用 session_start 时缓存的 prompt
+  4. 注入到本轮 systemPrompt 末尾
+  5. 项目目录未命中（仅 liveReload 时会逐目录扫描）→ 继续查找全局目录
 ```
 
-- 每次发送消息都会重新扫描目录并读取匹配文件
-- 同一模型不会在同一轮中重复注入；下一轮会基于 pi 重新构建的 system prompt 再注入一次
-- 编辑 `.md` 文件后**下一次发送消息立即生效**，无需 `/reload`
-- 修改 `.md` 会改变发给 provider 的 system prompt 前缀，下一次请求可能重建 prompt cache；文件内容稳定后，后续请求可继续命中缓存
-- `/reload` 后会重新加载配置
+- `liveReload=false`（默认）：prompt 在 `session_start` 时读取一次，本次 session 内固定；编辑 `.md` 后需 `/reload` 刷新。内容稳定，系统提示词前缀不变，有利于命中 provider prompt cache
+- `liveReload=true`：每次发消息都会重新扫描目录并读取匹配文件，编辑 `.md` 后**下一次发送消息立即生效**
+- `/reload` 会重新触发 `session_start`，刷新配置与缓存
+- `liveReload=true` 时修改 `.md` 会改变发给 provider 的 system prompt 前缀，下一次请求可能重建 prompt cache；文件内容稳定后，后续请求可继续命中缓存
 
 ## 禁用插件
 
