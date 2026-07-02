@@ -48,19 +48,25 @@ const MODEL_SUFFIXES = [
   ":paid",
 ];
 
+// ponytail: 顺序敏感——优先官方原厂 > 官方 cn > 知名托管 > 渠道转售。
+// "minimax" 留到 miniMax/M 系列在 minimax 自己 key 下；同名 model 也存在 alibaba 渠道
+// 时仍要走向 minimax。pattern 用 includes 而非 startsWith，避免 "gpt" 抢 "gpt-oss"。
 const PREFERRED_PROVIDERS: Array<{ pattern: string; providers: string[] }> = [
-  { pattern: "gemini", providers: ["google", "google-vertex", "ollama-cloud"] },
-  { pattern: "gemma", providers: ["google", "ollama-cloud"] },
-  { pattern: "gpt", providers: ["openai"] },
-  { pattern: "o1", providers: ["openai"] },
-  { pattern: "o3", providers: ["openai"] },
-  { pattern: "claude", providers: ["anthropic"] },
-  { pattern: "deepseek", providers: ["deepseek"] },
-  { pattern: "minimax", providers: ["minimax"] },
-  { pattern: "kimi", providers: ["moonshotai"] },
-  { pattern: "qwen", providers: ["alibaba-cn"] },
-  { pattern: "mistral", providers: ["mistral"] },
-  { pattern: "ministral", providers: ["mistral"] },
+	{ pattern: "gemini", providers: ["google", "google-vertex", "ollama-cloud"] },
+	{ pattern: "gemma", providers: ["google", "ollama-cloud"] },
+	{ pattern: "gpt", providers: ["openai"] },
+	{ pattern: "o1", providers: ["openai"] },
+	{ pattern: "o3", providers: ["openai"] },
+	{ pattern: "claude", providers: ["anthropic"] },
+	{ pattern: "deepseek", providers: ["deepseek"] },
+	{ pattern: "minimax-m", providers: ["minimax", "minimax-cn"] },
+	{ pattern: "minimax-", providers: ["minimax", "minimax-cn"] },
+	{ pattern: "kimi", providers: ["moonshotai", "moonshotai-cn"] },
+	{ pattern: "qwen", providers: ["alibaba-cn", "alibaba"] },
+	{ pattern: "mistral", providers: ["mistral"] },
+	{ pattern: "ministral", providers: ["mistral"] },
+	{ pattern: "glm", providers: ["zhipuai", "zhipuai-coding-plan", "zai", "zai-coding-plan"] },
+	{ pattern: "mimo", providers: ["xiaomi", "xiaomi-token-plan", "xiaomi-token-plan-cn", "xiaomi-token-plan-ams", "xiaomi-token-plan-sgp"] },
 ];
 
 export function flattenRegistry(data: RegistryData): Map<string, RegistryEntry[]> {
@@ -116,7 +122,7 @@ function pickBestEntry(
   if (entries.length === 0) return undefined;
   if (entries.length === 1) return entries[0];
 
-  const pref = PREFERRED_PROVIDERS.find((p) => modelId.startsWith(p.pattern));
+  const pref = PREFERRED_PROVIDERS.find((p) => modelId.toLowerCase().includes(p.pattern));
   if (pref) {
     for (const provider of pref.providers) {
       const match = entries.find((e) => e.provider === provider);

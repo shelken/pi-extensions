@@ -156,6 +156,30 @@ describe("dynamic model matcher", () => {
     expect(entry?.sourceKey).toBe("openai/gpt-oss-120b:free");
   });
 
+  it("prefers the xiaomi provider for mimo model ids over third-party aliases", () => {
+    const reg = flattenRegistry({
+      xiaomi: {
+        models: { "mimo-v2.5-pro": { id: "mimo-v2.5-pro", limit: { context: 128000, output: 16384 } } },
+      },
+      "opencode-go": {
+        models: { "mimo-v2.5-pro": { id: "mimo-v2.5-pro", limit: { context: 128000, output: 16384 } } },
+      },
+    });
+    expect(lookupModel("mimo-v2.5-pro", reg)?.provider).toBe("xiaomi");
+  });
+
+  it("prefers the zhipuai provider for glm model ids over routing aggregators", () => {
+    const reg = flattenRegistry({
+      zhipuai: {
+        models: { "glm-4.6": { id: "glm-4.6", limit: { context: 128000, output: 16384 } } },
+      },
+      "302ai": {
+        models: { "glm-4.6": { id: "glm-4.6", limit: { context: 128000, output: 16384 } } },
+      },
+    });
+    expect(lookupModel("glm-4.6", reg)?.provider).toBe("zhipuai");
+  });
+
   it("maps registry cost fields to pi cost fields", () => {
     expect(toPiCost({ input: 5, output: 30, cache_read: 0.5 })).toEqual({
       input: 5,
