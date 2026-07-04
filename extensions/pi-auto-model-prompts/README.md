@@ -2,9 +2,9 @@
 
 为不同模型自动注入不同的系统提示词。
 
-插件会在每次 `before_agent_start` 时读取当前模型匹配的 Markdown 文件，并将内容追加到本轮系统提示词末尾。
+插件会在每次 `before_agent_start` 时读取当前模型匹配的 Markdown 文件，并以 `# AUTO MODEL PROMPT(模型特别规则)` 标题将内容追加到本轮系统提示词末尾，便于在调试 / 日志中快速定位。
 
-**默认行为**：prompt 内容在 `session_start`（含 `/reload`）时读取一次并缓存，本轮 session 内固定。编辑文件后需要执行 `/reload` 才会生效。如果你希望改动立即生效（下一轮消息即反映），在配置中开启 `liveReload`。
+**默认行为**：prompt 内容在 `before_agent_start`（每次发送前）按需加载并缓存，**仅在模型变化时重新匹配**。编辑文件后需要执行 `/reload` 才会生效（重载会重置缓存并重读配置）。如果你希望改动立即生效（下一轮消息即反映），在配置中开启 `liveReload`。
 
 ## 安装
 
@@ -67,7 +67,15 @@
 └── *.md                ← 兜底，匹配所有模型
 ```
 
-文件内容为纯 Markdown 文本，会在 `before_agent_start` 事件中追加到本轮系统提示词末尾。
+文件内容为纯 Markdown 文本，会在 `before_agent_start` 事件中以 `# AUTO MODEL PROMPT(模型特别规则)` 为一级标题追加到本轮系统提示词末尾。注入后的格式示例：
+
+```text
+<pi core 构建的基础 system prompt>
+
+# AUTO MODEL PROMPT(模型特别规则)
+
+<gpt-5.5.md 文件内容>
+```
 
 **提示**：文件内容会被 `trim()` 处理，首尾空白会被去除。空文件会被忽略。
 
@@ -117,22 +125,24 @@
 ## 工作原理
 
 ```text
-session_start → 加载配置（enabled / liveReload）
-             → 若 enabled 且 liveReload=false：预读当前模型匹配的 prompt 并缓存
+session_start → 仅加载配置（enabled / liveReload），不读写 prompt
 
 before_agent_start:
   1. enabled=false                → 跳过
   2. 当前模型为空                  → 跳过
-  3. liveReload=true              → 实时扫描目录并读取匹配文件
-     liveReload=false             → 使用 session_start 时缓存的 prompt
-  4. 注入到本轮 systemPrompt 末尾
+  3. liveReload=true              → 按当前模型实时读一次，刷新缓存
+     liveReload=false             →
+       · ctx.model.id === cachedForModelId → 用缓存
+       · ctx.model.id !== cachedForModelId → 按当前模型重读并刷新缓存
+  4. 以 `# AUTO MODEL PROMPT(模型特别规则)` 一级标题为前缀，追加到本轮 systemPrompt 末尾
   5. 项目目录未命中（仅 liveReload 时会逐目录扫描）→ 继续查找全局目录
 ```
 
-- `liveReload=false`（默认）：prompt 在 `session_start` 时读取一次，本次 session 内固定；编辑 `.md` 后需 `/reload` 刷新。内容稳定，系统提示词前缀不变，有利于命中 provider prompt cache
-- `liveReload=true`：每次发消息都会重新扫描目录并读取匹配文件，编辑 `.md` 后**下一次发送消息立即生效**
-- `/reload` 会重新触发 `session_start`，刷新配置与缓存
+- `liveReload=false`（默认）：第一次发送时按当前模型读一次并缓存，**后续仅在用户切换模型时**重读，**编辑 `.md` 后需 `/reload` 才会刷新**。内容稳定，系统提示词前缀不变，有利于命中 provider prompt cache
+- `liveReload=true`：每次发消息都会重新扫描目录并读取匹配文件，编辑 `.md` 后**下一次发送消息立即生效**；模型切换也会触发重读（同 `liveReload=false` 语义）
+- `/reload` 会重新触发 `session_start`，刷新配置并重置缓存（不预热，下次发送时再读）
 - `liveReload=true` 时修改 `.md` 会改变发给 provider 的 system prompt 前缀，下一次请求可能重建 prompt cache；文件内容稳定后，后续请求可继续命中缓存
+- 插件不监听 `model_select`：所有判断和读取都集中在 `before_agent_start`，避免缓存被事件抢跑
 
 ## 禁用插件
 

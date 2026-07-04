@@ -108,17 +108,13 @@ export function findPrompt(modelId: string, dirs: string[]): string | undefined 
 
 export default function (pi: ExtensionAPI) {
   let config: Config = { ...DEFAULT_CONFIG };
-  // session_start 时缓存的 prompt 内容，仅在 liveReload=false 时使用
+  // 懒加载缓存：仅在 before_agent_start 时填充 / 刷新，不在 session_start 预热。
+  // 缓存同时记录「为哪个模型缓存」，模型变化时自动失效。
   let cachedPrompt: string | undefined;
+  let cachedForModelId: string | undefined;
 
   pi.on("session_start", (_event, ctx) => {
     config = loadConfig(ctx.cwd);
-    if (config.enabled === false) return;
-
-    // 预读缓存：liveReload=false 时，prompt 内容在本次 session 内固定，
-    // 改动文件后需要 /reload 才会刷新（/reload 会重新触发 session_start）
-    const modelId = ctx.model?.id;
-    cachedPrompt = modelId ? findPrompt(modelId, getPromptDirs(ctx.cwd)) : undefined;
   });
 
   pi.on("before_agent_start", (event, ctx) => {
@@ -127,13 +123,16 @@ export default function (pi: ExtensionAPI) {
     const modelId = ctx.model?.id;
     if (!modelId) return;
 
-    const content = config.liveReload
-      ? findPrompt(modelId, getPromptDirs(ctx.cwd))
-      : cachedPrompt;
-    if (!content) return;
+    // liveReload=true 每次实时读；liveReload=false 仅在模型变化时重读。
+    // 不响应 model_select：所有判断和读取都集中在这里，避免缓存提前变动。
+    if (config.liveReload || modelId !== cachedForModelId) {
+      cachedPrompt = findPrompt(modelId, getPromptDirs(ctx.cwd));
+      cachedForModelId = modelId;
+    }
+    if (!cachedPrompt) return;
 
     return {
-      systemPrompt: event.systemPrompt + "\n\n" + content,
+      systemPrompt: `${event.systemPrompt}\n\n# AUTO MODEL PROMPT(模型特别规则)\n\n${cachedPrompt}`,
     };
   });
 }

@@ -1,6 +1,6 @@
 {
   "name": "pi-auto-model-prompts",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Inject model-specific system prompts into pi turns from local Markdown files.",
   "type": "module",
   "scripts": {
