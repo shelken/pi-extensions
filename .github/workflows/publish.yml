@@ -52,6 +52,7 @@ jobs:
         if: steps.changesets.outputs.pullRequestNumber != ''
         run: |
           for pkg in ${{ steps.packages.outputs.names }}; do
+            gh label create "release:$pkg" 2>/dev/null || true
             gh pr edit "${{ steps.changesets.outputs.pullRequestNumber }}" --add-label "release:$pkg"
           done
         env:
