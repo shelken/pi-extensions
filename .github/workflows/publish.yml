@@ -7,6 +7,10 @@ name: Publish
 on:
   push:
     branches: [main]
+    paths:
+      - .changeset/**
+      - extensions/*/package.json
+      - extensions/*/CHANGELOG.md
   workflow_dispatch:
 
 concurrency:
