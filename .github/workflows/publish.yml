@@ -30,7 +30,14 @@ jobs:
 
       - run: bun install --frozen-lockfile
 
+      - name: 提取待发布包名
+        id: packages
+        run: |
+          NAMES=$(sed -n 's/^"\([^"]*\)".*/\1/p' .changeset/*.md | sort -u | tr '\n' ' ')
+          echo "names=$NAMES" >> "$GITHUB_OUTPUT"
+
       - uses: changesets/action@v1.9.0
+        id: changesets
         with:
           publish: bunx changeset publish
           version: bunx changeset version
@@ -40,3 +47,30 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: 给 release PR 加标签
+        if: steps.changesets.outputs.pullRequestNumber != ''
+        run: |
+          for pkg in ${{ steps.packages.outputs.names }}; do
+            gh pr edit "${{ steps.changesets.outputs.pullRequestNumber }}" --add-label "release:$pkg"
+          done
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: 创建 GitHub Releases
+        if: steps.changesets.outputs.published == 'true'
+        run: |
+          echo '${{ steps.changesets.outputs.publishedPackages }}' | jq -c '.[]' | while read -r pkg; do
+            name=$(echo "$pkg" | jq -r '.name')
+            version=$(echo "$pkg" | jq -r '.version')
+            tag="${name}@${version}"
+            dir="extensions/$(echo "$name" | sed 's|@[^/]*/||')"
+            notes=$(awk -v ver="$version" '
+              $0 ~ "^## " ver { found=1; next }
+              found && /^## / { exit }
+              found { print }
+            ' "$dir/CHANGELOG.md" 2>/dev/null)
+            gh release create "$tag" --title "$tag" --notes "${notes:-$tag}"
+          done
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
