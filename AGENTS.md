@@ -35,3 +35,4 @@
 - 使用justfile统一流程, 所有新增的开发命令/测试命令, 全部放justfile; 同样的命令使用参数控制并注释简洁说明
 - 使用mise管理所有**不在系统**的cli/tools
 - python相关用uv(禁止pip); node/ts 相关用bun
+- 跟特定子包相关的justfile放在特定子包目录下
