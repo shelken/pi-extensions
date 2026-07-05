@@ -8,6 +8,9 @@
       "./extensions/index.ts"
     ]
   },
+  "scripts": {
+    "test": "echo \"no tests\""
+  },
   "dependencies": {
     "@plannotator/pi-extension": "^0.19.23"
   },

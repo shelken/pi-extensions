@@ -1,0 +1,5 @@
+# mise 管理项目工具链版本，保证本地与 CI 一致。
+# 详细说明见 docs/versioning.md
+[tools]
+node = "24"
+bun = "1.3.13"
