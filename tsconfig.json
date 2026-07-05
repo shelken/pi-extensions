@@ -12,7 +12,8 @@
       "@plannotator/pi-extension/plannotator-browser": [
         "./extensions/simple-plannotator/extensions/plannotator-browser.d.ts"
       ]
-    }
+    },
+    "resolveJsonModule": true
   },
   "include": ["extensions/**/*.ts"],
   "exclude": [
