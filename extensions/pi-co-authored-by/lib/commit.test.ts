@@ -42,6 +42,10 @@ describe("containsGitCommit", () => {
 		expect(containsGitCommit('git commit -m "fix bug"')).toBe(true);
 	});
 
+	it("detects absolute git commit commands", () => {
+		expect(containsGitCommit('/usr/bin/git commit -m "fix bug"')).toBe(true);
+	});
+
 	it("detects heredoc commit commands", () => {
 		expect(containsGitCommit("git commit -F - <<'EOF'\nmessage\nEOF")).toBe(true);
 	});
@@ -152,6 +156,23 @@ git log -1 --format=%B
 `);
 
 		expect(output).toContain("simple subject");
+		expect(output).toContain(CO_AUTHOR);
+		expect(output).toContain(GENERATED_BY);
+	});
+
+	it("appends trailers to absolute git commit with heredoc -m", () => {
+		const output = runInGitRepo(`
+echo one > a.txt
+/usr/bin/git add a.txt && /usr/bin/git status --porcelain=v1 && /usr/bin/git commit -q -m "$(cat <<'EOF'
+absolute heredoc subject
+
+Refs #53
+EOF
+)" && /usr/bin/git log -1 --format=%B
+`);
+
+		expect(output).toContain("absolute heredoc subject");
+		expect(output).toContain("Refs #53");
 		expect(output).toContain(CO_AUTHOR);
 		expect(output).toContain(GENERATED_BY);
 	});

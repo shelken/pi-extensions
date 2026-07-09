@@ -29,8 +29,9 @@ const GIT_GLOBAL_FLAG_OPTIONS = [
 const GIT_GLOBAL_VALUE_OPTION_PATTERN = `(?:${GIT_GLOBAL_OPTIONS_WITH_VALUE.map(escapeRegex).join("|")})(?:=|\\s+)\\S+`;
 const GIT_GLOBAL_FLAG_OPTION_PATTERN = `(?:${GIT_GLOBAL_FLAG_OPTIONS.map(escapeRegex).join("|")})`;
 const GIT_GLOBAL_OPTION_PATTERN = `(?:${GIT_GLOBAL_VALUE_OPTION_PATTERN}|${GIT_GLOBAL_FLAG_OPTION_PATTERN})`;
+const GIT_COMMAND_PATTERN = String.raw`(?:git|/[^\s;&|]+/git)`;
 const GIT_COMMIT_COMMAND_PATTERN = new RegExp(
-	`(?:^|[;&|\\n])\\s*(?:rtk\\s+)?git(?:\\s+${GIT_GLOBAL_OPTION_PATTERN})*\\s+commit(?:\\s|$)`,
+	`(?:^|[;&|\\n])\\s*(?:rtk\\s+)?${GIT_COMMAND_PATTERN}(?:\\s+${GIT_GLOBAL_OPTION_PATTERN})*\\s+commit(?:\\s|$)`,
 );
 const BASH_GIT_GLOBAL_OPTIONS_WITH_VALUE = buildBashWordList(
 	GIT_GLOBAL_OPTIONS_WITH_VALUE,
@@ -57,8 +58,11 @@ export function wrapGitWithTrailers(
 	const coAuthor = `Co-Authored-By: ${modelName} <noreply@pi.dev>`;
 	const generatedBy = `Generated-By: pi ${piVersion}`;
 
-	// 变更原因：RTK 的外部命令会绕过 `git()` wrapper；只还原真实命令位置，避免改写提交参数里的普通文本。
-	const effectiveCmd = cmd.replaceAll(/(^|[;&|\n]\s*)rtk\s+git\b/g, "$1git");
+	// 变更原因：RTK 和绝对路径 git 都会绕过 `git()` wrapper；只归一化真实命令位置，避免改写提交参数里的普通文本。
+	const effectiveCmd = cmd.replaceAll(
+		/(^|[;&|\n]\s*)(?:rtk\s+)?(?:git|\/[^\s;&|]+\/git)\b/g,
+		"$1git",
+	);
 
 	return `${buildGitWrapper(coAuthor, generatedBy)}\n${effectiveCmd}`;
 }
