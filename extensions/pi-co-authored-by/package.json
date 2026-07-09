@@ -18,8 +18,7 @@
   "files": [
     "extensions/co-authored-by.ts",
     "lib/commit.ts",
-    "README.md",
-    "LICENSE"
+    "README.md"
   ],
   "peerDependencies": {
     "@earendil-works/pi-coding-agent": "*"
