@@ -23,6 +23,19 @@ type GitRepo = {
 	cleanup: () => void;
 };
 
+function createIsolatedGitEnvironment(): NodeJS.ProcessEnv {
+	const env = { ...process.env };
+	for (const key of Object.keys(env)) {
+		if (
+			key.startsWith("PI_CO_AUTHORED_BY_") ||
+			/^GIT_CONFIG_(?:COUNT|KEY_\d+|VALUE_\d+)$/.test(key)
+		) {
+			delete env[key];
+		}
+	}
+	return env;
+}
+
 function createGitRepo(): GitRepo {
 	const cwd = mkdtempSync(join(tmpdir(), "pi-co-authored-by-"));
 	const hooksDir = createCommitHookDirectory();
@@ -37,7 +50,7 @@ git config user.name Tester
 git config user.email tester@example.com
 `,
 		],
-		{ cwd, stdio: ["ignore", "pipe", "pipe"] },
+		{ cwd, env: createIsolatedGitEnvironment(), stdio: ["ignore", "pipe", "pipe"] },
 	);
 
 	return {
@@ -47,7 +60,12 @@ git config user.email tester@example.com
 			return execFileSync(
 				"bash",
 				["-lc", `set -euo pipefail\n${wrapBashWithCommitHook(script, hooksDir, modelName, PI_VERSION)}`],
-				{ cwd, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] },
+				{
+					cwd,
+					env: createIsolatedGitEnvironment(),
+					encoding: "utf8",
+					stdio: ["ignore", "pipe", "pipe"],
+				},
 			);
 		},
 		cleanup(): void {
@@ -165,12 +183,14 @@ git log --oneline || true
 		});
 	});
 
+	// 用户 hook 在仓库根目录运行；日志放仓库内，避免并发临时仓库共享父目录。
 	it("runs the default user prepare-commit-msg hook after appending trailers", () => {
 		withGitRepo((repo) => {
+			const hookLog = join(repo.cwd, ".hook-log");
 			writeFileSync(
 				join(repo.cwd, ".git/hooks/prepare-commit-msg"),
 				`#!/bin/sh
-echo default-user-hook >> ../hook-log
+echo default-user-hook >> '${hookLog}'
 printf '\nUser-Hook: default\n' >> "$1"
 `,
 				{ mode: 0o755 },
@@ -180,7 +200,7 @@ printf '\nUser-Hook: default\n' >> "$1"
 echo one > a.txt
 git add a.txt
 git commit -q -m 'default hook subject'
-cat ../hook-log
+cat '${hookLog}'
 git log -1 --format=%B
 `);
 
@@ -193,11 +213,12 @@ git log -1 --format=%B
 	it("runs user hooks from absolute and relative core.hooksPath", () => {
 		withGitRepo((repo) => {
 			const absoluteHooks = join(repo.cwd, "absolute-hooks");
+			const hookLog = join(repo.cwd, ".hook-log");
 			execFileSync("mkdir", ["-p", absoluteHooks]);
 			writeFileSync(
 				join(absoluteHooks, "prepare-commit-msg"),
 				`#!/bin/sh
-echo absolute-user-hook >> ../hook-log
+echo absolute-user-hook >> '${hookLog}'
 printf '\nUser-Hook: absolute\n' >> "$1"
 `,
 				{ mode: 0o755 },
@@ -208,7 +229,7 @@ git config core.hooksPath '${absoluteHooks}'
 echo one > a.txt
 git add a.txt
 git commit -q -m 'absolute hook subject'
-cat ../hook-log
+cat '${hookLog}'
 git log -1 --format=%B
 `);
 
@@ -217,11 +238,11 @@ git log -1 --format=%B
 			expect(absoluteOutput).toContain(CO_AUTHOR);
 
 			const relativeOutput = repo.run(`
-rm ../hook-log
+rm '${hookLog}'
 mkdir -p relative-hooks
 cat > relative-hooks/prepare-commit-msg <<'EOF'
 #!/bin/sh
-echo relative-user-hook >> ../hook-log
+echo relative-user-hook >> '${hookLog}'
 printf '\nUser-Hook: relative\n' >> "$1"
 EOF
 chmod +x relative-hooks/prepare-commit-msg
@@ -229,7 +250,7 @@ git config core.hooksPath relative-hooks
 echo two > b.txt
 git add b.txt
 git commit -q -m 'relative hook subject'
-cat ../hook-log
+cat '${hookLog}'
 git log -1 --format=%B
 `);
 
@@ -241,10 +262,11 @@ git log -1 --format=%B
 
 	it("propagates user hook failures", () => {
 		withGitRepo((repo) => {
+			const hookLog = join(repo.cwd, ".hook-log");
 			writeFileSync(
 				join(repo.cwd, ".git/hooks/prepare-commit-msg"),
 				`#!/bin/sh
-echo failing-user-hook >> ../hook-log
+echo failing-user-hook >> '${hookLog}'
 exit 42
 `,
 				{ mode: 0o755 },
@@ -257,7 +279,7 @@ git add a.txt
 git commit -q -m 'blocked subject'
 `),
 			).toThrow();
-			const log = execFileSync("cat", ["../hook-log"], { cwd: repo.cwd, encoding: "utf8" });
+			const log = execFileSync("cat", [hookLog], { cwd: repo.cwd, encoding: "utf8" });
 			expect(log).toContain("failing-user-hook");
 		});
 	});

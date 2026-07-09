@@ -61,21 +61,3 @@ jobs:
           done
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: 创建 GitHub Releases
-        if: steps.changesets.outputs.published == 'true'
-        run: |
-          echo '${{ steps.changesets.outputs.publishedPackages }}' | jq -c '.[]' | while read -r pkg; do
-            name=$(echo "$pkg" | jq -r '.name')
-            version=$(echo "$pkg" | jq -r '.version')
-            tag="${name}@${version}"
-            dir="extensions/$(echo "$name" | sed 's|@[^/]*/||')"
-            notes=$(awk -v ver="$version" '
-              $0 ~ "^## " ver { found=1; next }
-              found && /^## / { exit }
-              found { print }
-            ' "$dir/CHANGELOG.md" 2>/dev/null)
-            gh release create "$tag" --title "$tag" --notes "${notes:-$tag}"
-          done
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
