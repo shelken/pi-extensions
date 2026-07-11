@@ -16,15 +16,17 @@ import type {
   ExtensionAPI,
   ExtensionContext,
 } from "@earendil-works/pi-coding-agent";
-import {
-  getLastAssistantMessageText,
-  getStartupErrorMessage,
-  hasPlanBrowserHtml,
-  hasReviewBrowserHtml,
-  startCodeReviewBrowserSession,
-  startLastMessageAnnotationSession,
-  startMarkdownAnnotationSession,
-} from "@plannotator/pi-extension/plannotator-browser";
+
+// 启动时不拉 plannotator 整图（~500ms+）；命令触发时再加载。
+type PlannotatorBrowser =
+  typeof import("@plannotator/pi-extension/plannotator-browser");
+
+let browserPromise: Promise<PlannotatorBrowser> | undefined;
+function loadBrowser(): Promise<PlannotatorBrowser> {
+  return (browserPromise ??= import(
+    "@plannotator/pi-extension/plannotator-browser"
+  ));
+}
 
 /** Shared result handling for all browser session decisions. */
 function handleDecision(
@@ -50,6 +52,12 @@ export default function pn(pi: ExtensionAPI): void {
   pi.registerCommand("pnr", {
     description: "Open code review for local git changes",
     handler: async (_args, ctx) => {
+      const {
+        hasReviewBrowserHtml,
+        startCodeReviewBrowserSession,
+        getStartupErrorMessage,
+      } = await loadBrowser();
+
       if (!hasReviewBrowserHtml()) {
         ctx.ui.notify(
           "Code review UI not available. Rebuild @plannotator/pi-extension.",
@@ -90,6 +98,12 @@ export default function pn(pi: ExtensionAPI): void {
         return;
       }
 
+      const {
+        hasPlanBrowserHtml,
+        startMarkdownAnnotationSession,
+        getStartupErrorMessage,
+      } = await loadBrowser();
+
       if (!hasPlanBrowserHtml()) {
         ctx.ui.notify(
           "Annotation UI not available. Rebuild @plannotator/pi-extension.",
@@ -109,7 +123,9 @@ export default function pn(pi: ExtensionAPI): void {
 
       try {
         const isDir = statSync(absPath).isDirectory();
-        let session: Awaited<ReturnType<typeof startMarkdownAnnotationSession>>;
+        let session: Awaited<
+          ReturnType<typeof startMarkdownAnnotationSession>
+        >;
 
         if (isDir) {
           if (!scanMarkdownFiles(absPath)) {
@@ -160,6 +176,13 @@ export default function pn(pi: ExtensionAPI): void {
   pi.registerCommand("pnl", {
     description: "Annotate the last assistant message",
     handler: async (_args, ctx) => {
+      const {
+        hasPlanBrowserHtml,
+        getLastAssistantMessageText,
+        startLastMessageAnnotationSession,
+        getStartupErrorMessage,
+      } = await loadBrowser();
+
       if (!hasPlanBrowserHtml()) {
         ctx.ui.notify(
           "Annotation UI not available. Rebuild @plannotator/pi-extension.",
