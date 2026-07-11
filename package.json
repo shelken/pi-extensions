@@ -26,8 +26,7 @@
       "./extensions/pi-co-authored-by/extensions/co-authored-by.ts",
       "./extensions/pi-command-history/extensions/index.ts",
       "./extensions/pi-add-dir/extensions/pi-add-dir/index.ts",
-      "./extensions/simple-plannotator/extensions/index.ts",
-      "./extensions/pi-zed-provider/index.ts"
+      "./extensions/simple-plannotator/extensions/index.ts"
     ]
   },
   "devDependencies": {
