@@ -36,3 +36,4 @@
 - 使用mise管理所有**不在系统**的cli/tools
 - python相关用uv(禁止pip); node/ts 相关用bun
 - 跟特定子包相关的justfile放在特定子包目录下
+- 新建新的插件时 使用 `nix flake new extensions/{new-extension} -t github:shelken/nix-templates#pi-extension`
