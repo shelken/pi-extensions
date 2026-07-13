@@ -10,12 +10,12 @@
 |---|---|
 | `shift+up` | 更早的历史 |
 | `shift+down` | 更新的历史 |
-| `ctrl+up` / `ctrl+down` | 同上（兼容别名） |
 
 - 用户输入都会保存（含 `/` 命令）
 - 去重：重复输入会移到最新
-- 每个目录最多 500 条
-- 文件：`~/.pi/folder-history/*.jsonl`
+- 每个目录最多 500 条（`session_start`/`load` 时压缩）
+- 文件：`~/.pi/folder-history/*.jsonl`（每行 `{ cwd, text }`，append 写入）
+- 文件名把路径 `/` 换成 `-` 可能碰撞，靠行内 `cwd` 隔离
 
 ## 验证
 

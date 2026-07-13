@@ -1,69 +1,127 @@
 /**
  * 按工作目录持久化输入历史，shift+up/down 跨 session 回填。
  * 存储：~/.pi/folder-history/<path-with-dashes>.jsonl
+ *
+ * 文件名把 `/` 换成 `-`，`/a-b` 与 `/a/b` 会撞同一文件；
+ * 因此每行必须带 cwd，读写都按 cwd 过滤。
+ *
+ * 写入用 append（并发更安全）；超过上限时在 load 时压缩回写。
  */
 
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
-import { appendFileSync, existsSync, mkdirSync, readFileSync } from "node:fs";
+import {
+  appendFileSync,
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  renameSync,
+  writeFileSync,
+} from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 
 export const HISTORY_DIR = join(homedir(), ".pi", "folder-history");
 export const MAX_HISTORY = 500;
 
-export function getHistoryFile(cwd: string): string {
-  const name = cwd.replace(/\//g, "-");
-  return join(HISTORY_DIR, `${name}.jsonl`);
+interface HistoryRow {
+  cwd: string;
+  text: string;
 }
 
-export function loadHistory(cwd: string, historyDir = HISTORY_DIR): string[] {
-  const file = join(historyDir, `${cwd.replace(/\//g, "-")}.jsonl`);
+function historyFile(cwd: string, historyDir: string): string {
+  return join(historyDir, `${cwd.replace(/\//g, "-")}.jsonl`);
+}
+
+function readRows(file: string): HistoryRow[] {
   if (!existsSync(file)) return [];
-
   try {
-    const lines = readFileSync(file, "utf-8")
-      .split("\n")
-      .filter((l) => l.trim());
-
-    const entries: string[] = [];
-    for (const line of lines) {
+    const rows: HistoryRow[] = [];
+    for (const line of readFileSync(file, "utf-8").split("\n")) {
+      if (!line.trim()) continue;
       try {
         const entry = JSON.parse(line) as { text?: string; cwd?: string };
-        if (entry.text && entry.cwd === cwd) {
-          entries.push(entry.text);
-        }
+        if (!entry.text || !entry.cwd) continue;
+        rows.push({ cwd: entry.cwd, text: entry.text });
       } catch {
         // skip malformed lines
       }
     }
-
-    const seen = new Map<string, number>();
-    entries.forEach((text, i) => seen.set(text, i));
-    const unique = [...seen.entries()]
-      .sort((a, b) => a[1] - b[1])
-      .map(([text]) => text);
-
-    return unique.slice(-MAX_HISTORY);
+    return rows;
   } catch {
     return [];
   }
 }
 
+function uniqueTexts(texts: string[]): string[] {
+  const seen = new Map<string, number>();
+  texts.forEach((text, i) => seen.set(text, i));
+  return [...seen.entries()]
+    .sort((a, b) => a[1] - b[1])
+    .map(([text]) => text);
+}
+
+function writeRows(file: string, rows: HistoryRow[]): void {
+  const body =
+    rows.map((row) => JSON.stringify(row)).join("\n") + (rows.length > 0 ? "\n" : "");
+  const tmp = `${file}.${process.pid}.tmp`;
+  writeFileSync(tmp, body, "utf-8");
+  renameSync(tmp, file);
+}
+
+/** 压缩：各 cwd 只保留最近 MAX_HISTORY 条唯一记录。 */
+function compactFile(file: string): void {
+  const rows = readRows(file);
+  const byCwd = new Map<string, string[]>();
+  for (const row of rows) {
+    const list = byCwd.get(row.cwd) ?? [];
+    list.push(row.text);
+    byCwd.set(row.cwd, list);
+  }
+
+  const compacted: HistoryRow[] = [];
+  for (const [cwd, texts] of byCwd) {
+    for (const text of uniqueTexts(texts).slice(-MAX_HISTORY)) {
+      compacted.push({ cwd, text });
+    }
+  }
+
+  // 只有确实变短才回写，避免无意义 IO
+  if (compacted.length < rows.length) {
+    writeRows(file, compacted);
+  }
+}
+
+export function loadHistory(cwd: string, historyDir = HISTORY_DIR): string[] {
+  const file = historyFile(cwd, historyDir);
+  const rows = readRows(file);
+  const oursRaw = rows.filter((r) => r.cwd === cwd).map((r) => r.text);
+  const unique = uniqueTexts(oursRaw);
+
+  // 文件膨胀时在 load 路径压缩（session_start 触发一次即可）
+  if (rows.length > MAX_HISTORY || unique.length > MAX_HISTORY) {
+    compactFile(file);
+  }
+
+  return unique.slice(-MAX_HISTORY);
+}
+
+/** append 新输入；截断在下次 load/compact 时完成。 */
 export function appendHistory(
   cwd: string,
   text: string,
   historyDir = HISTORY_DIR,
 ): void {
   mkdirSync(historyDir, { recursive: true });
-  const file = join(historyDir, `${cwd.replace(/\//g, "-")}.jsonl`);
-  const entry = JSON.stringify({ cwd, text, ts: Date.now() });
-  appendFileSync(file, entry + "\n", "utf-8");
+  const file = historyFile(cwd, historyDir);
+  appendFileSync(file, `${JSON.stringify({ cwd, text })}\n`, "utf-8");
 }
 
 export function pushUniqueHistory(history: string[], text: string): string[] {
   const next = history.filter((item) => item !== text);
   next.push(text);
-  if (next.length > MAX_HISTORY) next.shift();
+  if (next.length > MAX_HISTORY) {
+    return next.slice(-MAX_HISTORY);
+  }
   return next;
 }
 
@@ -104,11 +162,6 @@ export default function commandHistoryExtension(pi: ExtensionAPI): void {
     history = loadHistory(currentCwd);
     historyIndex = -1;
     savedEditorText = "";
-
-    ctx.ui.setStatus(
-      "folder-history",
-      history.length > 0 ? `📜 ${history.length} cmds (shift+↑/↓)` : undefined,
-    );
   });
 
   pi.on("input", (event, _ctx) => {
@@ -130,17 +183,6 @@ export default function commandHistoryExtension(pi: ExtensionAPI): void {
 
   pi.registerShortcut("shift+down", {
     description: "Next command from folder history",
-    handler: showNextCommand,
-  });
-
-  // 兼容旧键位
-  pi.registerShortcut("ctrl+up", {
-    description: "Previous command from folder history (legacy alias)",
-    handler: showPreviousCommand,
-  });
-
-  pi.registerShortcut("ctrl+down", {
-    description: "Next command from folder history (legacy alias)",
     handler: showNextCommand,
   });
 }
