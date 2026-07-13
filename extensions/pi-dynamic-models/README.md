@@ -4,7 +4,11 @@
 
 ## 安装
 
-本插件作为 `pi-extensions` mono repo 的子包维护。通常只需要把仓库根目录作为 Pi package 加到 `settings.json` 的 `packages`，由根 `package.json` 的 `pi.extensions` 加载本插件入口。
+```bash
+pi install npm:@shelken/pi-dynamic-models
+```
+
+也可以把 `pi-extensions` 仓库根目录作为 Pi package 加到 `settings.json`，由根 `package.json` 的 `pi.extensions` 加载本插件入口：
 
 ```json
 {
