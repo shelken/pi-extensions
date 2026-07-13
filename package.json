@@ -21,7 +21,6 @@
   "pi": {
     "extensions": [
       "./extensions/pi-auto-model-prompts/index.ts",
-      "./extensions/pi-debug-cache/index.ts",
       "./extensions/pi-dynamic-models/index.ts",
       "./extensions/pi-co-authored-by/index.ts",
       "./extensions/pi-command-history/index.ts",

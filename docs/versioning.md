@@ -108,7 +108,7 @@ pi 扩展以 `.ts` 源文件直接发布（`pi.extensions` 数组指向各子包
 ### 当前子包发布状态
 
 - **public（会发 npm）**：`@shelken/pi-dynamic-models`
-- **private（只打 tag）**：`pi-add-dir`、`pi-auto-model-prompts`、`pi-co-authored-by`、`pi-command-history`、`pi-debug-cache`、`simple-plannotator`
+- **private（只打 tag）**：`pi-add-dir`、`pi-auto-model-prompts`、`pi-co-authored-by`、`pi-command-history`、`simple-plannotator`
 
 ### 子包从 private 转 public
 
