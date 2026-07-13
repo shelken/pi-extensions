@@ -107,8 +107,8 @@ pi 扩展以 `.ts` 源文件直接发布（`pi.extensions` 数组指向各子包
 
 ### 当前子包发布状态
 
-- **public（会发 npm）**：`@shelken/pi-dynamic-models`
-- **private（只打 tag）**：`pi-add-dir`、`pi-auto-model-prompts`、`pi-co-authored-by`、`pi-command-history`、`simple-plannotator`
+- **public（会发 npm）**：`@shelken/pi-add-dir`、`@shelken/pi-co-authored-by`、`@shelken/pi-command-history`、`@shelken/pi-dynamic-models`、`@shelken/simple-plannotator`
+- **private（只打 tag）**：`pi-auto-model-prompts`
 
 ### 子包从 private 转 public
 
@@ -124,12 +124,45 @@ pi 扩展以 `.ts` 源文件直接发布（`pi.extensions` 数组指向各子包
    - 添加 `publishConfig.access: public`；
    - 用 `files` 限制 tarball，只包含运行文件和必要文档。
 4. **更新文档**：子包 README 增加 npm 安装方式；同步更新根 README 的 npm 包名。
-5. **检查 tarball**：在子包目录运行 `npm pack --dry-run --json`，确认没有测试、fixture、临时文件、凭据或不应公开的源码。
-6. **运行验证**：至少运行子包测试、入口 smoke test、`just verify` 和 `just secrets`。仅测试 helper 不算覆盖发布入口。
-7. **配置 Trusted Publisher**：为目标 npm 包绑定 `shelken/pi-extensions` 的 `.github/workflows/publish.yml`。若包尚不存在，npm 会返回 `E404`，必须先用 2FA 完成一次人工首发，再立即建立绑定；后续版本全部走 OIDC：
+5. **同步 lockfile**：修改 workspace 包名后运行 `just install`，确认 `bun.lock` 已记录 scoped 名称。
+6. **检查 tarball**：从 monorepo 根运行 `npm pack --workspace='@shelken/<package>' --dry-run --json`，确认没有测试、fixture、临时文件、凭据或不应公开的源码。
+7. **运行验证**：至少运行子包测试、入口 smoke test、`just verify` 和 `just secrets`。仅测试 helper 不算覆盖发布入口。
+8. **写 changeset**：scope、公开入口和发布方式变化属于发布意义变更，必须声明 bump。若 private 阶段已经生成错误 tag/Release，先删除；不要让 tag 指向未实际发布的版本。
+9. **提交并推送准备改动**：等待 Changesets 创建 release PR，但新包人工首发和 Trusted Publisher 配置完成前不要 merge。
+10. **完成一次人工首发并绑定 OIDC**：严格按下方 runbook 操作。已有 npm 包可以跳过人工首发，直接配置 Trusted Publisher。
+11. **合并 release PR**：review 包名、version、CHANGELOG 和 tarball 后再合并，触发首个 OIDC patch 发布。
+12. **验证发布闭环**：确认 npm 版本、provenance、GitHub Release 和 tag 一致。
+
+### 新 scoped 包人工首发 runbook
+
+以下命令都从 monorepo 根执行。不要直接运行裸 `npm publish`：根 `package.json` 没有 `version`，npm 11 会报 `Cannot read properties of null (reading 'prerelease')`。
+
+1. 登录到临时 npmrc，避免修改由 Nix 管理的用户配置：
 
    ```bash
-   npm publish --access public
+   npm login --userconfig /tmp/.npmrc-user
+   ```
+
+2. 用当前 package version 人工发布 baseline；显式指定 workspace：
+
+   ```bash
+   NPM_CONFIG_USERCONFIG=/tmp/.npmrc-user \
+   npm publish --workspace='@shelken/<package>' --access public
+   ```
+
+3. 验证包状态。新包发布后 registry 元数据可能短暂延迟；`npm access get status` 已显示 `public` 时不要重复 publish，等待 `npm view` 可见：
+
+   ```bash
+   NPM_CONFIG_USERCONFIG=/tmp/.npmrc-user \
+   npm access get status '@shelken/<package>'
+
+   npm view '@shelken/<package>' version
+   ```
+
+4. 立即绑定 Trusted Publisher。该操作需要浏览器 2FA：
+
+   ```bash
+   NPM_CONFIG_USERCONFIG=/tmp/.npmrc-user \
    npm trust github '@shelken/<package>' \
      --file publish.yml \
      --repo shelken/pi-extensions \
@@ -137,9 +170,24 @@ pi 扩展以 `.ts` 源文件直接发布（`pi.extensions` 数组指向各子包
      --yes
    ```
 
-8. **写 changeset**：scope、公开入口和发布方式变化属于发布意义变更，必须声明 bump。若 private 阶段已经生成错误 tag/Release，先删除；不要让 tag 指向未实际发布的版本。
-9. **合并 release PR**：review 包名、version、CHANGELOG 和 tarball 后再合并，触发 OIDC 发布。
-10. **验证发布闭环**：确认 npm 版本、provenance、GitHub Release 和 tag 一致。
+   - `E404`：包尚未创建或 registry 仍未完成传播，等待后重试。
+   - `E409`：该包已有唯一绑定；运行 `npm trust list '@shelken/<package>' --json` 核对，不要重复创建。
+
+5. 为人工发布的 baseline 补 scoped tag 和 GitHub Release，tag 必须指向实际打包源码所在 commit：
+
+   ```bash
+   git tag '@shelken/<package>@<version>' <publish-commit>
+   git push origin '@shelken/<package>@<version>'
+   gh release create '@shelken/<package>@<version>' --generate-notes
+   ```
+
+6. 合并 Changesets release PR，等待 workflow 用 OIDC 发布下一 patch。随后确认 npm 页面有 provenance，且来源为 `shelken/pi-extensions` 的 `publish.yml`。
+
+7. 全部完成后删除临时凭据：
+
+   ```bash
+   rm -f /tmp/.npmrc-user
+   ```
 
 manifest 示例：
 
