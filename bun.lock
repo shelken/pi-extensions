@@ -20,8 +20,8 @@
       },
     },
     "extensions/pi-add-dir": {
-      "name": "pi-add-dir",
-      "version": "1.3.1",
+      "name": "@shelken/pi-add-dir",
+      "version": "1.4.0",
       "peerDependencies": {
         "@earendil-works/pi-coding-agent": "*",
         "@earendil-works/pi-tui": "*",
@@ -75,7 +75,7 @@
     },
     "extensions/pi-dynamic-models": {
       "name": "@shelken/pi-dynamic-models",
-      "version": "0.1.4",
+      "version": "0.1.5",
       "peerDependencies": {
         "@earendil-works/pi-coding-agent": "*",
       },
@@ -335,6 +335,8 @@
     "@rolldown/binding-win32-x64-msvc": ["@rolldown/binding-win32-x64-msvc@1.1.5", "", { "os": "win32", "cpu": "x64" }, "sha512-tTZuDBPw85tEN5PQi1pnEBzDy0Z49HtScLAbD5t6hyeU92A95pRWaSMw1GZZi/RwgSgUIl0xrSlXIT/9QzvYSA=="],
 
     "@rolldown/pluginutils": ["@rolldown/pluginutils@1.0.1", "", {}, "sha512-2j9bGt5Jh8hj+vPtgzPtl72j0yRxHAyumoo6TNfAjsLB04UtpSvPbPcDcBMxz7n+9CYB0c1GxQFxYRg2jimqGw=="],
+
+    "@shelken/pi-add-dir": ["@shelken/pi-add-dir@workspace:extensions/pi-add-dir"],
 
     "@shelken/pi-dynamic-models": ["@shelken/pi-dynamic-models@workspace:extensions/pi-dynamic-models"],
 
@@ -777,8 +779,6 @@
     "path-type": ["path-type@4.0.0", "", {}, "sha512-gDKb8aZMDeD/tZWs9P6+q0J9Mwkdl6xMV8TjnGP3qJVJ06bdMgkbBlLU8IdfOsIsFz2BW1rNVT3XuNEl8zPAvw=="],
 
     "pathe": ["pathe@2.0.3", "", {}, "sha512-WUjGcAqP1gQacoQe+OBJsFA7Ld4DyXuUIjZ5cc75cLHvJ7dtNsTugphxIADwspS+AraAUePCKrSVtPLFj/F88w=="],
-
-    "pi-add-dir": ["pi-add-dir@workspace:extensions/pi-add-dir"],
 
     "pi-auto-model-prompts": ["pi-auto-model-prompts@workspace:extensions/pi-auto-model-prompts"],
 

@@ -16,9 +16,15 @@
 
 Skills 通过 `resources_discover` 注册为 `/skill:name`。
 
-## 本地使用
+## 安装
 
-本 monorepo 根 `package.json` 的 `pi.extensions` 已包含入口。全局安装时也可直接引用本包：
+从 npm 安装：
+
+```bash
+pi install npm:@shelken/pi-add-dir
+```
+
+本 monorepo 根 `package.json` 的 `pi.extensions` 也已包含入口。本地使用时可直接引用整个仓库：
 
 ```json
 {

@@ -6,7 +6,7 @@
 
 | Package | npm | 入口 | 用途 |
 |---|---|---|---|
-| `pi-add-dir` | | `extensions/pi-add-dir/index.ts` | 向当前会话添加外部目录，并加载其上下文文件和 skills。 |
+| `pi-add-dir` | `@shelken/pi-add-dir` | `extensions/pi-add-dir/index.ts` | 向当前会话添加外部目录，并加载其上下文文件和 skills。 |
 | `pi-auto-model-prompts` | | `extensions/pi-auto-model-prompts/index.ts` | 按模型加载额外 system prompt。 |
 | `pi-co-authored-by` | | `extensions/pi-co-authored-by/index.ts` | agent 执行 `git commit` 时追加 Co-Authored-By / Generated-By trailer。 |
 | `pi-command-history` | | `extensions/pi-command-history/index.ts` | 按工作目录持久化输入历史，支持快捷键回填。 |

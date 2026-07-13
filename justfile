@@ -3,6 +3,10 @@
 default:
     @just --list
 
+# 安装依赖并同步 lockfile
+install:
+    bun install
+
 # 类型检查
 check:
     bun run check

@@ -1,9 +1,21 @@
 {
-  "name": "pi-add-dir",
+  "name": "@shelken/pi-add-dir",
   "version": "1.4.0",
   "description": "Add external directories to a pi session - loads AGENTS.md, CLAUDE.md, and skills into context.",
   "type": "module",
-  "private": true,
+  "license": "MIT",
+  "files": [
+    "index.ts",
+    "helpers.ts"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/shelken/pi-extensions.git",
+    "directory": "extensions/pi-add-dir"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
     "test": "vitest run"
   },
