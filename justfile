@@ -15,6 +15,10 @@ test:
 verify:
     bun run verify
 
+# 扫描完整 Git 历史中的密钥
+secrets:
+    gitleaks git --redact --no-banner --verbose
+
 # 依赖升级 (latest, 递归) 后跑 verify
 deps-update:
     bun run deps:update
