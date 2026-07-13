@@ -8,11 +8,11 @@
 |---|---|---|---|
 | `pi-add-dir` | | `extensions/pi-add-dir/index.ts` | 向当前会话添加外部目录，并加载其上下文文件和 skills。 |
 | `pi-auto-model-prompts` | | `extensions/pi-auto-model-prompts/index.ts` | 按模型加载额外 system prompt。 |
-| `pi-co-authored-by` | | `extensions/pi-co-authored-by/extensions/co-authored-by.ts` | agent 执行 `git commit` 时追加 Co-Authored-By / Generated-By trailer。 |
-| `pi-command-history` | | `extensions/pi-command-history/extensions/index.ts` | 按工作目录持久化输入历史，支持快捷键回填。 |
+| `pi-co-authored-by` | | `extensions/pi-co-authored-by/index.ts` | agent 执行 `git commit` 时追加 Co-Authored-By / Generated-By trailer。 |
+| `pi-command-history` | | `extensions/pi-command-history/index.ts` | 按工作目录持久化输入历史，支持快捷键回填。 |
 | `pi-debug-cache` | | `extensions/pi-debug-cache/index.ts` | 记录 system prompt hash、diff 和 prompt cache 调试信息。 |
 | `pi-dynamic-models` | `@shelken/pi-dynamic-models` | `extensions/pi-dynamic-models/index.ts` | 自动发现 provider 远端模型，并用 models.dev registry 补全模型参数。 |
-| `simple-plannotator` | | `extensions/simple-plannotator/extensions/index.ts` | 基于浏览器的代码审查和 Markdown 标注（`/pnr` `/pna` `/pnl`）。 |
+| `simple-plannotator` | | `extensions/simple-plannotator/index.ts` | 基于浏览器的代码审查和 Markdown 标注（`/pnr` `/pna` `/pnl`）。 |
 
 新增、移除或改名任何子 package 时，必须同步更新本表和根 `package.json` 的 `pi.extensions`。
 

@@ -1,15 +1,21 @@
 {
   "name": "simple-plannotator",
   "version": "0.1.3",
+  "description": "基于浏览器的代码审查和 Markdown 标注（/pnr /pna /pnl）",
+  "type": "module",
   "private": true,
-  "description": "Browser-based code review and markdown annotation for pi",
+  "scripts": {
+    "test": "vitest run"
+  },
+  "keywords": [
+    "pi-package",
+    "plannotator",
+    "code-review"
+  ],
   "pi": {
     "extensions": [
-      "./extensions/index.ts"
+      "./index.ts"
     ]
-  },
-  "scripts": {
-    "test": "echo \"no tests\""
   },
   "dependencies": {
     "@plannotator/pi-extension": "^0.23.0"

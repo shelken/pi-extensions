@@ -1,58 +1,24 @@
 # pi-command-history
 
-Folder-based persistent command history for [pi](https://github.com/badlogic/pi-mono). Recall previous commands with `shift+up`/`shift+down` across sessions — as long as you're in the same folder, your full command history is always available.
+按工作目录持久化输入历史。同一目录下跨 session 可用 `shift+up` / `shift+down` 回填。
 
-## Fork Source
+初始 fork 自 [ross-jill-ws/pi-command-history](https://github.com/ross-jill-ws/pi-command-history)。
 
-This package is maintained as a fork of <https://github.com/ross-jill-ws/pi-command-history>.
+## 快捷键
 
-## Install
+| 快捷键 | 作用 |
+|---|---|
+| `shift+up` | 更早的历史 |
+| `shift+down` | 更新的历史 |
+| `ctrl+up` / `ctrl+down` | 同上（兼容别名） |
 
-```bash
-pi install npm:pi-command-history
-```
+- 用户输入都会保存（含 `/` 命令）
+- 去重：重复输入会移到最新
+- 每个目录最多 500 条
+- 文件：`~/.pi/folder-history/*.jsonl`
 
-Or try without installing:
-
-```bash
-pi -e npm:pi-command-history
-```
-
-## Usage
-
-| Shortcut | Action |
-|----------|--------|
-| `shift+up` | Previous command (older) |
-| `shift+down` | Next command (newer) |
-| `ctrl+up` | Previous command (older, legacy alias) |
-| `ctrl+down` | Next command (newer, legacy alias) |
-
-When you enter a command in pi, it's saved to a per-folder history file. Next time you open pi in the same folder (even in a new session), press `shift+up` to cycle through your previous commands.
-
-### What gets saved
-
-- All user input is saved, including `/` slash commands
-- History is deduplicated — repeated commands move to the most recent position
-- Up to 500 commands are stored per folder
-
-### How it works
-
-- History files are stored in `~/.pi/folder-history/` as JSONL, keyed by a hash of the working directory
-- A status indicator in the footer shows the number of saved commands
-- Compatible with other editor extensions (e.g., `pi-vim`) — no editor replacement conflicts
-
-## Uninstall
+## 验证
 
 ```bash
-pi remove npm:pi-command-history
+bun --filter pi-command-history test
 ```
-
-To also remove saved history:
-
-```bash
-rm -rf ~/.pi/folder-history/
-```
-
-## License
-
-MIT

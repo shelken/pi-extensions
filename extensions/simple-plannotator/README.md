@@ -1,11 +1,19 @@
 # simple-plannotator
 
-基于浏览器的代码审查和 Markdown 标注工具，集成 [Plannotator](https://github.com/plannotator/plannotator)。
+基于浏览器的代码审查和 Markdown 标注。依赖 `@plannotator/pi-extension` 提供 UI 与服务端能力。
 
-> Fork：<https://github.com/CNife/pi-extensions>
+初始 fork 自 [CNife/pi-extensions](https://github.com/CNife/pi-extensions)。
 
-## 功能
+## 命令
 
-- `/pnr` — 在浏览器中审查本地 git 变更
-- `/pna <path>` — 在浏览器中标注 Markdown 文件或文件夹
-- `/pnl` — 标注最后一条 AI 消息
+| 命令 | 作用 |
+|---|---|
+| `/pnr` | 审查本地 git 改动 |
+| `/pna <file.md\|folder/>` | 标注 markdown 文件或目录 |
+| `/pnl` | 标注最近一条 assistant 消息 |
+
+## 验证
+
+```bash
+bun --filter simple-plannotator test
+```

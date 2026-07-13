@@ -4,7 +4,7 @@ import {
 	createCommitHookDirectory,
 	removeCommitHookDirectory,
 	wrapBashWithCommitHook,
-} from "../lib/commit.ts";
+} from "./lib/commit.ts";
 
 export default function (pi: ExtensionAPI) {
 	let hooksDir: string | undefined;

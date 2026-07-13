@@ -10,7 +10,7 @@
     "types": ["node"],
     "paths": {
       "@plannotator/pi-extension/plannotator-browser": [
-        "./extensions/simple-plannotator/extensions/plannotator-browser.d.ts"
+        "./extensions/simple-plannotator/plannotator-browser.d.ts"
       ]
     },
     "resolveJsonModule": true

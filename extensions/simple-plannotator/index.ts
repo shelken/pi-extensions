@@ -220,7 +220,7 @@ export default function pn(pi: ExtensionAPI): void {
 }
 
 /** Normalize a user-provided path: strip @ prefix, quotes, expand ~ to home directory. */
-function normalizeUserPath(raw: string): string {
+export function normalizeUserPath(raw: string): string {
   const trimmed = raw.trim();
   const unquoted = trimmed.replace(/^["']|["']$/g, "");
   // Strip @ prefix from file references (e.g. @file.md -> file.md)
@@ -228,7 +228,7 @@ function normalizeUserPath(raw: string): string {
   return expandHomePath(stripped);
 }
 
-function expandHomePath(input: string): string {
+export function expandHomePath(input: string): string {
   const home = homedir();
   if (input === "~") return home;
   if (input.startsWith("~/") || input.startsWith("~\\")) {
