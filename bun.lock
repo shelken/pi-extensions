@@ -34,7 +34,7 @@
       ],
     },
     "extensions/pi-auto-model-prompts": {
-      "name": "pi-auto-model-prompts",
+      "name": "@shelken/pi-auto-model-prompts",
       "version": "0.2.1",
       "peerDependencies": {
         "@earendil-works/pi-coding-agent": "*",
@@ -327,6 +327,8 @@
     "@rolldown/pluginutils": ["@rolldown/pluginutils@1.0.1", "", {}, "sha512-2j9bGt5Jh8hj+vPtgzPtl72j0yRxHAyumoo6TNfAjsLB04UtpSvPbPcDcBMxz7n+9CYB0c1GxQFxYRg2jimqGw=="],
 
     "@shelken/pi-add-dir": ["@shelken/pi-add-dir@workspace:extensions/pi-add-dir"],
+
+    "@shelken/pi-auto-model-prompts": ["@shelken/pi-auto-model-prompts@workspace:extensions/pi-auto-model-prompts"],
 
     "@shelken/pi-co-authored-by": ["@shelken/pi-co-authored-by@workspace:extensions/pi-co-authored-by"],
 
@@ -775,8 +777,6 @@
     "path-type": ["path-type@4.0.0", "", {}, "sha512-gDKb8aZMDeD/tZWs9P6+q0J9Mwkdl6xMV8TjnGP3qJVJ06bdMgkbBlLU8IdfOsIsFz2BW1rNVT3XuNEl8zPAvw=="],
 
     "pathe": ["pathe@2.0.3", "", {}, "sha512-WUjGcAqP1gQacoQe+OBJsFA7Ld4DyXuUIjZ5cc75cLHvJ7dtNsTugphxIADwspS+AraAUePCKrSVtPLFj/F88w=="],
-
-    "pi-auto-model-prompts": ["pi-auto-model-prompts@workspace:extensions/pi-auto-model-prompts"],
 
     "picocolors": ["picocolors@1.1.1", "", {}, "sha512-xceH2snhtb5M9liqDsmEw56le376mTZkEX/jEb/RxNFyegNul7eNslCXP9FDj/Lcu0X8KEyMceP2ntpaHrDEVA=="],
 

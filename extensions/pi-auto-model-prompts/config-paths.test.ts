@@ -1,8 +1,9 @@
-import { describe, expect, it } from "vitest";
+import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import { describe, expect, it, vi } from "vitest";
 import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { loadConfig, getConfigPaths, findPrompt, getPromptDirs } from "./index.ts";
+import autoModelPrompts, { loadConfig, getConfigPaths, findPrompt, getPromptDirs } from "./index.ts";
 
 function withTempHome<T>(fn: (home: string, cwd: string) => T): T {
   const home = mkdtempSync(join(tmpdir(), "pi-amp-home-"));
@@ -14,6 +15,19 @@ function withTempHome<T>(fn: (home: string, cwd: string) => T): T {
     rmSync(cwd, { recursive: true, force: true });
   }
 }
+
+describe("pi-auto-model-prompts extension", () => {
+  it("registers the session and prompt events", () => {
+    const events: string[] = [];
+    const pi = {
+      on: vi.fn((event: string) => events.push(event)),
+    } as unknown as ExtensionAPI;
+
+    autoModelPrompts(pi);
+
+    expect(events).toEqual(["session_start", "before_agent_start"]);
+  });
+});
 
 describe("pi-auto-model-prompts config paths", () => {
   it("uses the standard global and project extension config paths", () => {

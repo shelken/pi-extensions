@@ -2,6 +2,12 @@
 
 按当前模型 ID 注入额外 system prompt。在 `before_agent_start` 以 `# AUTO MODEL PROMPT(模型特别规则)` 标题追加到末尾。
 
+## 安装
+
+```bash
+pi install npm:@shelken/pi-auto-model-prompts
+```
+
 ## 配置
 
 可选：
@@ -49,5 +55,5 @@
 ## 验证
 
 ```bash
-bun --filter pi-auto-model-prompts test
+bun --filter '@shelken/pi-auto-model-prompts' test
 ```
