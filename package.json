@@ -13,7 +13,7 @@
   ],
   "scripts": {
     "check": "tsc --noEmit",
-    "test": "bun --filter '*' test && vitest run",
+    "test": "node --test scripts/*.node-test.mjs && bun --filter '*' test && vitest run",
     "verify": "bun run check && bun run test",
     "deps:update": "bun update --latest --recursive && bun run verify",
     "deps:update:dry": "bun update --latest --recursive --dry-run"

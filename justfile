@@ -23,6 +23,42 @@ verify:
 secrets:
     gitleaks git --redact --no-banner --verbose
 
+# 首次公开前门禁: manifest + 子包测试 + tarball + 全仓验证
+package-audit package:
+    node scripts/public-package.mjs audit "{{package}}"
+    just verify
+    just secrets
+
+# 登录临时 npmrc（需要浏览器 2FA）
+package-login:
+    npm login --userconfig /tmp/.npmrc-user
+
+# 人工首发当前 workspace 版本（需要浏览器 2FA）
+package-bootstrap package:
+    node scripts/public-package.mjs bootstrap "{{package}}"
+
+# 为已存在的 npm 包绑定 GitHub OIDC（需要浏览器 2FA）
+package-trust package:
+    node scripts/public-package.mjs trust "{{package}}"
+
+# 补齐人工首发的 scoped tag 和 GitHub Release
+package-baseline package commit="HEAD":
+    node scripts/public-package.mjs baseline "{{package}}" "{{commit}}"
+
+# 查看 npm version、repository、license 和公开状态
+package-status package:
+    node scripts/public-package.mjs status "{{package}}"
+
+# 删除临时 npm 登录凭据
+package-auth-clean:
+    rm -f /tmp/.npmrc-user
+
+# 日常发包门禁: 测试 + 密钥扫描 + changeset 状态
+release-ready:
+    just verify
+    just secrets
+    bunx changeset status
+
 # 依赖升级 (latest, 递归) 后跑 verify
 deps-update:
     bun run deps:update
