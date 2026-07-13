@@ -11,6 +11,11 @@
     "dynamic-models",
     "model-discovery"
   ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/shelken/pi-extensions.git",
+    "directory": "extensions/pi-dynamic-models"
+  },
   "publishConfig": {
     "access": "public"
   },
