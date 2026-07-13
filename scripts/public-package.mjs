@@ -7,6 +7,7 @@ import { spawnSync } from "node:child_process";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const REPOSITORY = "shelken/pi-extensions";
+const NPM_OWNER = "shelken";
 const REPOSITORY_URL = `git+https://github.com/${REPOSITORY}.git`;
 const DEFAULT_USERCONFIG = "/tmp/.npmrc-user";
 
@@ -128,21 +129,29 @@ function registryVersion(name) {
 }
 
 function accessStatus(name, env) {
-  const result = run("npm", ["access", "get", "status", name], {
+  const result = run("npm", ["access", "get", "status", name], { capture: true, env });
+  return result.stdout.trim();
+}
+
+function ownedPackages(env) {
+  const result = run("npm", ["access", "list", "packages", NPM_OWNER, "--json"], {
     capture: true,
-    allowFailure: true,
     env,
   });
-  return result.status === 0 ? result.stdout.trim() : null;
+  return JSON.parse(result.stdout);
+}
+
+export function packageExists(name, publishedVersion, packages) {
+  return Boolean(publishedVersion) || Object.hasOwn(packages, name);
 }
 
 function bootstrapPackage(pkg) {
   auditPackage(pkg);
   const env = npmEnvironment();
   const published = registryVersion(pkg.manifest.name);
-  const access = accessStatus(pkg.manifest.name, env);
-  if (published || access) {
-    fail(`${pkg.manifest.name} 已存在于 npm (${published ?? access})，不要重复人工首发`);
+  const packages = ownedPackages(env);
+  if (packageExists(pkg.manifest.name, published, packages)) {
+    fail(`${pkg.manifest.name} 已存在于 npm (${published ?? packages[pkg.manifest.name]})，不要重复人工首发`);
   }
 
   run("npm", ["publish", `--workspace=${pkg.manifest.name}`, "--access", "public"], { env });
@@ -219,12 +228,11 @@ function showStatus(pkg) {
   if (result.status === 0) console.log(result.stdout.trim());
 
   const userconfig = process.env.NPM_CONFIG_USERCONFIG ?? DEFAULT_USERCONFIG;
-  const access = existsSync(userconfig)
-    ? accessStatus(pkg.manifest.name, { ...process.env, NPM_CONFIG_USERCONFIG: userconfig })
-    : null;
-  if (access) console.log(access);
+  const env = { ...process.env, NPM_CONFIG_USERCONFIG: userconfig };
+  const owned = existsSync(userconfig) && Object.hasOwn(ownedPackages(env), pkg.manifest.name);
+  if (owned) console.log(accessStatus(pkg.manifest.name, env));
 
-  if (result.status !== 0 && !access) fail(`${pkg.manifest.name} 在 npm 不可见`);
+  if (result.status !== 0 && !owned) fail(`${pkg.manifest.name} 在 npm 不可见`);
   if (result.status !== 0) console.log("npm view 尚未传播完成，请等待后重试");
 }
 

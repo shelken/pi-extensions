@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { manifestErrors, tarballErrors } from "./public-package.mjs";
+import { manifestErrors, packageExists, tarballErrors } from "./public-package.mjs";
 
 const validManifest = {
   name: "@shelken/example",
@@ -38,6 +38,11 @@ test("manifestErrors rejects private packages", () => {
   });
 
   assert.ok(errors.includes("必须删除 private: true"));
+});
+
+test("packageExists ignores npm access status for an unowned package", () => {
+  assert.equal(packageExists("@shelken/new-package", null, {}), false);
+  assert.equal(packageExists("@shelken/new-package", null, { "@shelken/new-package": "read-write" }), true);
 });
 
 test("tarballErrors rejects tests and env files", () => {
