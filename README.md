@@ -4,17 +4,19 @@
 
 ## 子 package
 
-| Package | 入口 | 用途 | 来源 |
+| Package | npm | 入口 | 用途 |
 |---|---|---|---|
-| `pi-add-dir` | `extensions/pi-add-dir/extensions/pi-add-dir/index.ts` | 向当前会话添加外部目录，并加载其上下文文件和 skills。 | Fork：<https://github.com/itisbryan/pi-add-dir> |
-| `pi-auto-model-prompts` | `extensions/pi-auto-model-prompts/index.ts` | 按模型加载额外 system prompt。 | 自管 |
-| `pi-co-authored-by` | `extensions/pi-co-authored-by/extensions/co-authored-by.ts` | agent 执行 `git commit` 时追加 commit trailer。 | 自管 |
-| `pi-command-history` | `extensions/pi-command-history/extensions/index.ts` | 按工作目录持久化输入历史，支持快捷键回填。 | Fork：<https://github.com/ross-jill-ws/pi-command-history> |
-| `pi-debug-cache` | `extensions/pi-debug-cache/index.ts` | 记录 system prompt hash、diff 和 prompt cache 调试信息。 | 自管 |
-| `pi-dynamic-models` | `extensions/pi-dynamic-models/index.ts` | 自动发现 provider 远端模型，并用 registry 补全模型参数。 | 自管 |
-| `simple-plannotator` | `extensions/simple-plannotator/extensions/index.ts` | 基于浏览器的代码审查和 Markdown 标注工具。 | Fork：<https://github.com/CNife/pi-extensions> |
+| `pi-add-dir` | | `extensions/pi-add-dir/index.ts` | 向当前会话添加外部目录，并加载其上下文文件和 skills。 |
+| `pi-auto-model-prompts` | | `extensions/pi-auto-model-prompts/index.ts` | 按模型加载额外 system prompt。 |
+| `pi-co-authored-by` | | `extensions/pi-co-authored-by/extensions/co-authored-by.ts` | agent 执行 `git commit` 时追加 Co-Authored-By / Generated-By trailer。 |
+| `pi-command-history` | | `extensions/pi-command-history/extensions/index.ts` | 按工作目录持久化输入历史，支持快捷键回填。 |
+| `pi-debug-cache` | | `extensions/pi-debug-cache/index.ts` | 记录 system prompt hash、diff 和 prompt cache 调试信息。 |
+| `pi-dynamic-models` | `@shelken/pi-dynamic-models` | `extensions/pi-dynamic-models/index.ts` | 自动发现 provider 远端模型，并用 models.dev registry 补全模型参数。 |
+| `simple-plannotator` | | `extensions/simple-plannotator/extensions/index.ts` | 基于浏览器的代码审查和 Markdown 标注（`/pnr` `/pna` `/pnl`）。 |
 
 新增、移除或改名任何子 package 时，必须同步更新本表和根 `package.json` 的 `pi.extensions`。
+
+子包用法、配置与初始来源见各自目录下的 `README.md`。
 
 ## 临时禁用某个插件
 
@@ -32,17 +34,25 @@
 
 ## 本地使用
 
-把本仓库作为本地 pi package 加到 `settings.json` 的 `packages`：
+把本仓库作为本地 pi package 加到 `{pi-agent-dir}/settings.json` 的 `packages`：
 
 ```json
 {
-  "packages": ["./pi-extensions"]
+  "packages": ["/path/to/pi-extensions"]
 }
 ```
+
+修改后在 pi 中 `/reload` 即可加载。只加载根 `package.json` 的 `pi.extensions` 里列出的入口。
 
 ## 验证
 
 ```bash
 bun install
-bun run check
+just verify
 ```
+
+## 版本与发布
+
+子包独立 semver，用 changesets 管理。表格中有 npm 名的 public 子包经 CI 发 npm；其余 private 子包只打 tag。
+
+流程与命令见 [`docs/versioning.md`](docs/versioning.md)。
