@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.4.0
+
+### Minor Changes
+
+- [`880b5cf`](https://github.com/shelken/pi-extensions/commit/880b5cf3dc081419045bebd2b550a0a4e1fd64ea) Thanks [@shelken](https://github.com/shelken)! - 大幅简化：去掉 smart suggestions / monorepo 推荐 / 扩展探测；扁平入口到 `index.ts`；支持 `~` 路径展开
+
 ## 1.3.1
 
 - **fix:** `ctx.ui.select` returns the selected string, not an index — all select handlers (`/add-dir`, `/suggest-dirs`, `/remove-dir`) now use `indexOf` to find the match
