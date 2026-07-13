@@ -4,6 +4,12 @@
 
 初始 fork 自 [CNife/pi-extensions](https://github.com/CNife/pi-extensions)。
 
+## 安装
+
+```bash
+pi install npm:@shelken/simple-plannotator
+```
+
 ## 命令
 
 | 命令 | 作用 |
@@ -15,5 +21,5 @@
 ## 验证
 
 ```bash
-bun --filter simple-plannotator test
+bun --filter @shelken/simple-plannotator test
 ```

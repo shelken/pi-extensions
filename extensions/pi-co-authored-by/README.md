@@ -9,8 +9,14 @@ agent 通过 bash 工具执行 `git commit` 时，自动追加：
 
 初始 fork 自 [bruno-garcia/pi-co-authored-by](https://github.com/bruno-garcia/pi-co-authored-by)；本仓库有本地改动。
 
+## 安装
+
+```bash
+pi install npm:@shelken/pi-co-authored-by
+```
+
 ## 验证
 
 ```bash
-bun --filter pi-co-authored-by test
+bun --filter @shelken/pi-co-authored-by test
 ```

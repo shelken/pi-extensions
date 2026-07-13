@@ -4,6 +4,12 @@
 
 初始 fork 自 [ross-jill-ws/pi-command-history](https://github.com/ross-jill-ws/pi-command-history)。
 
+## 安装
+
+```bash
+pi install npm:@shelken/pi-command-history
+```
+
 ## 快捷键
 
 | 快捷键 | 作用 |
@@ -20,5 +26,5 @@
 ## 验证
 
 ```bash
-bun --filter pi-command-history test
+bun --filter @shelken/pi-command-history test
 ```

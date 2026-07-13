@@ -1,9 +1,21 @@
 {
-  "name": "simple-plannotator",
+  "name": "@shelken/simple-plannotator",
   "version": "0.1.3",
   "description": "基于浏览器的代码审查和 Markdown 标注（/pnr /pna /pnl）",
   "type": "module",
-  "private": true,
+  "license": "MIT",
+  "files": [
+    "index.ts",
+    "plannotator-browser.d.ts"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/shelken/pi-extensions.git",
+    "directory": "extensions/simple-plannotator"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
     "test": "vitest run"
   },

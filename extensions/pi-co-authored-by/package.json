@@ -1,9 +1,21 @@
 {
-  "name": "pi-co-authored-by",
+  "name": "@shelken/pi-co-authored-by",
   "version": "0.2.6",
   "description": "agent 执行 git commit 时自动追加 Co-Authored-By / Generated-By trailer",
   "type": "module",
-  "private": true,
+  "license": "MIT",
+  "files": [
+    "index.ts",
+    "lib/commit.ts"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/shelken/pi-extensions.git",
+    "directory": "extensions/pi-co-authored-by"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
     "test": "vitest run"
   },
