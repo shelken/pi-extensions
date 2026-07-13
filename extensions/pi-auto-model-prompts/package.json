@@ -1,6 +1,6 @@
 {
   "name": "@shelken/pi-auto-model-prompts",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "description": "Inject model-specific system prompts into pi turns from local Markdown files.",
   "type": "module",
   "license": "MIT",

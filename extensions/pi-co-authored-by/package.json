@@ -1,6 +1,6 @@
 {
   "name": "@shelken/pi-co-authored-by",
-  "version": "0.2.6",
+  "version": "0.2.7",
   "description": "agent 执行 git commit 时自动追加 Co-Authored-By / Generated-By trailer",
   "type": "module",
   "license": "MIT",
