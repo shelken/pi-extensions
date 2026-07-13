@@ -114,12 +114,15 @@ function auditPackage(pkg) {
   console.log(`${pkg.manifest.name} 首发门禁通过`);
 }
 
+export function withTempNpmConfig(env) {
+  return { ...env, NPM_CONFIG_USERCONFIG: DEFAULT_USERCONFIG };
+}
+
 function npmEnvironment() {
-  const userconfig = process.env.NPM_CONFIG_USERCONFIG ?? DEFAULT_USERCONFIG;
-  if (!existsSync(userconfig)) {
-    fail(`npm 登录文件不存在: ${userconfig}；先运行 just package-login`);
+  if (!existsSync(DEFAULT_USERCONFIG)) {
+    fail(`npm 登录文件不存在: ${DEFAULT_USERCONFIG}；先运行 just package-login`);
   }
-  return { ...process.env, NPM_CONFIG_USERCONFIG: userconfig };
+  return withTempNpmConfig(process.env);
 }
 
 function registryVersion(name) {
@@ -227,9 +230,8 @@ function showStatus(pkg) {
   ], { capture: true, allowFailure: true });
   if (result.status === 0) console.log(result.stdout.trim());
 
-  const userconfig = process.env.NPM_CONFIG_USERCONFIG ?? DEFAULT_USERCONFIG;
-  const env = { ...process.env, NPM_CONFIG_USERCONFIG: userconfig };
-  const owned = existsSync(userconfig) && Object.hasOwn(ownedPackages(env), pkg.manifest.name);
+  const env = withTempNpmConfig(process.env);
+  const owned = existsSync(DEFAULT_USERCONFIG) && Object.hasOwn(ownedPackages(env), pkg.manifest.name);
   if (owned) console.log(accessStatus(pkg.manifest.name, env));
 
   if (result.status !== 0 && !owned) fail(`${pkg.manifest.name} 在 npm 不可见`);

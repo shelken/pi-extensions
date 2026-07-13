@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { manifestErrors, packageExists, tarballErrors } from "./public-package.mjs";
+import { manifestErrors, packageExists, tarballErrors, withTempNpmConfig } from "./public-package.mjs";
 
 const validManifest = {
   name: "@shelken/example",
@@ -38,6 +38,12 @@ test("manifestErrors rejects private packages", () => {
   });
 
   assert.ok(errors.includes("必须删除 private: true"));
+});
+
+test("withTempNpmConfig overrides the managed user npmrc", () => {
+  const env = withTempNpmConfig({ NPM_CONFIG_USERCONFIG: "/managed/.npmrc" });
+
+  assert.equal(env.NPM_CONFIG_USERCONFIG, "/tmp/.npmrc-user");
 });
 
 test("packageExists ignores npm access status for an unowned package", () => {
