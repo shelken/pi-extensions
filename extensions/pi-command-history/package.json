@@ -1,6 +1,6 @@
 {
   "name": "@shelken/pi-command-history",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "description": "按工作目录持久化输入历史，支持 shift+up/down 回填",
   "type": "module",
   "license": "MIT",

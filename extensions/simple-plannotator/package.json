@@ -1,6 +1,6 @@
 {
   "name": "@shelken/simple-plannotator",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "description": "基于浏览器的代码审查和 Markdown 标注（/pnr /pna /pnl）",
   "type": "module",
   "license": "MIT",
