@@ -6,6 +6,7 @@
 
 - 读 `{pi-agent-dir}/models.json` 的 `baseUrl` / `apiKey` / `api`，请求 provider 的 `/models`
 - 不覆盖手动模型；registry 缓存 6h，provider 列表缓存 10min
+- factory 同步用磁盘 cache 先注册 AUTO 模型（让 session restore 能找到上次的 `provider/id`）；`session_start` 再拉网刷新
 - 日志始终写文件；`debug` 时再打 console
 
 运行时文件：

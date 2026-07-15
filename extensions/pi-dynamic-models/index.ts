@@ -278,37 +278,156 @@ async function fetchRemoteModels(cfg: ProviderConfig): Promise<string[]> {
   throw lastErr instanceof Error ? lastErr : new Error("all candidates failed");
 }
 
+type FlatRegistry = ReturnType<typeof flattenRegistry>;
+
+type AutoModel = {
+  id: string;
+  name: string;
+  reasoning: boolean;
+  input: ("text" | "image")[];
+  cost: ReturnType<typeof toPiCost>;
+  contextWindow: number;
+  maxTokens: number;
+};
+
+/** 仅返回 models.json 尚未声明的 id，供 eager/async 共用。 */
+export function filterNewModelIds(discoveredIds: string[], existing: Set<string>): string[] {
+  return discoveredIds.filter((id) => !existing.has(id));
+}
+
+function buildAutoModel(id: string, registry: FlatRegistry): AutoModel {
+  const entry = lookupModel(id, registry);
+  if (!entry) {
+    return {
+      id,
+      name: `${id} (AUTO)`,
+      reasoning: false,
+      input: ["text"],
+      cost: toPiCost(),
+      contextWindow: 128_000,
+      maxTokens: 16_384,
+    };
+  }
+
+  const model = entry.model;
+  return {
+    id,
+    name: `${model.name ?? id} (AUTO)`,
+    reasoning: model.reasoning ?? false,
+    input: toPiInput(model.modalities?.input, model.attachment),
+    cost: toPiCost(model.cost),
+    contextWindow: model.limit?.context ?? 128_000,
+    maxTokens: model.limit?.output ?? 16_384,
+  };
+}
+
+function registerProviderModels(
+  pi: ExtensionAPI,
+  providerName: string,
+  providerCfg: ProviderConfig,
+  existingRaw: unknown[],
+  discoveredModels: AutoModel[],
+): void {
+  pi.registerProvider(providerName, {
+    baseUrl: providerCfg.baseUrl,
+    apiKey: providerCfg.apiKey ?? "none",
+    authHeader: !!providerCfg.apiKey,
+    api: providerCfg.api ?? "openai-completions",
+    models: [...existingRaw, ...discoveredModels],
+  });
+}
+
+function resolveEnabledConfig(): {
+  config: PluginConfig;
+  modelsJson: Record<string, any>;
+} | null {
+  const config = loadConfig(process.cwd());
+  if (!config) {
+    log(`Config not found in standard extension config paths, skip`);
+    return null;
+  }
+
+  isDebug = config.debug ?? false;
+  if (isDebug) log("Debug mode ON");
+  if (!config.enable) {
+    log("Disabled via config.enable = false");
+    return null;
+  }
+  if (!Array.isArray(config.enableProviders) || config.enableProviders.length === 0) {
+    log("No enableProviders configured, skip");
+    return null;
+  }
+
+  const modelsJson = readModelsJson();
+  if (!modelsJson?.providers) {
+    log("models.json not found or invalid, skip");
+    return null;
+  }
+
+  return { config, modelsJson };
+}
+
+/**
+ * factory 阶段同步注册：只用磁盘 cache，不发网络。
+ * pi 会在 createAgentSessionServices 里 flush pendingProviderRegistrations，
+ * 早于 session restore；否则 cpa/* (AUTO) 在 restore 时还不存在。
+ */
+function eagerRegisterFromCache(pi: ExtensionAPI): void {
+  try {
+    const resolved = resolveEnabledConfig();
+    if (!resolved) return;
+
+    const { config, modelsJson } = resolved;
+    log(`Eager register from cache; providers: ${config.enableProviders.join(", ")}`);
+
+    let registry: FlatRegistry = new Map();
+    const regCache = readRegistryCache();
+    if (regCache?.data) {
+      registry = flattenRegistry(regCache.data);
+      log(`  registry cache: ${registry.size} entries`);
+    } else {
+      log(`  registry cache missing; AUTO models use defaults until session_start`);
+    }
+
+    for (const providerName of config.enableProviders) {
+      const providerCfg = extractProviderConfig(modelsJson, providerName);
+      if (!providerCfg) continue;
+
+      // 不限 freshness：restore 需要「上一次发现过」的 id，过期也比没有强
+      const cached = readProviderCache(providerName);
+      if (!cached?.modelIds?.length) {
+        log(`  [eager ${providerName}] no provider cache, defer to session_start`);
+        continue;
+      }
+
+      const newIds = filterNewModelIds(cached.modelIds, providerCfg.existingModels);
+      if (newIds.length === 0) {
+        log(`  [eager ${providerName}] all ${cached.modelIds.length} already in models.json`);
+        continue;
+      }
+
+      const discoveredModels = newIds.map((id) => buildAutoModel(id, registry));
+      const existingRaw: unknown[] = modelsJson.providers[providerName]?.models ?? [];
+      registerProviderModels(pi, providerName, providerCfg, existingRaw, discoveredModels);
+      log(`  [eager ${providerName}] registered ${newIds.length} cached models`);
+    }
+  } catch (err) {
+    log(`Eager register failed: ${err}`);
+  }
+}
+
 async function initModels(pi: ExtensionAPI) {
   const t0 = Date.now();
 
   try {
-    const config = loadConfig(process.cwd());
-    if (!config) {
-      log(`Config not found in standard extension config paths, skip`);
-      return;
-    }
+    const resolved = resolveEnabledConfig();
+    if (!resolved) return;
 
-    isDebug = config.debug ?? false;
-    if (isDebug) log("Debug mode ON");
-    if (!config.enable) {
-      log("Disabled via config.enable = false");
-      return;
-    }
-    if (!Array.isArray(config.enableProviders) || config.enableProviders.length === 0) {
-      log("No enableProviders configured, skip");
-      return;
-    }
-
+    const { config, modelsJson } = resolved;
     log(`Enabled providers: ${config.enableProviders.join(", ")}`);
     let t = Date.now();
 
-    const modelsJson = readModelsJson();
-    if (!modelsJson?.providers) {
-      log("models.json not found or invalid, skip");
-      return;
-    }
     log(`models.json providers: ${Object.keys(modelsJson.providers).join(", ")}`);
-
     log(`  step2_modelsjson: ${Date.now() - t}ms`);
     t = Date.now();
     const { data: registryData, fromCache } = await fetchRegistry();
@@ -316,12 +435,11 @@ async function initModels(pi: ExtensionAPI) {
     t = Date.now();
     const registry = flattenRegistry(registryData);
     log(`  flatten: ${Date.now() - t}ms, ${registry.size} entries`);
-    t = Date.now();
 
     async function processProvider(
       providerName: string,
       providerCfg: ProviderConfig,
-      registry: ReturnType<typeof flattenRegistry>,
+      registry: FlatRegistry,
     ) {
       const pt = Date.now();
 
@@ -356,7 +474,7 @@ async function initModels(pi: ExtensionAPI) {
         return null;
       }
 
-      const newIds = discoveredIds.filter((id) => !providerCfg.existingModels.has(id));
+      const newIds = filterNewModelIds(discoveredIds, providerCfg.existingModels);
       if (newIds.length === 0) {
         log(`  [${providerName}] ✓ all ${discoveredIds.length} models already defined`);
         return null;
@@ -366,35 +484,17 @@ async function initModels(pi: ExtensionAPI) {
 
       let matchedCount = 0;
       const discoveredModels = newIds.map((id) => {
+        const model = buildAutoModel(id, registry);
         const entry = lookupModel(id, registry);
         if (!entry) {
           log(`    + ${id} → (defaults, no registry match)`);
-          return {
-            id,
-            name: `${id} (AUTO)`,
-            reasoning: false,
-            input: ["text"] as ("text" | "image")[],
-            cost: toPiCost(),
-            contextWindow: 128_000,
-            maxTokens: 16_384,
-          };
+        } else {
+          matchedCount++;
+          log(
+            `    + ${id} → [${entry.provider}] ctx:${model.contextWindow} reasoning:${model.reasoning} input:${model.input}`,
+          );
         }
-
-        matchedCount++;
-        const model = entry.model;
-        const piModel = {
-          id,
-          name: `${model.name ?? id} (AUTO)`,
-          reasoning: model.reasoning ?? false,
-          input: toPiInput(model.modalities?.input, model.attachment),
-          cost: toPiCost(model.cost),
-          contextWindow: model.limit?.context ?? 128_000,
-          maxTokens: model.limit?.output ?? 16_384,
-        };
-        log(
-          `    + ${id} → [${entry.provider}] ctx:${piModel.contextWindow} reasoning:${piModel.reasoning} input:${piModel.input}`,
-        );
-        return piModel;
+        return model;
       });
 
       log(
@@ -418,14 +518,8 @@ async function initModels(pi: ExtensionAPI) {
 
     for (const result of results) {
       if (!result) continue;
-      const existingRaw: any[] = modelsJson.providers[result.name]?.models ?? [];
-      pi.registerProvider(result.name, {
-        baseUrl: result.cfg.baseUrl,
-        apiKey: result.cfg.apiKey ?? "none",
-        authHeader: !!result.cfg.apiKey,
-        api: result.cfg.api ?? "openai-completions",
-        models: [...existingRaw, ...result.discoveredModels],
-      });
+      const existingRaw: unknown[] = modelsJson.providers[result.name]?.models ?? [];
+      registerProviderModels(pi, result.name, result.cfg, existingRaw, result.discoveredModels);
     }
   } catch (err) {
     log(`Fatal error: ${err}`);
@@ -438,5 +532,9 @@ async function initModels(pi: ExtensionAPI) {
 }
 
 export default function (pi: ExtensionAPI) {
-  pi.on("session_start", () => { void initModels(pi).catch((err) => log(`Unhandled: ${err}`)); });
+  // 同步：把上次发现的 AUTO 模型挂上，才能被 session restore 找到
+  eagerRegisterFromCache(pi);
+  pi.on("session_start", () => {
+    void initModels(pi).catch((err) => log(`Unhandled: ${err}`));
+  });
 }
