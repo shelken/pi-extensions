@@ -13,28 +13,37 @@
 
 ## 2. 硬禁 `reason` 选择顺序
 
-对命中的那条规则：
-
-1. 若规则自带非空 `reason` → **只用**该字符串  
-2. 否则若最终 `default_reason` 非空（用户配置合并后）→ **只用**该字符串  
-3. 否则用内置模板：
+对命中的那条规则，组装两行协议：
 
 ```
-blocked by pi-guard: <kind> matched <value>
+! FORBIDDEN <HEADER>
+<body>
 ```
 
-| 占位 | 取值 |
-|---|---|
-| `kind` | `command` 或 `path` |
-| `value` | 命中规则的配置 value（如 `rm -rf /`、`~/.ssh/*`），**不是**展开后的绝对路径 |
+| 优先级 | 条件 | header | body |
+|---|---|---|---|
+| 1 | 规则自带非空 `reason` | `BY USER` | 该 reason（`\n` 压空格） |
+| 2 | 最终 `default_reason` 非空 | `COMMAND` 或 `PATH` | default_reason |
+| 3 | 否则 | `COMMAND` 或 `PATH` | 规则配置 `value`（未展开） |
 
 示例：
 
-- `blocked by pi-guard: command matched rm -rf /`
-- `blocked by pi-guard: path matched ~/.ssh/*`
+```
+! FORBIDDEN COMMAND
+rm -rf /
 
-**不**在用户自定义 reason 后追加 `(kind matched value)`。
+! FORBIDDEN PATH
+~/.ssh/*
 
+! FORBIDDEN BY USER
+禁止强推
+
+! FORBIDDEN COMMAND
+blocked by pi-guard
+```
+（末例：仅配置了 `default_reason: "blocked by pi-guard"` 时）
+
+**不**在 per-rule reason 后追加 matched value。  
 硬禁时 **不** 额外 `notify`（避免双通道吵）。
 
 ## 3. `default_reason` 合并（与 schema 一致）

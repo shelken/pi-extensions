@@ -56,7 +56,9 @@ deny_paths:
 
 - 拦：agent `bash`、`read`、`write`、`edit`
 - 不拦：人类 `!`（user_bash）、`grep`/`find`/`ls` 工具（v1）
-- 命中：`{ block: true, reason }` → agent 可见的 tool error
+- 命中：`{ block: true, reason }` → agent 可见 tool error：
+  - 内置 / 仅 `default_reason`：`! FORBIDDEN COMMAND|PATH\n<body>`
+  - 规则自带 `reason`：`! FORBIDDEN BY USER\n<body>`
 - 硬禁不额外 toast；配置失败才 UI error notify
 
 ## 开发

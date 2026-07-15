@@ -163,15 +163,20 @@ wget *|sh
 
 ### 6.1 硬禁 reason（agent 可见）
 
-顺序：规则 `reason` → 最终 `default_reason` → 模板：
+顺序：规则 `reason` → 最终 `default_reason` → 内置 value。协议固定两行：
 
 ```
-blocked by pi-guard: <kind> matched <value>
+! FORBIDDEN <HEADER>
+<body>
 ```
 
-`kind` = `command` | `path`；`value` = 规则配置串（未展开）。
+| 来源 | header | body |
+|---|---|---|
+| 规则 `reason` | `BY USER` | 用户文案（换行压成空格） |
+| 仅 `default_reason` | `COMMAND` 或 `PATH` | default 文案 |
+| 内置模板 | `COMMAND` 或 `PATH` | 规则配置串 `value`（未展开） |
 
-有用户文案时 **不** 再拼模板。硬禁 **不** `notify`。
+有用户 per-rule 文案时 **不** 再拼 matched value。硬禁 **不** `notify`。
 
 ### 6.2 配置失败 fail-open
 

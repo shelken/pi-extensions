@@ -31,9 +31,7 @@ describe("evaluateGuard — commands", () => {
       );
       expect(r.block, command).toBe(true);
       if (r.block) {
-        expect(r.reason.startsWith("blocked by pi-guard: command matched ")).toBe(
-          true,
-        );
+        expect(r.reason.startsWith("! FORBIDDEN COMMAND\n")).toBe(true);
       }
     }
   });
@@ -64,7 +62,7 @@ describe("evaluateGuard — commands", () => {
         { tool: "bash", command: "npm publish", cwd: CWD, home: HOME },
         withRule,
       ),
-    ).toEqual({ block: true, reason: "no publish" });
+    ).toEqual({ block: true, reason: "! FORBIDDEN BY USER\nno publish" });
 
     const withDefault: Policy = {
       default_reason: "default stop",
@@ -76,7 +74,7 @@ describe("evaluateGuard — commands", () => {
         { tool: "bash", command: "npm publish", cwd: CWD, home: HOME },
         withDefault,
       ),
-    ).toEqual({ block: true, reason: "default stop" });
+    ).toEqual({ block: true, reason: "! FORBIDDEN COMMAND\ndefault stop" });
 
     const template: Policy = {
       commands: [{ value: "npm publish" }],
@@ -89,7 +87,7 @@ describe("evaluateGuard — commands", () => {
       ),
     ).toEqual({
       block: true,
-      reason: "blocked by pi-guard: command matched npm publish",
+      reason: "! FORBIDDEN COMMAND\nnpm publish",
     });
   });
 
@@ -128,9 +126,7 @@ describe("evaluateGuard — paths (read/write/edit)", () => {
       );
       expect(r.block, p).toBe(true);
       if (r.block) {
-        expect(r.reason.startsWith("blocked by pi-guard: path matched ")).toBe(
-          true,
-        );
+        expect(r.reason.startsWith("! FORBIDDEN PATH\n")).toBe(true);
       }
     }
   });
@@ -201,7 +197,7 @@ describe("evaluateGuard — paths (read/write/edit)", () => {
         { tool: "edit", path: "/proj/.env", cwd: CWD, home: HOME },
         policy,
       ),
-    ).toEqual({ block: true, reason: "no env" });
+    ).toEqual({ block: true, reason: "! FORBIDDEN BY USER\nno env" });
   });
 });
 

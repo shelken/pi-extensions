@@ -89,16 +89,29 @@ export function pathRuleMatchesInCommand(
   return false;
 }
 
+function oneLineBody(text: string): string {
+  return text.split(/\r\n|\r|\n/).join(" ").trim();
+}
+
+/**
+ * Agent-visible block reason.
+ * Protocol: `! FORBIDDEN <HEADER>\n<body>` (headers uppercase for emphasis)
+ * - per-rule reason → `BY USER`, body = user text
+ * - default_reason only → `COMMAND`|`PATH`, body = default text
+ * - builtin template → `COMMAND`|`PATH`, body = rule.value
+ */
 export function resolveBlockReason(
   rule: Rule,
   kind: "command" | "path",
   defaultReason?: string,
 ): string {
+  // Leading `!` + uppercase header: tool-error surfaces often de-emphasize plain text.
+  const kindHeader = kind === "command" ? "COMMAND" : "PATH";
   if (rule.reason !== undefined && rule.reason !== "") {
-    return rule.reason;
+    return `! FORBIDDEN BY USER\n${oneLineBody(rule.reason)}`;
   }
   if (defaultReason !== undefined && defaultReason !== "") {
-    return defaultReason;
+    return `! FORBIDDEN ${kindHeader}\n${oneLineBody(defaultReason)}`;
   }
-  return `blocked by pi-guard: ${kind} matched ${rule.value}`;
+  return `! FORBIDDEN ${kindHeader}\n${rule.value}`;
 }
