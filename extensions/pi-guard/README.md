@@ -1,15 +1,68 @@
 # pi-guard
 
-硬禁止 agent 危险 bash 命令与机密路径读写。
+硬禁止 agent 危险 bash 命令与机密路径（`read` / `write` / `edit`）。无交互放行、无风险分。
 
-配置：`~/.pi/agent/permissions.yaml` 与项目 `.pi/permissions.yaml`。  
-规格与样例见 monorepo `docs/wayfinder/2026-07-14-pi-guard-spec.md`。
+## 安装
 
-## 用法
+monorepo 本地：根 `pi.extensions` 已包含入口；`settings.json` 的 `packages` 指向本仓即可。
 
-挂载扩展后默认启用内置清单。可选配置：
+```bash
+pi install npm:@shelken/pi-guard
+```
 
-- 全局：`~/.pi/agent/permissions.yaml`
-- 项目：`.pi/permissions.yaml`
+## 配置
 
-样例见 monorepo `docs/wayfinder/samples/`。
+仅认 `permissions.yaml`（UTF-8）：
+
+| 层 | 路径 |
+|---|---|
+| 全局 | `{pi-agent-dir}/permissions.yaml`（通常 `~/.pi/agent/permissions.yaml`） |
+| 项目 | `.pi/permissions.yaml` |
+
+合并顺序：**内置 → 全局 → 项目**。缺文件静默当空。
+
+### 形状
+
+```yaml
+default_reason: "blocked by pi-guard"   # 可选；项目覆盖全局
+
+deny_commands:
+  - "npm publish"                       # 字符串 = pattern
+  - pattern: "git push -f"
+    reason: "禁止强推"
+  - "-find ~"                           # 减号：按 value 全等移除（含内置）
+
+deny_paths:
+  - "~/.netrc"
+  - path: ".env"
+    reason: "项目 env 禁止读写"
+  - "-~/.specific.zsh"                  # 移除内置路径规则
+```
+
+- 减号仅 string 项：`^-` 且非 `--`；对象项不能用减号字段
+- `*` 为任意字符（可跨 `/`）；命令侧无 `*` 时为子串 includes
+- 未知顶层键忽略；坏 YAML 该层 fail-open（console + 一次 UI 警告）
+
+同构样例：`docs/wayfinder/samples/permissions.{global,project}.example.yaml`  
+完整规格：`docs/wayfinder/2026-07-14-pi-guard-spec.md`
+
+### 内置清单（摘要）
+
+**命令：** `rm -rf /` · `rm -rf ~` · `find /` · `find ~` · curl/wget pipe-to-shell（有/无空格）  
+
+**路径：** `~/.ssh/*` · `~/.aws/*` · `~/.gnupg/*` · `~/.specific.zsh`
+
+## 行为
+
+- 拦：agent `bash`、`read`、`write`、`edit`
+- 不拦：人类 `!`（user_bash）、`grep`/`find`/`ls` 工具（v1）
+- 命中：`{ block: true, reason }` → agent 可见的 tool error
+- 硬禁不额外 toast；配置失败才 UI error notify
+
+## 开发
+
+```bash
+bun --filter @shelken/pi-guard test
+```
+
+测试只用纯函数与临时 fixture；禁止执行真实危险命令。

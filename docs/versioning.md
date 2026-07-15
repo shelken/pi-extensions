@@ -115,7 +115,7 @@ pi 扩展以 `.ts` 源文件直接发布（`pi.extensions` 数组指向各子包
 
 ### 当前子包发布状态
 
-- **public（会发 npm）**：`@shelken/pi-add-dir`、`@shelken/pi-co-authored-by`、`@shelken/pi-command-history`、`@shelken/pi-dynamic-models`、`@shelken/simple-plannotator`
+- **public（会发 npm）**：`@shelken/pi-add-dir`、`@shelken/pi-co-authored-by`、`@shelken/pi-command-history`、`@shelken/pi-dynamic-models`、`@shelken/pi-guard`、`@shelken/simple-plannotator`
 - **private（只打 tag）**：`pi-auto-model-prompts`
 
 ### 首次公开：人工边界与脚本边界
