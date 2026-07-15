@@ -325,7 +325,8 @@ function registerProviderModels(
   pi: ExtensionAPI,
   providerName: string,
   providerCfg: ProviderConfig,
-  existingRaw: unknown[],
+  // models.json 原始条目 + AUTO 模型；pi 侧类型为 ProviderModelConfig[]
+  existingRaw: any[],
   discoveredModels: AutoModel[],
 ): void {
   pi.registerProvider(providerName, {
@@ -407,7 +408,7 @@ function eagerRegisterFromCache(pi: ExtensionAPI): void {
       }
 
       const discoveredModels = newIds.map((id) => buildAutoModel(id, registry));
-      const existingRaw: unknown[] = modelsJson.providers[providerName]?.models ?? [];
+      const existingRaw: any[] = modelsJson.providers[providerName]?.models ?? [];
       registerProviderModels(pi, providerName, providerCfg, existingRaw, discoveredModels);
       log(`  [eager ${providerName}] registered ${newIds.length} cached models`);
     }
@@ -518,7 +519,7 @@ async function initModels(pi: ExtensionAPI) {
 
     for (const result of results) {
       if (!result) continue;
-      const existingRaw: unknown[] = modelsJson.providers[result.name]?.models ?? [];
+      const existingRaw: any[] = modelsJson.providers[result.name]?.models ?? [];
       registerProviderModels(pi, result.name, result.cfg, existingRaw, result.discoveredModels);
     }
   } catch (err) {
