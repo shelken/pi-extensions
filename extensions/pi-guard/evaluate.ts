@@ -1,4 +1,9 @@
-/** Guard policy and evaluation seam (v1 rules land in later tickets). */
+import {
+  pathRuleMatchesFull,
+  pathRuleMatchesInCommand,
+  resolveBlockReason,
+  textMatchesPattern,
+} from "./match.ts";
 
 export type Rule = {
   value: string;
@@ -24,7 +29,46 @@ export type GuardResult =
   | { block: false }
   | { block: true; reason: string };
 
-/** Always allow until command/path matchers are implemented. */
-export function evaluateGuard(_input: GuardInput, _policy: Policy): GuardResult {
+export function evaluateGuard(input: GuardInput, policy: Policy): GuardResult {
+  if (input.tool === "bash") {
+    for (const rule of policy.commands) {
+      if (textMatchesPattern(input.command, rule.value)) {
+        return {
+          block: true,
+          reason: resolveBlockReason(rule, "command", policy.default_reason),
+        };
+      }
+    }
+    for (const rule of policy.paths) {
+      if (
+        pathRuleMatchesInCommand(
+          input.command,
+          rule.value,
+          input.cwd,
+          input.home,
+        )
+      ) {
+        return {
+          block: true,
+          reason: resolveBlockReason(rule, "path", policy.default_reason),
+        };
+      }
+    }
+    return { block: false };
+  }
+
+  const pathValue = input.path?.trim() ?? "";
+  if (pathValue === "") {
+    return { block: false };
+  }
+
+  for (const rule of policy.paths) {
+    if (pathRuleMatchesFull(pathValue, rule.value, input.cwd, input.home)) {
+      return {
+        block: true,
+        reason: resolveBlockReason(rule, "path", policy.default_reason),
+      };
+    }
+  }
   return { block: false };
 }

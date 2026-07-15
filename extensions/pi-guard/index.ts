@@ -26,6 +26,15 @@ export {
   type ParseLayerResult,
 } from "./policy.ts";
 
+export {
+  absoluteForm,
+  normPath,
+  pathRuleMatchesFull,
+  pathRuleMatchesInCommand,
+  resolveBlockReason,
+  textMatchesPattern,
+} from "./match.ts";
+
 export default function piGuard(_pi: ExtensionAPI): void {
   // hooks wired in a later ticket
 }

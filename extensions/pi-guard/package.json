@@ -7,6 +7,7 @@
   "files": [
     "index.ts",
     "evaluate.ts",
+    "match.ts",
     "policy.ts"
   ],
   "repository": {
