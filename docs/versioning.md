@@ -131,7 +131,7 @@ pi 扩展以 `.ts` 源文件直接发布（`pi.extensions` 数组指向各子包
 
 `package-audit` 强制检查 scoped 名称、`private`、LICENSE、`files`、repository、public access、Pi 入口、安装文档、测试和 tarball。具体规则维护在 `scripts/public-package.mjs`，文档不重复 manifest 模板。
 
-首次公开按以下顺序执行，`<slug>` 使用目录名（例如尚未上架 npm 的 `pi-guard`）：
+首次公开按以下顺序执行，`<slug>` 使用目录名（`extensions/<slug>`）：
 
 ```bash
 # Agent：修改包并写 changeset 后
@@ -157,8 +157,9 @@ just package-auth-clean
 
 - 不要从 monorepo 根运行裸 `npm publish`；脚本始终显式指定 workspace。
 - 新包未人工首发时无法绑定 Trusted Publisher，npm 会返回 `E404`。
-- `E409` 表示已有唯一绑定，核对现有配置，不要重复创建。
-- `npm access get status` 已显示 `public`、但 `npm view` 暂时 404 时，等待 registry 传播，不要重复 publish。
+- 已上架包再 `package-bootstrap` / 重复首发路径是错的：那是「建包」流程，日常版本只走 release PR + CI OIDC。
+- `E409` 表示 Trusted Publisher 已有唯一绑定，核对现有配置即可，不要重复创建。
+- `npm access get status` 已显示 `public`、但 `npm view` / registry 暂时 404 时，等待传播，不要重复 publish。
 - 每个 npm 包独立绑定 `shelken/pi-extensions` 的 `publish.yml`；CI 不使用 `NPM_TOKEN`。
 
 ### 日常发包
@@ -178,6 +179,40 @@ just package-status <slug>
 ```
 
 若 CI 报 `ENEEDAUTH`，检查 `registry-url`、`id-token: write`、npm CLI 版本、Trusted Publisher 和 manifest repository；不要回退到长期 token。
+
+### CI 发布失败排查
+
+`changeset publish` 按包依次发布；**中间某个失败时，前面已成功的包不会回滚**。处理前先对照 npm 与本地 version：
+
+```bash
+# 各子包 local vs npm
+for d in extensions/*/; do
+  name=$(jq -r .name "$d/package.json")
+  echo "$name local=$(jq -r .version "$d/package.json") npm=$(npm view "$name" version 2>&1 | tail -1)"
+done
+gh run list --workflow=publish.yml --limit 5
+```
+
+| 现象 | 常见含义 | 处理 |
+|---|---|---|
+| 新包 `PUT` / `E404` | 尚未人工首发，或 Trusted Publisher 未绑定 | 走上文「首次公开」；不要指望 release PR  alone 首发 |
+| **已上架包** `PUT ... E404` | npm 常把 **OIDC/Trusted Publisher 鉴权失败** 伪装成 404，不等于包不存在 | 核对该包 Trusted Publisher 是否仍绑 `shelken/pi-extensions` + `publish.yml`；不要 bootstrap |
+| 同 job 多数成功、单包失败 | 按包独立鉴权，只补失败包 | 见下「补发」 |
+| `E409` on trust | 绑定已存在 | 改 npm 控制台现有绑定，勿重复创建 |
+| CI 已发 npm、无 tag/Release | publish 中断在 tag 步骤，或只人工补了 npm | `just package-baseline <slug> <publish-commit>` |
+
+**补发已上架但 CI 漏掉的版本**（人工浏览器登录，不用 bootstrap）：
+
+```bash
+just package-login
+npm publish --workspace=@shelken/<name> --access public --userconfig /tmp/.npmrc-user
+just package-baseline <slug> <publish-commit>   # 幂等补 tag + GitHub Release
+just package-auth-clean
+```
+
+- `<publish-commit>`：与本次要发布的源码一致的 commit（通常是已 merge 的 release commit 或当时 workspace 所在 HEAD）。
+- 补发前确认 npm 上还没有该 version，避免重复 publish。
+- 根因若是 Trusted Publisher 配置漂移，补发只是止血；修绑定后下次仍应走纯 CI。
 
 ## 配置参考
 
