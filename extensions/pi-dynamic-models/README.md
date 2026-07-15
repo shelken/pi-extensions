@@ -34,7 +34,8 @@ pi install npm:@shelken/pi-dynamic-models
 ## 行为
 
 - 读 `{pi-agent-dir}/models.json` 的 `baseUrl` / `apiKey` / `api`，请求 provider 的 `/models`
-- 不覆盖手动模型；registry 缓存 6h（过期先用旧数据再后台刷新）；provider 列表缓存 10min
+- **不覆盖** `models.json` 手写模型，也不覆盖 **pi 内置** 同 id 模型参数（如 `openai`/`anthropic`）；只追加缺失 id。`registerProvider` 会整表替换，实现上会合并：内置 → models.json → 新 AUTO
+- registry 缓存 6h（过期先用旧数据再后台刷新）；provider 列表缓存 10min
 - factory 同步用磁盘 cache 注册 AUTO 模型（session restore 能找到上次的 `provider/id`）
 - 同进程内 AUTO 列表 hash 未变则跳过重注册；默认只打摘要日志
 - 默认过滤 `contextWindow === 0`（如 image 模型）

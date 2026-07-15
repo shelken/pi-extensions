@@ -25,6 +25,7 @@ import {
   toPiInput,
   type RegistryData,
 } from "./src/matcher.ts";
+import { getBuiltInModelDefs, getBuiltInModelIds } from "./src/builtin.ts";
 import {
   filterByExcludePatterns,
   filterNewModelIds,
@@ -36,6 +37,7 @@ import {
   shouldSkipByHash,
   type ProviderRunSummary,
 } from "./src/logic.ts";
+import { collectExistingIds, mergeProviderModelList } from "./src/merge.ts";
 
 interface PluginConfig {
   enable: boolean;
@@ -330,11 +332,20 @@ function extractProviderConfig(
     return null;
   }
 
-  const existingModels = new Set<string>();
+  const fromJsonIds: string[] = [];
   if (Array.isArray(provider.models)) {
     for (const model of provider.models) {
-      if (model.id) existingModels.add(model.id);
+      if (model.id) fromJsonIds.push(model.id);
     }
+  }
+
+  // 内置 provider（如 openai）同 id 视为已存在：不覆盖参数，只补缺失
+  const builtInIds = getBuiltInModelIds(providerName);
+  const existingModels = collectExistingIds(fromJsonIds, builtInIds);
+  if (builtInIds.length > 0) {
+    log(
+      `Provider "${providerName}": protect ${builtInIds.length} built-in + ${fromJsonIds.length} models.json ids`,
+    );
   }
 
   return {
@@ -411,12 +422,19 @@ function registerProviderModels(
   existingRaw: any[],
   discoveredModels: AutoModel[],
 ): void {
+  // registerProvider(models) 整表替换：必须带上内置 + models.json，再只追加新 AUTO
+  const models = mergeProviderModelList({
+    builtIn: getBuiltInModelDefs(providerName),
+    fromModelsJson: existingRaw,
+    autoNew: discoveredModels,
+  });
+
   pi.registerProvider(providerName, {
     baseUrl: providerCfg.baseUrl,
     apiKey: providerCfg.apiKey ?? "none",
     authHeader: !!providerCfg.apiKey,
     api: providerCfg.api ?? "openai-completions",
-    models: [...existingRaw, ...discoveredModels],
+    models: models as any[],
   });
 }
 
