@@ -1,5 +1,11 @@
 # @shelken/pi-guard
 
+## 0.3.0
+
+### Minor Changes
+
+- [`6db4113`](https://github.com/shelken/pi-extensions/commit/6db41135d8884e9d413843deaa35af022a035fc2) Thanks [@shelken](https://github.com/shelken)! - 路径根边界匹配；reason 带 command/path/reason 前缀；default_reason 不覆盖 builtin
+
 ## 0.2.0
 
 ### Minor Changes
