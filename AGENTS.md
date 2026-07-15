@@ -23,7 +23,7 @@
 ## 基本约束
 
 - AGENTS / 开发说明禁止复述源码已表达的逻辑；只记代码看不出来的约定(实现即文档), 只记流程、边界决策、禁止事项
-- 子包默认 `private: true`；公开发布用 `@shelken/` + `publishConfig.access: public`
+- 子包默认 `private: true`；公开发布用 `@shelken/` + `publishConfig.access: public`；`keywords` 必须含 `pi-package`（pi.dev/packages 官方索引靠这个，不是 git tag）
 - 子包级命令放子包 justfile；通用命令放根 `justfile`
 - 插件配置路径无特殊理由时：`{pi-agent-dir}/extensions/<package>/config.json` 与 `.pi/extensions/<package>/config.json`，项目覆盖全局
 - 扩展 factory 禁网络与同步重 IO；耗时放 `session_start`（或等价延迟路径）
