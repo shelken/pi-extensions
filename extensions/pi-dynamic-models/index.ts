@@ -76,8 +76,6 @@ const LOG_FILE = join(LOG_DIR, "pi-dynamic-models.log");
 const REGISTRY_URL = "https://models.dev/api.json";
 const REGISTRY_CACHE_MAX_AGE_MS = 6 * 60 * 60 * 1000;
 const PROVIDER_CACHE_MAX_AGE_MS = 10 * 60 * 1000;
-const STATUS_KEY = "dynamic-models";
-
 let isDebug = false;
 
 /** 进程内：provider → 已注册 AUTO id 列表 hash */
@@ -673,7 +671,6 @@ async function initModels(pi: ExtensionAPI, options: InitOptions = {}): Promise<
     const resolved = resolveEnabledConfig();
     if (!resolved) {
       lastEnabledProviders = [];
-      ctx?.ui.setStatus(STATUS_KEY, undefined);
       return { ok: true, summaries };
     }
 
@@ -725,11 +722,6 @@ async function initModels(pi: ExtensionAPI, options: InitOptions = {}): Promise<
     lastSummaries = summaries;
     lastStatusText = formatStatusLine(summaries);
     if (ctx?.hasUI) {
-      ctx.ui.setStatus(
-        STATUS_KEY,
-        lastStatusText === "dynamic-models: idle" ? undefined : lastStatusText,
-      );
-
       const anyRegistered = summaries.some((s) => s.registered);
       if (hadNoCache && anyRegistered) {
         ctx.ui.notify(`dynamic-models: first discovery · ${lastStatusText}`, "info");

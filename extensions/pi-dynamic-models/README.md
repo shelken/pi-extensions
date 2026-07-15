@@ -40,7 +40,7 @@ pi install npm:@shelken/pi-dynamic-models
 - 同一次 runtime 内 AUTO 内容 hash 未变则跳过重注册；**每次扩展 factory 会清空 hash**（`/new` 会换 ModelRegistry，必须重新 register）
 - 默认只打摘要日志
 - 默认过滤 `contextWindow === 0`（如 image 模型）
-- 页脚 `setStatus`：如 `cpa +47`；列表变化或首次发现时 `notify`
+- 列表变化或首次发现时 `notify`（无页脚 status）
 - 日志：`{pi-agent-dir}/logs/pi-dynamic-models.log`
 
 ## 命令
