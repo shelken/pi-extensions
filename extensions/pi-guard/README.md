@@ -5,6 +5,11 @@
 配置：`~/.pi/agent/permissions.yaml` 与项目 `.pi/permissions.yaml`。  
 规格与样例见 monorepo `docs/wayfinder/2026-07-14-pi-guard-spec.md`。
 
-## 状态
+## 用法
 
-脚手架阶段：`evaluateGuard` 已导出；真实拦截规则在后续提交落地。
+挂载扩展后默认启用内置清单。可选配置：
+
+- 全局：`~/.pi/agent/permissions.yaml`
+- 项目：`.pi/permissions.yaml`
+
+样例见 monorepo `docs/wayfinder/samples/`。

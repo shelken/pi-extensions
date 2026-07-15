@@ -4,10 +4,11 @@
 
 ## 目录结构
 
-`index.ts`: 扩展入口
+`index.ts`: 扩展入口（session_start / tool_call）
 `evaluate.ts`: `evaluateGuard` 与 Policy 类型
 `match.ts`: 命令/路径匹配与 reason
 `policy.ts`: 内置清单、YAML 层解析与合并
+`config-load.ts`: permissions.yaml 路径与磁盘加载
 `tests/`: 测试
 `package.json` / `README.md` / `LICENSE`: 包元数据
 

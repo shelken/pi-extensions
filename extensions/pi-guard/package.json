@@ -8,7 +8,8 @@
     "index.ts",
     "evaluate.ts",
     "match.ts",
-    "policy.ts"
+    "policy.ts",
+    "config-load.ts"
   ],
   "repository": {
     "type": "git",
