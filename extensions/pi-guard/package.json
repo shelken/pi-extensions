@@ -1,0 +1,41 @@
+{
+  "name": "@shelken/pi-guard",
+  "version": "0.1.0",
+  "description": "Hard-block dangerous agent bash commands and secret path access",
+  "type": "module",
+  "license": "MIT",
+  "files": [
+    "index.ts",
+    "evaluate.ts"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/shelken/pi-extensions.git",
+    "directory": "extensions/pi-guard"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "test": "vitest run"
+  },
+  "keywords": [
+    "pi-package",
+    "pi-extension",
+    "guard",
+    "permissions"
+  ],
+  "pi": {
+    "extensions": [
+      "./index.ts"
+    ]
+  },
+  "peerDependencies": {
+    "@earendil-works/pi-coding-agent": "*"
+  },
+  "peerDependenciesMeta": {
+    "@earendil-works/pi-coding-agent": {
+      "optional": true
+    }
+  }
+}

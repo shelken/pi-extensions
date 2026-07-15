@@ -21,7 +21,7 @@
     },
     "extensions/pi-add-dir": {
       "name": "@shelken/pi-add-dir",
-      "version": "1.4.0",
+      "version": "1.4.1",
       "peerDependencies": {
         "@earendil-works/pi-coding-agent": "*",
         "@earendil-works/pi-tui": "*",
@@ -35,7 +35,7 @@
     },
     "extensions/pi-auto-model-prompts": {
       "name": "@shelken/pi-auto-model-prompts",
-      "version": "0.2.1",
+      "version": "0.2.2",
       "peerDependencies": {
         "@earendil-works/pi-coding-agent": "*",
       },
@@ -45,7 +45,7 @@
     },
     "extensions/pi-co-authored-by": {
       "name": "@shelken/pi-co-authored-by",
-      "version": "0.2.6",
+      "version": "0.2.7",
       "peerDependencies": {
         "@earendil-works/pi-coding-agent": "*",
       },
@@ -55,7 +55,7 @@
     },
     "extensions/pi-command-history": {
       "name": "@shelken/pi-command-history",
-      "version": "0.1.3",
+      "version": "0.1.4",
       "peerDependencies": {
         "@earendil-works/pi-coding-agent": "*",
       },
@@ -65,7 +65,17 @@
     },
     "extensions/pi-dynamic-models": {
       "name": "@shelken/pi-dynamic-models",
-      "version": "0.1.5",
+      "version": "0.1.6",
+      "peerDependencies": {
+        "@earendil-works/pi-coding-agent": "*",
+      },
+      "optionalPeers": [
+        "@earendil-works/pi-coding-agent",
+      ],
+    },
+    "extensions/pi-guard": {
+      "name": "@shelken/pi-guard",
+      "version": "0.1.0",
       "peerDependencies": {
         "@earendil-works/pi-coding-agent": "*",
       },
@@ -75,7 +85,7 @@
     },
     "extensions/simple-plannotator": {
       "name": "@shelken/simple-plannotator",
-      "version": "0.1.3",
+      "version": "0.1.4",
       "dependencies": {
         "@plannotator/pi-extension": "^0.23.0",
       },
@@ -335,6 +345,8 @@
     "@shelken/pi-command-history": ["@shelken/pi-command-history@workspace:extensions/pi-command-history"],
 
     "@shelken/pi-dynamic-models": ["@shelken/pi-dynamic-models@workspace:extensions/pi-dynamic-models"],
+
+    "@shelken/pi-guard": ["@shelken/pi-guard@workspace:extensions/pi-guard"],
 
     "@shelken/simple-plannotator": ["@shelken/simple-plannotator@workspace:extensions/simple-plannotator"],
 

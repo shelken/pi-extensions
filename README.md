@@ -11,6 +11,7 @@
 | `pi-co-authored-by` | `@shelken/pi-co-authored-by` | `extensions/pi-co-authored-by/index.ts` | agent 执行 `git commit` 时追加 Co-Authored-By / Generated-By trailer。 |
 | `pi-command-history` | `@shelken/pi-command-history` | `extensions/pi-command-history/index.ts` | 按工作目录持久化输入历史，支持快捷键回填。 |
 | `pi-dynamic-models` | `@shelken/pi-dynamic-models` | `extensions/pi-dynamic-models/index.ts` | 自动发现 provider 远端模型，并用 models.dev registry 补全模型参数。 |
+| `pi-guard` | `@shelken/pi-guard` | `extensions/pi-guard/index.ts` | 硬禁 agent 危险 bash 与机密路径读写。 |
 | `simple-plannotator` | `@shelken/simple-plannotator` | `extensions/simple-plannotator/index.ts` | 基于浏览器的代码审查和 Markdown 标注（`/pnr` `/pna` `/pnl`）。 |
 
 新增、移除或改名任何子 package 时，必须同步更新本表和根 `package.json` 的 `pi.extensions`。
