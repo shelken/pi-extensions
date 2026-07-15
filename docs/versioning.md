@@ -115,8 +115,8 @@ pi 扩展以 `.ts` 源文件直接发布（`pi.extensions` 数组指向各子包
 
 ### 当前子包发布状态
 
-- **public（会发 npm）**：`@shelken/pi-add-dir`、`@shelken/pi-co-authored-by`、`@shelken/pi-command-history`、`@shelken/pi-dynamic-models`、`@shelken/pi-guard`、`@shelken/simple-plannotator`
-- **private（只打 tag）**：`pi-auto-model-prompts`
+- **public（会发 npm）**：`@shelken/pi-add-dir`、`@shelken/pi-auto-model-prompts`、`@shelken/pi-co-authored-by`、`@shelken/pi-command-history`、`@shelken/pi-dynamic-models`、`@shelken/pi-guard`、`@shelken/simple-plannotator`
+- **private（只打 tag）**：当前无（新建子包默认可先 `private: true`，见根 `AGENTS.md`）
 
 ### 首次公开：人工边界与脚本边界
 
@@ -131,7 +131,7 @@ pi 扩展以 `.ts` 源文件直接发布（`pi.extensions` 数组指向各子包
 
 `package-audit` 强制检查 scoped 名称、`private`、LICENSE、`files`、repository、public access、Pi 入口、安装文档、测试和 tarball。具体规则维护在 `scripts/public-package.mjs`，文档不重复 manifest 模板。
 
-首次公开按以下顺序执行，`<slug>` 使用目录名（例如 `pi-auto-model-prompts`）：
+首次公开按以下顺序执行，`<slug>` 使用目录名（例如尚未上架 npm 的 `pi-guard`）：
 
 ```bash
 # Agent：修改包并写 changeset 后

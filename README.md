@@ -53,6 +53,4 @@ just verify
 
 ## 版本与发布
 
-子包独立 semver，用 changesets 管理。表格中有 npm 名的 public 子包经 CI 发 npm；其余 private 子包只打 tag。
-
-流程与命令见 [`docs/versioning.md`](docs/versioning.md)。
+子包独立 semver，用 changesets 管理；当前子包均为 public，经 CI 发 npm。清单与流程见 [`docs/versioning.md`](docs/versioning.md)。

@@ -18,6 +18,7 @@
 - 增删改名子包：同步根 `README.md` 表格与根 `package.json` 的 `pi.extensions`
 - 有发布意义的行为/入口/配置变更写 `.changeset/*.md`；只改测试/文档可空 changeset 或不写（见 `docs/versioning.md`）
 - fork 说明写在**子包** `README.md`，根 README 不写 fork 来源
+- 依赖分层：`@earendil-works/*` 只在根 `devDependencies`（给 tsc/测试）+ 子包 `peerDependencies`（宿主 pi 提供，可 optional）；真 runtime 库（如 `yaml`/`typebox`）放子包 `dependencies`，不要挂根
 
 ## 基本约束
 

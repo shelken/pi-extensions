@@ -1,8 +1,8 @@
 {
   "name": "@shelken/pi-dynamic-models",
   "version": "0.1.6",
+  "description": "从 models.dev 自动发现并补全 models.json 中的远端模型",
   "type": "module",
-  "main": "index.ts",
   "license": "MIT",
   "files": [
     "index.ts",
@@ -12,6 +12,7 @@
     "test": "vitest run tests/*.test.ts"
   },
   "keywords": [
+    "pi-package",
     "pi-extension",
     "dynamic-models",
     "model-discovery"
@@ -30,7 +31,7 @@
     ]
   },
   "peerDependencies": {
-    "@earendil-works/pi-coding-agent": "*"
+    "@earendil-works/pi-coding-agent": ">=0.80.0"
   },
   "peerDependenciesMeta": {
     "@earendil-works/pi-coding-agent": {

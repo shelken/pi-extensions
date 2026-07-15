@@ -34,10 +34,10 @@
     ]
   },
   "dependencies": {
-    "yaml": "^2.8.0"
+    "yaml": "^2.9.0"
   },
   "peerDependencies": {
-    "@earendil-works/pi-coding-agent": "*"
+    "@earendil-works/pi-coding-agent": ">=0.80.0"
   },
   "peerDependenciesMeta": {
     "@earendil-works/pi-coding-agent": {
