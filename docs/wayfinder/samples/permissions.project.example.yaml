@@ -1,0 +1,17 @@
+# <项目根>/.pi/permissions.yaml
+# 与全局文件同构；default_reason 若写了则覆盖全局
+
+default_reason: "blocked by pi-guard (this project)"
+
+deny_commands:
+  - "-find ~" # 移除内置：允许本项目 find ~
+  - pattern: "pnpm publish"
+    reason: "本仓库禁止本地 pnpm publish"
+
+deny_paths:
+  # - "-~/.specific.zsh"  # 需要时取消注释以移除内置
+  - path: ".env"
+    reason: "项目 .env 禁止 agent 读写"
+  - path: ".env.*"
+    reason: "项目 .env.* 禁止 agent 读写"
+  - "secrets/*"

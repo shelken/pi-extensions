@@ -1,0 +1,15 @@
+# ~/.pi/agent/permissions.yaml
+# 与项目文件同构；内置规则不用写，用 "-value" 移除
+
+default_reason: "blocked by pi-guard"
+
+deny_commands:
+  - pattern: "npm publish"
+    reason: "禁止直接 npm publish；走 CI"
+  - "git push --force"
+  - "git push -f"
+
+deny_paths:
+  - path: "~/.netrc"
+    reason: "netrc 含凭据"
+  - "~/.npmrc"
