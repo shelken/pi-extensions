@@ -1,5 +1,15 @@
 # @shelken/pi-dynamic-models
 
+## 0.2.0
+
+### Minor Changes
+
+- [`50227a3`](https://github.com/shelken/pi-extensions/commit/50227a3f2bd281486bb25daef549c4153233ade2) Thanks [@shelken](https://github.com/shelken)! - hash 未变跳过重注册、日志摘要、registry SWR/memo、过滤非对话模型、status/notify，以及 enableProviders \* 与 /dynamic-models 命令。
+
+### Patch Changes
+
+- [`0120d52`](https://github.com/shelken/pi-extensions/commit/0120d521e288294d5efbb523e0566549c43238b3) Thanks [@shelken](https://github.com/shelken)! - 内置 provider（如 openai）同 id 不覆盖参数：existing 含 built-in，register 时合并内置+models.json 仅追加新 AUTO。
+
 ## 0.1.7
 
 ### Patch Changes
