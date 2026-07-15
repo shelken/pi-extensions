@@ -23,22 +23,22 @@ export type BuildPolicyResult = {
 
 /** Frozen builtin deny commands (see docs/wayfinder builtin denylist). */
 export const BUILTIN_COMMANDS: Rule[] = [
-  { value: "rm -rf /" },
-  { value: "rm -rf ~" },
-  { value: "find /" },
-  { value: "find ~" },
-  { value: "curl *| bash" },
-  { value: "curl *|bash" },
-  { value: "wget *| sh" },
-  { value: "wget *|sh" },
+  { value: "rm -rf /", source: "builtin" },
+  { value: "rm -rf ~", source: "builtin" },
+  { value: "find /", source: "builtin" },
+  { value: "find ~", source: "builtin" },
+  { value: "curl *| bash", source: "builtin" },
+  { value: "curl *|bash", source: "builtin" },
+  { value: "wget *| sh", source: "builtin" },
+  { value: "wget *|sh", source: "builtin" },
 ];
 
 /** Frozen builtin deny paths. */
 export const BUILTIN_PATHS: Rule[] = [
-  { value: "~/.ssh/*" },
-  { value: "~/.aws/*" },
-  { value: "~/.gnupg/*" },
-  { value: "~/.specific.zsh" },
+  { value: "~/.ssh/*", source: "builtin" },
+  { value: "~/.aws/*", source: "builtin" },
+  { value: "~/.gnupg/*", source: "builtin" },
+  { value: "~/.specific.zsh", source: "builtin" },
 ];
 
 function isRemoveString(raw: string): string | null {
@@ -152,7 +152,9 @@ export function applyOps(rules: Rule[], ops: LayerOp[]): Rule[] {
       continue;
     }
     const next: Rule =
-      op.reason === undefined ? { value: op.value } : { value: op.value, reason: op.reason };
+      op.reason === undefined
+        ? { value: op.value, source: "user" }
+        : { value: op.value, reason: op.reason, source: "user" };
     const i = out.findIndex((r) => r.value === op.value);
     if (i >= 0) out[i] = next;
     else out.push(next);

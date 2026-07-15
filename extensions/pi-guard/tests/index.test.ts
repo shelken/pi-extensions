@@ -56,7 +56,7 @@ describe("pi-guard extension wiring", () => {
 
     expect(result).toEqual({
       block: true,
-      reason: "! FORBIDDEN COMMAND\nrm -rf /",
+      reason: "! FORBIDDEN COMMAND\ncommand: rm -rf /",
     });
     // hard block does not notify
     expect(notify).not.toHaveBeenCalled();

@@ -18,12 +18,47 @@ export function globToRegExpSource(pattern: string): string {
   return out;
 }
 
-/** Command / needle match: includes or substring glob (`*` any chars incl. `/`). */
+/** True when char continues a path after `/` (not shell delim / glob). */
+function isPathSegmentStart(ch: string): boolean {
+  if (ch === "*") return false;
+  return !/[\s|;&<>()`'"\n\r]/.test(ch);
+}
+
+/**
+ * Path-root false positive: pattern ends with `/` or `~` and the match is only
+ * a prefix of a longer path (`rm -rf /` ⊄ `/tmp`, `find ~` ⊄ `~/Code`).
+ */
+function isLongerPathExtension(
+  text: string,
+  afterIdx: number,
+  pattern: string,
+): boolean {
+  const after = text[afterIdx];
+  if (after === undefined) return false;
+  if (pattern.endsWith("~")) return after === "/";
+  if (pattern.endsWith("/")) return isPathSegmentStart(after);
+  return false;
+}
+
+/**
+ * Command / needle match.
+ * - with `*`: substring glob (`*` → any chars incl. `/`)
+ * - no `*`: substring includes, except path-root patterns ending in `/` or `~`
+ *   must not extend into a longer path target
+ */
 export function textMatchesPattern(text: string, pattern: string): boolean {
-  if (!pattern.includes("*")) {
-    return text.includes(pattern);
+  if (pattern.includes("*")) {
+    return new RegExp(globToRegExpSource(pattern)).test(text);
   }
-  return new RegExp(globToRegExpSource(pattern)).test(text);
+  let from = 0;
+  for (;;) {
+    const idx = text.indexOf(pattern, from);
+    if (idx === -1) return false;
+    if (!isLongerPathExtension(text, idx + pattern.length, pattern)) {
+      return true;
+    }
+    from = idx + 1;
+  }
 }
 
 /**
@@ -95,10 +130,15 @@ function oneLineBody(text: string): string {
 
 /**
  * Agent-visible block reason.
- * Protocol: `! FORBIDDEN <HEADER>\n<body>` (headers uppercase for emphasis)
- * - per-rule reason → `BY USER`, body = user text
- * - default_reason only → `COMMAND`|`PATH`, body = default text
- * - builtin template → `COMMAND`|`PATH`, body = rule.value
+ * Protocol (every field prefixed):
+ *   `! FORBIDDEN <HEADER>`
+ *   `command: <value>` | `path: <value>`
+ *   `reason: <detail>`   (optional)
+ *
+ * detail 优先级：
+ * 1. 规则自己的 reason
+ * 2. default_reason —— 仅非 builtin（global/project 用户规则）
+ * 3. builtin 无 per-rule reason 时不加 reason 行（回退为仅展示 command|path）
  */
 export function resolveBlockReason(
   rule: Rule,
@@ -106,12 +146,29 @@ export function resolveBlockReason(
   defaultReason?: string,
 ): string {
   // Leading `!` + uppercase header: tool-error surfaces often de-emphasize plain text.
-  const kindHeader = kind === "command" ? "COMMAND" : "PATH";
-  if (rule.reason !== undefined && rule.reason !== "") {
-    return `! FORBIDDEN BY USER\n${oneLineBody(rule.reason)}`;
+  const ruleReason =
+    rule.reason !== undefined && rule.reason !== ""
+      ? oneLineBody(rule.reason)
+      : undefined;
+  const header =
+    ruleReason !== undefined
+      ? "BY USER"
+      : kind === "command"
+        ? "COMMAND"
+        : "PATH";
+  const targetKey = kind === "command" ? "command" : "path";
+  const targetLine = `${targetKey}: ${rule.value}`;
+  let detail = ruleReason;
+  if (
+    detail === undefined &&
+    rule.source !== "builtin" &&
+    defaultReason !== undefined &&
+    defaultReason !== ""
+  ) {
+    detail = oneLineBody(defaultReason);
   }
-  if (defaultReason !== undefined && defaultReason !== "") {
-    return `! FORBIDDEN ${kindHeader}\n${oneLineBody(defaultReason)}`;
+  if (detail !== undefined) {
+    return `! FORBIDDEN ${header}\n${targetLine}\nreason: ${detail}`;
   }
-  return `! FORBIDDEN ${kindHeader}\n${rule.value}`;
+  return `! FORBIDDEN ${header}\n${targetLine}`;
 }

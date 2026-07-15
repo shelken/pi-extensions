@@ -1,6 +1,6 @@
 # pi-guard：内置 deny 清单（冻结）
 
-- **日期**：2026-07-14
+- **日期**：2026-07-14（路径根边界修订：会话内）
 - **票**：[冻结内置 deny 命令与路径清单](https://github.com/shelken/pi-extensions/issues/7)
 - **档位**：极简；用户可用 `"-…"` 按 value 全等移除任一项
 
@@ -8,10 +8,10 @@
 
 | pattern | 用意 |
 |---|---|
-| `rm -rf /` | 禁对根的递归删除（子串：也会命中 `rm -rf /foo`） |
-| `rm -rf ~` | 禁对 home 的递归删除（子串：也会命中 `rm -rf ~/…`） |
-| `find /` | 禁从根瞎找（子串：也会命中 `find /Users/…`） |
-| `find ~` | 禁从 home 瞎找（子串：也会命中 `find ~/Code/…`） |
+| `rm -rf /` | 禁对根的递归删除（不中 `/tmp`；仍中 `/*`） |
+| `rm -rf ~` | 禁对 home 的递归删除（不中 `~/…`） |
+| `find /` | 禁从根瞎找（不中 `find /Users/…`） |
+| `find ~` | 禁从 home 瞎找（不中 `find ~/Code/…`） |
 | `curl *\| bash` | pipe-to-shell（`*` 通配；有空格） |
 | `curl *\|bash` | 同上，无空格 |
 | `wget *\| sh` | 同上 |
@@ -31,16 +31,14 @@ deny_commands:
   - "wget *|sh"
 ```
 
-### 已知更严副作用（接受）
+### 路径根边界（无 `*`）
 
-在 **子串** 匹配下：
+pattern 以 `/` 或 `~` 结尾时，匹配后若紧跟更长路径则**不中**：
 
-- `rm -rf /` ⊃ `rm -rf /tmp`
-- `rm -rf ~` ⊃ `rm -rf ~/Code`
-- `find /` ⊃ `find /Users/x`
-- `find ~` ⊃ `find ~/Code`
+- `rm -rf /` ⊄ `rm -rf /tmp`；仍中 `rm -rf /`、`rm -rf /*`、`rm -rf / && …`
+- `find ~` ⊄ `find ~/Code`；仍中 `find ~`、`find ~ -type f`
 
-若以后要「只禁恰好 `/` 或 `~` 目标」，需改命令匹配语义（另票），不是改这张表能单独解决的。
+不以 `/`/`~` 结尾的无 `*` pattern 仍为普通子串 includes。
 
 ### 明确不内置（文档示例可写）
 
@@ -73,7 +71,7 @@ deny_paths:
 
 ## 默认 reason
 
-内置项 **不** 自带 per-rule reason；命中用最终 `default_reason`（见 UX 票）。用户若要区分文案，在自己的配置里用对象形重加同 value（upsert reason）。
+内置项 **不** 自带 per-rule reason，也 **不** 吃 `default_reason`（那只给 global/project 用户规则）。命中回显：`command|path: <value>`，无 reason 行。用户若要给某条内置加文案，用对象形重加同 value（upsert 后变为 user 规则，可写 reason / 吃 default_reason）。
 
 ## 移除示例
 

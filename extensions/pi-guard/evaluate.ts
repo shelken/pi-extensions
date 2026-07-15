@@ -8,6 +8,8 @@ import {
 export type Rule = {
   value: string;
   reason?: string;
+  /** builtin 不吃 default_reason；用户层 add/upsert 为 user */
+  source?: "builtin" | "user";
 };
 
 export type Policy = {

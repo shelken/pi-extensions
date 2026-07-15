@@ -40,7 +40,7 @@ deny_paths:
 ```
 
 - 减号仅 string 项：`^-` 且非 `--`；对象项不能用减号字段
-- `*` 为任意字符（可跨 `/`）；命令侧无 `*` 时为子串 includes
+- `*` 为任意字符（可跨 `/`）；命令侧无 `*` 时为子串 includes，但以 `/` 或 `~` 结尾的 pattern 不会匹配更长路径（`find ~` 不中 `find ~/Code`，`rm -rf /` 不中 `rm -rf /tmp`）
 - 未知顶层键忽略；坏 YAML 该层 fail-open（console + 一次 UI 警告）
 
 同构样例：`docs/wayfinder/samples/permissions.{global,project}.example.yaml`  
@@ -56,9 +56,10 @@ deny_paths:
 
 - 拦：agent `bash`、`read`、`write`、`edit`
 - 不拦：人类 `!`（user_bash）、`grep`/`find`/`ls` 工具（v1）
-- 命中：`{ block: true, reason }` → agent 可见 tool error：
-  - 内置 / 仅 `default_reason`：`! FORBIDDEN COMMAND|PATH\n<body>`
-  - 规则自带 `reason`：`! FORBIDDEN BY USER\n<body>`
+- 命中：`{ block: true, reason }` → agent 可见 tool error（字段均带前缀）：
+  - 内置：`! FORBIDDEN COMMAND|PATH\ncommand|path: <value>`（**不**吃 `default_reason`）
+  - 用户规则 + `default_reason`：`! FORBIDDEN COMMAND|PATH\ncommand|path: <value>\nreason: <default>`
+  - 规则自带 `reason`：`! FORBIDDEN BY USER\ncommand|path: <value>\nreason: <reason>`
 - 硬禁不额外 toast；配置失败才 UI error notify
 
 ## 开发

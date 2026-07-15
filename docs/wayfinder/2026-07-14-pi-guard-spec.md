@@ -128,7 +128,7 @@ wget *|sh
 
 无 per-rule 内置 reason。用户 `-value` 可移除。
 
-子串副作用已接受（如 `rm -rf /` ⊃ `rm -rf /tmp`）。
+路径根边界：以 `/` 或 `~` 结尾的无 `*` pattern 不匹配更长路径（`rm -rf /` ⊄ `/tmp`，`find ~` ⊄ `~/Code`）。
 
 详见：`docs/wayfinder/2026-07-14-pi-guard-builtin-denylist.md`
 
@@ -137,7 +137,7 @@ wget *|sh
 ### 5.1 命令 pattern
 
 - 大小写敏感
-- 无 `*`：`command.includes(pattern)`
+- 无 `*`：子串 includes；若 pattern 以 `/` 或 `~` 结尾，则匹配后不得紧跟更长路径（`/` 后路径段，或 `~` 后 `/`）
 - 有 `*`：`*` → 任意字符（含 `/`、空格）；在 command 上 **子串** 通配命中
 - 不解析 shell、不拆 token、不管引号/`$var`/`bash -c` 混淆（v1 不做）
 
@@ -155,7 +155,7 @@ wget *|sh
 
 **read/write/edit**：`glob_match(norm(input.path), absolute_form(rule))` 全路径匹配。
 
-**bash 扫路径**：每条 path 规则两根针——① 配置原文 ② 绝对形；无 `*` 用 `includes`，有 `*` 用子串通配。
+**bash 扫路径**：每条 path 规则两根针——① 配置原文 ② 绝对形；与命令侧同一套 `textMatchesPattern`（含路径根边界）。
 
 详见：`docs/wayfinder/2026-07-14-pi-guard-path-match-semantics.md`
 
@@ -163,20 +163,21 @@ wget *|sh
 
 ### 6.1 硬禁 reason（agent 可见）
 
-顺序：规则 `reason` → 最终 `default_reason` → 内置 value。协议固定两行：
+detail 优先级：规则 `reason` →（仅非 builtin）`default_reason` → 无 detail。字段均带前缀：
 
 ```
 ! FORBIDDEN <HEADER>
-<body>
+command: <value>   # 或 path: <value>
+reason: <detail>   # 可选
 ```
 
-| 来源 | header | body |
-|---|---|---|
-| 规则 `reason` | `BY USER` | 用户文案（换行压成空格） |
-| 仅 `default_reason` | `COMMAND` 或 `PATH` | default 文案 |
-| 内置模板 | `COMMAND` 或 `PATH` | 规则配置串 `value`（未展开） |
+| 来源 | header | 目标行 | reason 行 |
+|---|---|---|---|
+| 规则 `reason` | `BY USER` | `command|path: value` | `reason: ` 用户文案 |
+| 用户规则 + `default_reason` | `COMMAND` 或 `PATH` | 同上 | `reason: ` default |
+| 内置（无 per-rule reason） | `COMMAND` 或 `PATH` | 同上 | （无；**不**吃 default_reason） |
 
-有用户 per-rule 文案时 **不** 再拼 matched value。硬禁 **不** `notify`。
+硬禁 **不** `notify`。
 
 ### 6.2 配置失败 fail-open
 
