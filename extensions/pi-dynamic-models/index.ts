@@ -817,6 +817,12 @@ function registerCommands(pi: ExtensionAPI): void {
 }
 
 export default function (pi: ExtensionAPI) {
+  // /new、fork 等会 createRuntime → 新 ModelRegistry + 重新 load 扩展。
+  // 进程内 hash 若不清空，eager/session_start 会 skip registerProvider，
+  // pending 为空，新 registry 只剩 models.json，动态模型「全没了」。
+  registeredAutoHashes.clear();
+  lastInitError = null;
+
   eagerRegisterFromCache(pi);
   registerCommands(pi);
   pi.on("session_start", (_event, ctx) => {
