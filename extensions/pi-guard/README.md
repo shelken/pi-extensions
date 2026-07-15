@@ -40,7 +40,7 @@ deny_paths:
 ```
 
 - 减号仅 string 项：`^-` 且非 `--`；对象项不能用减号字段
-- `*` 为任意字符（可跨 `/`）；命令侧无 `*` 时为子串 includes，但以 `/` 或 `~` 结尾的 pattern 不会匹配更长路径（`find ~` 不中 `find ~/Code`，`rm -rf /` 不中 `rm -rf /tmp`）
+- 命令侧：无 `*` = **短语匹配**（两侧须为边界，非前缀 includes）；有 `*` = 用户显式通配（`*` 任意字符可跨 `/`）。例：`git add .` 不中 `git add .agents/…`；要前缀写 `git add .*`
 - 未知顶层键忽略；坏 YAML 该层 fail-open（console + 一次 UI 警告）
 
 同构样例：`docs/wayfinder/samples/permissions.{global,project}.example.yaml`  

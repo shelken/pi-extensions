@@ -128,7 +128,7 @@ wget *|sh
 
 无 per-rule 内置 reason。用户 `-value` 可移除。
 
-路径根边界：以 `/` 或 `~` 结尾的无 `*` pattern 不匹配更长路径（`rm -rf /` ⊄ `/tmp`，`find ~` ⊄ `~/Code`）。
+无 `*` 为短语边界匹配（非前缀 includes）；前缀/通配必须显式写 `*`。
 
 详见：`docs/wayfinder/2026-07-14-pi-guard-builtin-denylist.md`
 
@@ -137,8 +137,8 @@ wget *|sh
 ### 5.1 命令 pattern
 
 - 大小写敏感
-- 无 `*`：子串 includes；若 pattern 以 `/` 或 `~` 结尾，则匹配后不得紧跟更长路径（`/` 后路径段，或 `~` 后 `/`）
-- 有 `*`：`*` → 任意字符（含 `/`、空格）；在 command 上 **子串** 通配命中
+- 无 `*`：**短语匹配**——pattern 在 command 中出现，且左右为边界（串首/尾，或 shell 分隔符空白/`|;&<>(){}[]`/`'"` 等）；`git add .` ⊄ `git add .agents/…`，`find ~` ⊄ `find ~/Code`
+- 有 `*`：用户显式通配；`*` → 任意字符（含 `/`、空格）；在 command 上 **子串** 通配命中
 - 不解析 shell、不拆 token、不管引号/`$var`/`bash -c` 混淆（v1 不做）
 
 ### 5.2 路径
