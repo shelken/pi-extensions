@@ -4,6 +4,9 @@
   "workspaces": {
     "": {
       "name": "@shelken/pi-extensions",
+      "dependencies": {
+        "yaml": "^2.9.0",
+      },
       "devDependencies": {
         "@changesets/changelog-github": "0.7.0",
         "@changesets/cli": "2.31.0",
@@ -76,6 +79,9 @@
     "extensions/pi-guard": {
       "name": "@shelken/pi-guard",
       "version": "0.1.0",
+      "dependencies": {
+        "yaml": "^2.8.0",
+      },
       "peerDependencies": {
         "@earendil-works/pi-coding-agent": "*",
       },

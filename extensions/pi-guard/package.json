@@ -6,7 +6,8 @@
   "license": "MIT",
   "files": [
     "index.ts",
-    "evaluate.ts"
+    "evaluate.ts",
+    "policy.ts"
   ],
   "repository": {
     "type": "git",
@@ -29,6 +30,9 @@
     "extensions": [
       "./index.ts"
     ]
+  },
+  "dependencies": {
+    "yaml": "^2.8.0"
   },
   "peerDependencies": {
     "@earendil-works/pi-coding-agent": "*"

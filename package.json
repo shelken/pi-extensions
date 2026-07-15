@@ -42,5 +42,8 @@
     "typebox": "1.1.39",
     "typescript": "6.0.3",
     "vitest": "4.1.7"
+  },
+  "dependencies": {
+    "yaml": "^2.9.0"
   }
 }

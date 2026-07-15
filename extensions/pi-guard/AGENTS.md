@@ -6,6 +6,7 @@
 
 `index.ts`: 扩展入口
 `evaluate.ts`: `evaluateGuard` 与 Policy 类型
+`policy.ts`: 内置清单、YAML 层解析与合并
 `tests/`: 测试
 `package.json` / `README.md` / `LICENSE`: 包元数据
 

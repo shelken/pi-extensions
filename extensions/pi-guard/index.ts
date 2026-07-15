@@ -14,6 +14,18 @@ export {
   type Rule,
 } from "./evaluate.ts";
 
+export {
+  BUILTIN_COMMANDS,
+  BUILTIN_PATHS,
+  applyOps,
+  buildPolicy,
+  parseLayerYaml,
+  type BuildPolicyResult,
+  type LayerOp,
+  type ParsedLayer,
+  type ParseLayerResult,
+} from "./policy.ts";
+
 export default function piGuard(_pi: ExtensionAPI): void {
   // hooks wired in a later ticket
 }
