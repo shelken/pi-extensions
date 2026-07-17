@@ -1,6 +1,6 @@
 {
   "name": "@shelken/pi-guard",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "Hard-block dangerous agent bash commands and secret path access",
   "type": "module",
   "license": "MIT",
