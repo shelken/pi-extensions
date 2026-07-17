@@ -1,5 +1,11 @@
 # @shelken/pi-guard
 
+## 0.4.0
+
+### Minor Changes
+
+- [#26](https://github.com/shelken/pi-extensions/pull/26) [`2bfcf44`](https://github.com/shelken/pi-extensions/commit/2bfcf44bfe597f426103de8de77985c1de168563) Thanks [@shelken](https://github.com/shelken)! - 命令无 _ 改为短语边界匹配（非前缀 includes）；前缀/通配须显式写 _
+
 ## 0.3.0
 
 ### Minor Changes
