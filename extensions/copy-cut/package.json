@@ -1,0 +1,39 @@
+{
+  "name": "@shelken/copy-cut",
+  "version": "0.1.0",
+  "description": "alt+shift+x 剪切输入框文本到剪贴板",
+  "type": "module",
+  "license": "MIT",
+  "files": [
+    "index.ts"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/shelken/pi-extensions.git",
+    "directory": "extensions/copy-cut"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "test": "vitest run"
+  },
+  "keywords": [
+    "pi-package",
+    "clipboard",
+    "cut"
+  ],
+  "pi": {
+    "extensions": [
+      "./index.ts"
+    ]
+  },
+  "peerDependencies": {
+    "@earendil-works/pi-coding-agent": ">=0.80.0"
+  },
+  "peerDependenciesMeta": {
+    "@earendil-works/pi-coding-agent": {
+      "optional": true
+    }
+  }
+}

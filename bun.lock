@@ -14,9 +14,19 @@
         "vitest": "4.1.7",
       },
     },
+    "extensions/copy-cut": {
+      "name": "@shelken/copy-cut",
+      "version": "0.1.0",
+      "peerDependencies": {
+        "@earendil-works/pi-coding-agent": ">=0.80.0",
+      },
+      "optionalPeers": [
+        "@earendil-works/pi-coding-agent",
+      ],
+    },
     "extensions/pi-add-dir": {
       "name": "@shelken/pi-add-dir",
-      "version": "1.4.1",
+      "version": "1.4.2",
       "dependencies": {
         "typebox": "^1.1.39",
       },
@@ -31,7 +41,7 @@
     },
     "extensions/pi-auto-model-prompts": {
       "name": "@shelken/pi-auto-model-prompts",
-      "version": "0.2.2",
+      "version": "0.2.3",
       "peerDependencies": {
         "@earendil-works/pi-coding-agent": ">=0.80.0",
       },
@@ -41,7 +51,7 @@
     },
     "extensions/pi-co-authored-by": {
       "name": "@shelken/pi-co-authored-by",
-      "version": "0.2.7",
+      "version": "0.2.8",
       "peerDependencies": {
         "@earendil-works/pi-coding-agent": ">=0.80.0",
       },
@@ -51,7 +61,7 @@
     },
     "extensions/pi-command-history": {
       "name": "@shelken/pi-command-history",
-      "version": "0.1.4",
+      "version": "0.1.5",
       "peerDependencies": {
         "@earendil-works/pi-coding-agent": ">=0.80.0",
       },
@@ -61,17 +71,19 @@
     },
     "extensions/pi-dynamic-models": {
       "name": "@shelken/pi-dynamic-models",
-      "version": "0.1.6",
+      "version": "0.1.7",
       "peerDependencies": {
+        "@earendil-works/pi-ai": ">=0.80.0",
         "@earendil-works/pi-coding-agent": ">=0.80.0",
       },
       "optionalPeers": [
+        "@earendil-works/pi-ai",
         "@earendil-works/pi-coding-agent",
       ],
     },
     "extensions/pi-guard": {
       "name": "@shelken/pi-guard",
-      "version": "0.1.0",
+      "version": "0.2.0",
       "dependencies": {
         "yaml": "^2.9.0",
       },
@@ -84,7 +96,7 @@
     },
     "extensions/simple-plannotator": {
       "name": "@shelken/simple-plannotator",
-      "version": "0.1.4",
+      "version": "0.1.5",
       "dependencies": {
         "@plannotator/pi-extension": "^0.23.0",
       },
@@ -310,6 +322,8 @@
     "@rolldown/binding-win32-x64-msvc": ["@rolldown/binding-win32-x64-msvc@1.1.5", "", { "os": "win32", "cpu": "x64" }, "sha512-tTZuDBPw85tEN5PQi1pnEBzDy0Z49HtScLAbD5t6hyeU92A95pRWaSMw1GZZi/RwgSgUIl0xrSlXIT/9QzvYSA=="],
 
     "@rolldown/pluginutils": ["@rolldown/pluginutils@1.0.1", "", {}, "sha512-2j9bGt5Jh8hj+vPtgzPtl72j0yRxHAyumoo6TNfAjsLB04UtpSvPbPcDcBMxz7n+9CYB0c1GxQFxYRg2jimqGw=="],
+
+    "@shelken/copy-cut": ["@shelken/copy-cut@workspace:extensions/copy-cut"],
 
     "@shelken/pi-add-dir": ["@shelken/pi-add-dir@workspace:extensions/pi-add-dir"],
 

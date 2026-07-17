@@ -32,6 +32,7 @@
 - 如果想要测试pi插件, 先检查模型(使用mini/nano/flash/free等便宜经济的模型),`pi --list-models | grep -Ei '\-flash|\-mini|\-nano|free'`,优先使用free, 然后测试模型`pi --model opencode/deepseek-v4-flash-free --thinking high --no-session --no-context-files --no-approve --no-extensions --no-skills -p "say hi"`; 
 - 如果要自主交互测试, 阅读 `pi-interactive-shell` skill
 - 新建新的插件时 使用 `nix flake new extensions/{new-extension} -t github:shelken/nix-templates#pi-extension`
+- worktree / 分支开发新插件时：本地测试只把**单个子包路径**加入 `{pi-agent-dir}/settings.json` 的 `packages`（如 `.../extensions/<package>`），不要挂 monorepo 根目录，避免 worktree 整仓入口与主干 packages 叠装
 - 提交后, 检查changeset目录, 询问用户是否发布, 用户同意后按照发布流程进行
 
 ## 迁移流程（迁入 monorepo 时）
