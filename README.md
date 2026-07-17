@@ -13,6 +13,7 @@
 | `pi-dynamic-models` | `@shelken/pi-dynamic-models` | `extensions/pi-dynamic-models/index.ts` | 自动发现 provider 远端模型，并用 models.dev registry 补全模型参数。 |
 | `pi-guard` | `@shelken/pi-guard` | `extensions/pi-guard/index.ts` | 硬禁 agent 危险 bash 与机密路径读写。 |
 | `simple-plannotator` | `@shelken/simple-plannotator` | `extensions/simple-plannotator/index.ts` | 基于浏览器的代码审查和 Markdown 标注（`/pnr` `/pna` `/pnl`）。 |
+| `copy-cut` | `@shelken/copy-cut` | `extensions/copy-cut/index.ts` | `alt+shift+x` 剪切输入框文本到剪贴板。 |
 
 新增、移除或改名任何子 package 时，必须同步更新本表和根 `package.json` 的 `pi.extensions`。
 

@@ -1,8 +1,10 @@
 /**
  * Pi Dynamic Models
  *
- * 自动发现 models.json 中指定 provider 的远端模型，使用 models.dev registry 补全模型参数。
- * factory 同步用磁盘 cache 注册（供 session restore）；session_start 再刷新。
+ * 约束（启动性能）：
+ * - factory / 启动路径：只读磁盘 cache，禁止任何网络
+ * - 网络只允许在 session_start 之后异步跑（setTimeout 0，不挡进 session）
+ * - 有 provider 磁盘缓存时 session_start 也不打网；仅 force / 无缓存才请求 API
  */
 
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
@@ -75,9 +77,10 @@ const LOG_DIR = join(AGENT_DIR, "logs");
 const LOG_FILE = join(LOG_DIR, "pi-dynamic-models.log");
 const REGISTRY_URL = "https://models.dev/api.json";
 const REGISTRY_CACHE_MAX_AGE_MS = 6 * 60 * 60 * 1000;
+/** 仅用于日志区分 fresh/aged；有磁盘缓存时启动不再因过期打网 */
 const PROVIDER_CACHE_MAX_AGE_MS = 10 * 60 * 1000;
-const STATUS_KEY = "dynamic-models";
-
+/** 所有网络请求统一超时；超时后走磁盘缓存 */
+const NETWORK_TIMEOUT_MS = 3_000;
 let isDebug = false;
 
 /** 进程内：provider → 已注册 AUTO id 列表 hash */
@@ -193,7 +196,7 @@ async function fetchRegistryFromNetwork(cached: CacheEntry | null): Promise<{
 
   const res = await fetch(REGISTRY_URL, {
     headers,
-    signal: AbortSignal.timeout(15_000),
+    signal: AbortSignal.timeout(NETWORK_TIMEOUT_MS),
   });
 
   if (res.status === 304 && cached) {
@@ -367,26 +370,33 @@ async function fetchRemoteModels(cfg: ProviderConfig): Promise<string[]> {
   const headers: Record<string, string> = { Accept: "application/json" };
   if (cfg.apiKey) headers.Authorization = `Bearer ${cfg.apiKey}`;
 
-  let lastErr: unknown;
-  for (const url of candidates) {
-    log(`Fetching ${url} ...`);
-    try {
-      const res = await fetch(url, { headers, signal: AbortSignal.timeout(10_000) });
-      if (!res.ok) {
-        lastErr = new Error(`HTTP ${res.status}`);
-        log(`  ✗ ${lastErr}, try next candidate`);
-        continue;
-      }
-      const body = (await res.json()) as { data?: Array<{ id: string }> };
-      const ids = (body.data ?? []).map((model) => model.id);
-      log(`  → ${ids.length} models returned`);
-      return ids;
-    } catch (e) {
-      lastErr = e;
-      log(`  ✗ unreachable: ${e}, try next candidate`);
-    }
+  // 候选 URL 并发；整段 3s 总预算，任一成功即返回并 abort 其余
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), NETWORK_TIMEOUT_MS);
+  try {
+    for (const url of candidates) log(`Fetching ${url} ...`);
+    const ids = await Promise.any(
+      candidates.map(async (url) => {
+        const res = await fetch(url, { headers, signal: controller.signal });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const body = (await res.json()) as { data?: Array<{ id: string }> };
+        const list = (body.data ?? []).map((model) => model.id);
+        log(`  → ${url} ${list.length} models`);
+        return list;
+      }),
+    );
+    return ids;
+  } catch (e) {
+    // Promise.any 全失败 → AggregateError
+    const msg =
+      e instanceof AggregateError
+        ? e.errors.map((x) => String(x)).join("; ")
+        : String(e);
+    throw new Error(`all candidates failed: ${msg}`);
+  } finally {
+    clearTimeout(timer);
+    if (!controller.signal.aborted) controller.abort();
   }
-  throw lastErr instanceof Error ? lastErr : new Error("all candidates failed");
 }
 
 function buildAutoModel(id: string, registry: FlatRegistry): AutoModel {
@@ -637,14 +647,18 @@ async function discoverIds(
   force: boolean,
 ): Promise<{ ids: string[]; source: "fresh" | "stale" | "network" } | null> {
   const pt = Date.now();
-  if (!force) {
-    const freshCache = isProviderCacheFresh(providerName) ? readProviderCache(providerName) : null;
-    if (freshCache && freshCache.modelIds.length > 0) {
-      log(`  [${providerName}] cache hit (${freshCache.modelIds.length} models, ${Date.now() - pt}ms)`);
-      return { ids: freshCache.modelIds, source: "fresh" };
-    }
+  const disk = readProviderCache(providerName);
+
+  // 非 force：只要磁盘上有过缓存记录就不再打网（含空列表/失败负缓存）
+  if (!force && disk) {
+    const age = isProviderCacheFresh(providerName) ? "fresh" : "stale";
+    const n = disk.modelIds?.length ?? 0;
+    log(`  [${providerName}] cache hit ${age} (${n} models, ${Date.now() - pt}ms)`);
+    if (n === 0) return null;
+    return { ids: disk.modelIds, source: age === "fresh" ? "fresh" : "stale" };
   }
 
+  // force 或完全无缓存文件：才请求 API
   try {
     const ids = await fetchRemoteModels(providerCfg);
     writeProviderCache(providerName, {
@@ -654,10 +668,14 @@ async function discoverIds(
     return { ids, source: "network" };
   } catch (err) {
     log(`  [${providerName}] ✗ unreachable: ${err}`);
-    const cached = readProviderCache(providerName);
-    if (!cached || cached.modelIds.length === 0) return null;
-    log(`  [${providerName}] → fallback cache (${cached.modelIds.length} models)`);
-    return { ids: cached.modelIds, source: "stale" };
+    // 负缓存：下次启动别再撞死 endpoint
+    writeProviderCache(providerName, {
+      hash: disk?.hash ?? "failed",
+      modelIds: disk?.modelIds ?? [],
+    });
+    if (!disk || disk.modelIds.length === 0) return null;
+    log(`  [${providerName}] → fallback cache (${disk.modelIds.length} models)`);
+    return { ids: disk.modelIds, source: "stale" };
   }
 }
 
@@ -673,7 +691,6 @@ async function initModels(pi: ExtensionAPI, options: InitOptions = {}): Promise<
     const resolved = resolveEnabledConfig();
     if (!resolved) {
       lastEnabledProviders = [];
-      ctx?.ui.setStatus(STATUS_KEY, undefined);
       return { ok: true, summaries };
     }
 
@@ -681,12 +698,21 @@ async function initModels(pi: ExtensionAPI, options: InitOptions = {}): Promise<
     lastEnabledProviders = providerNames;
     log(`Enabled providers: ${providerNames.join(", ")}${force ? " (force)" : ""}`);
 
+    const hadNoCache = providerNames.every((name) => !readProviderCache(name)?.modelIds?.length);
+
+    // registry + 各 provider 发现全部并发（不准串行等 registry）
     let t = Date.now();
-    const { data: registryData, fromCache, stale, etag } = await loadRegistry({
-      force,
-      allowSwr,
-      pi,
-    });
+    const [registryLoad, ...discoveredList] = await Promise.all([
+      loadRegistry({ force, allowSwr, pi }),
+      ...providerNames.map(async (providerName) => {
+        const providerCfg = extractProviderConfig(modelsJson, providerName);
+        if (!providerCfg) return { providerName, providerCfg: null, discovered: null };
+        const discovered = await discoverIds(providerName, providerCfg, force);
+        return { providerName, providerCfg, discovered };
+      }),
+    ]);
+
+    const { data: registryData, fromCache, stale, etag } = registryLoad;
     log(
       `  registry: ${Date.now() - t}ms (${fromCache ? "cached" : "fresh"}${stale ? ",stale" : ""})`,
     );
@@ -694,14 +720,10 @@ async function initModels(pi: ExtensionAPI, options: InitOptions = {}): Promise<
     const registry = getFlatRegistry(registryData, etag || "live");
     log(`  flatten: ${Date.now() - t}ms, ${registry.size} entries`);
 
-    const hadNoCache = providerNames.every((name) => !readProviderCache(name)?.modelIds?.length);
-
     const results = await Promise.all(
-      providerNames.map(async (providerName) => {
-        const providerCfg = extractProviderConfig(modelsJson, providerName);
-        if (!providerCfg) return null;
-
-        const discovered = await discoverIds(providerName, providerCfg, force);
+      discoveredList.map(async (item) => {
+        if (!item?.providerCfg) return null;
+        const { providerName, providerCfg, discovered } = item;
         if (!discovered || discovered.ids.length === 0) {
           log(`  [${providerName}] ✗ 0 models`);
           return null;
@@ -725,11 +747,6 @@ async function initModels(pi: ExtensionAPI, options: InitOptions = {}): Promise<
     lastSummaries = summaries;
     lastStatusText = formatStatusLine(summaries);
     if (ctx?.hasUI) {
-      ctx.ui.setStatus(
-        STATUS_KEY,
-        lastStatusText === "dynamic-models: idle" ? undefined : lastStatusText,
-      );
-
       const anyRegistered = summaries.some((s) => s.registered);
       if (hadNoCache && anyRegistered) {
         ctx.ui.notify(`dynamic-models: first discovery · ${lastStatusText}`, "info");
@@ -817,9 +834,20 @@ function registerCommands(pi: ExtensionAPI): void {
 }
 
 export default function (pi: ExtensionAPI) {
+  // /new、fork 等会 createRuntime → 新 ModelRegistry + 重新 load 扩展。
+  // 进程内 hash 若不清空，eager/session_start 会 skip registerProvider，
+  // pending 为空，新 registry 只剩 models.json，动态模型「全没了」。
+  registeredAutoHashes.clear();
+  lastInitError = null;
+
+  // 启动同步路径：只读盘注册，零网络
   eagerRegisterFromCache(pi);
   registerCommands(pi);
+
+  // 进 session 之后再异步刷；handler 立刻返回，不挡 UI / createRuntime
   pi.on("session_start", (_event, ctx) => {
-    void initModels(pi, { ctx }).catch((err) => log(`Unhandled: ${err}`));
+    setTimeout(() => {
+      void initModels(pi, { ctx }).catch((err) => log(`Unhandled: ${err}`));
+    }, 0);
   });
 }

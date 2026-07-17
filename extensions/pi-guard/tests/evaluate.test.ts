@@ -41,7 +41,7 @@ describe("evaluateGuard — commands", () => {
     }
   });
 
-  it("does not treat longer paths as path-root builtins", () => {
+  it("no-star patterns are phrase-bounded, not prefix includes", () => {
     const policy = builtins();
     for (const command of [
       "rm -rf /tmp",
@@ -59,6 +59,51 @@ describe("evaluateGuard — commands", () => {
         command,
       ).toEqual({ block: false });
     }
+
+    // 用户规则：无 * 不得前缀吃进更长 token（git add . ⊄ git add .agents）
+    const gitDot: Policy = {
+      commands: [
+        { value: "git add .", reason: "请显式指定文件", source: "user" },
+      ],
+      paths: [],
+    };
+    expect(
+      evaluateGuard(
+        { tool: "bash", command: "git add .", cwd: CWD, home: HOME },
+        gitDot,
+      ),
+    ).toEqual({
+      block: true,
+      reason:
+        "! FORBIDDEN BY USER\ncommand: git add .\nreason: 请显式指定文件",
+    });
+    expect(
+      evaluateGuard(
+        {
+          tool: "bash",
+          command: "git add .agents/skills/foo/SKILL.md",
+          cwd: CWD,
+          home: HOME,
+        },
+        gitDot,
+      ),
+    ).toEqual({ block: false });
+    // 要前缀匹配必须显式 *
+    const gitStar: Policy = {
+      commands: [{ value: "git add .*", source: "user" }],
+      paths: [],
+    };
+    expect(
+      evaluateGuard(
+        {
+          tool: "bash",
+          command: "git add .agents/skills/foo/SKILL.md",
+          cwd: CWD,
+          home: HOME,
+        },
+        gitStar,
+      ).block,
+    ).toBe(true);
   });
 
   it("allows safe commands under builtins", () => {

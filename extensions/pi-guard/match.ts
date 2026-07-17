@@ -18,33 +18,18 @@ export function globToRegExpSource(pattern: string): string {
   return out;
 }
 
-/** True when char continues a path after `/` (not shell delim / glob). */
-function isPathSegmentStart(ch: string): boolean {
-  if (ch === "*") return false;
-  return !/[\s|;&<>()`'"\n\r]/.test(ch);
-}
-
-/**
- * Path-root false positive: pattern ends with `/` or `~` and the match is only
- * a prefix of a longer path (`rm -rf /` ⊄ `/tmp`, `find ~` ⊄ `~/Code`).
- */
-function isLongerPathExtension(
-  text: string,
-  afterIdx: number,
-  pattern: string,
-): boolean {
-  const after = text[afterIdx];
-  if (after === undefined) return false;
-  if (pattern.endsWith("~")) return after === "/";
-  if (pattern.endsWith("/")) return isPathSegmentStart(after);
-  return false;
+/** Shell / phrase edge: EOF or separator — not path/token continuation. */
+function isPhraseBoundary(ch: string | undefined): boolean {
+  if (ch === undefined) return true;
+  // `*`：命令里的 glob 字符，使 `rm -rf /` 能挡住 `rm -rf /*`，又不会像 includes 那样吃掉 `/tmp`
+  return /[\s|;&<>(){}[\]`'"*\n\r]/.test(ch);
 }
 
 /**
  * Command / needle match.
- * - with `*`: substring glob (`*` → any chars incl. `/`)
- * - no `*`: substring includes, except path-root patterns ending in `/` or `~`
- *   must not extend into a longer path target
+ * - with `*`: 用户显式通配，子串 glob（`*` → 任意字符含 `/`）
+ * - no `*`: 短语匹配——pattern 两侧须为边界（串首/尾或 shell 分隔符），
+ *   禁止 `git add .` 命中 `git add .agents/...`、`find ~` 命中 `find ~/…`
  */
 export function textMatchesPattern(text: string, pattern: string): boolean {
   if (pattern.includes("*")) {
@@ -54,7 +39,9 @@ export function textMatchesPattern(text: string, pattern: string): boolean {
   for (;;) {
     const idx = text.indexOf(pattern, from);
     if (idx === -1) return false;
-    if (!isLongerPathExtension(text, idx + pattern.length, pattern)) {
+    const before = idx === 0 ? undefined : text[idx - 1];
+    const after = text[idx + pattern.length];
+    if (isPhraseBoundary(before) && isPhraseBoundary(after)) {
       return true;
     }
     from = idx + 1;

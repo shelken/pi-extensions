@@ -26,7 +26,8 @@
       "./extensions/pi-command-history/index.ts",
       "./extensions/pi-add-dir/index.ts",
       "./extensions/pi-guard/index.ts",
-      "./extensions/simple-plannotator/index.ts"
+      "./extensions/simple-plannotator/index.ts",
+      "./extensions/copy-cut/index.ts"
     ]
   },
   "devDependencies": {
