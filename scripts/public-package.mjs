@@ -174,6 +174,41 @@ function trustPackage(pkg) {
   ], { env: npmEnvironment() });
 }
 
+function sleepMs(ms) {
+  spawnSync("sleep", [String(Math.ceil(ms / 1000))], { stdio: "ignore" });
+}
+
+function waitForRegistryVersion(name, expected, attempts = 12, delayMs = 5000) {
+  for (let i = 1; i <= attempts; i++) {
+    const published = registryVersion(name);
+    if (published === expected) return published;
+    console.log(`等待 registry 传播 ${name}@${expected}（${i}/${attempts}，当前=${published ?? "无"}）`);
+    sleepMs(delayMs);
+  }
+  fail(`registry 在超时后仍不是 ${name}@${expected}`);
+}
+
+/**
+ * 首发一站式：publish → trust → baseline。
+ * 前提：已 package-login；.changeset 里不要有该包的待发布项（否则随后 release PR 会再 bump 一版）。
+ * npm 对 publish/trust 各算一次写操作 2FA：浏览器若出现 “skip 2FA for 5 minutes” 必须勾选，trust 才不二次 OTP。
+ */
+function firstPublishPackage(pkg, commit) {
+  npmEnvironment();
+  console.log(`
+=== 首发 ${pkg.manifest.name}@${pkg.manifest.version} ===
+接下来最多 1 次写操作 OTP（publish）。
+若浏览器出现 skip 2FA for 5 minutes，务必勾选，这样随后 trust 不用再 OTP。
+不要拆开跑 bootstrap/trust；不要 auth-clean，除非你主动要清登录。
+`);
+
+  bootstrapPackage(pkg);
+  trustPackage(pkg);
+  waitForRegistryVersion(pkg.manifest.name, pkg.manifest.version);
+  createBaseline(pkg, commit);
+  console.log(`${pkg.manifest.name} 首发完成：npm + Trusted Publisher + baseline 已齐`);
+}
+
 function resolveCommit(commit) {
   const result = run("git", ["rev-parse", `${commit}^{commit}`], { capture: true });
   return result.stdout.trim();
@@ -241,8 +276,9 @@ function showStatus(pkg) {
 function usage() {
   console.log(`用法:
   public-package.mjs audit <package>
-  public-package.mjs bootstrap <package>
-  public-package.mjs trust <package>
+  public-package.mjs first-publish <package> [commit]   # 推荐：publish+trust+baseline
+  public-package.mjs bootstrap <package>                # 仅 publish（排障用）
+  public-package.mjs trust <package>                    # 仅绑 OIDC（排障用）
   public-package.mjs baseline <package> [commit]
   public-package.mjs status <package>`);
 }
@@ -257,6 +293,7 @@ function main() {
 
   const pkg = loadPackage(slug);
   if (command === "audit") auditPackage(pkg);
+  else if (command === "first-publish") firstPublishPackage(pkg, commit);
   else if (command === "bootstrap") bootstrapPackage(pkg);
   else if (command === "trust") trustPackage(pkg);
   else if (command === "baseline") createBaseline(pkg, commit);

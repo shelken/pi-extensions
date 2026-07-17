@@ -122,63 +122,67 @@ pi 扩展以 `.ts` 源文件直接发布（`pi.extensions` 数组指向各子包
 
 | 事项 | Agent / 脚本 | 人工 |
 |---|---|---|
-| scope、manifest、README、smoke test、changeset | 可完成 | review |
+| scope、manifest、README、smoke test | 可完成 | review |
 | npm 名称归属、fork 许可证和版权声明 | 提供证据 | 最终确认 |
 | 测试、Gitleaks、tarball 门禁 | `just package-audit` | — |
-| npm 登录、首次 publish、Trusted Publisher | 发起命令 | 浏览器 2FA |
-| baseline tag / GitHub Release | `just package-baseline` 幂等完成 | — |
-| release PR | review diff | 合并或授权 Agent 合并 |
+| npm 登录 + 首发（publish+trust+baseline） | 发起一条命令 | 浏览器：login 一次；publish 写操作 OTP 一次（勾选 5 分钟免 2FA） |
+| 之后所有版本 | CI OIDC | 只 merge release PR |
 
-`package-audit` 强制检查 scoped 名称、`private`、LICENSE、`files`、repository、public access、Pi 入口、安装文档、测试和 tarball。具体规则维护在 `scripts/public-package.mjs`，文档不重复 manifest 模板。
+`package-audit` 强制检查 scoped 名称、`private`、LICENSE、`files`、repository、public access、Pi 入口、安装文档、测试和 tarball。规则在 `scripts/public-package.mjs`。
 
-首次公开按以下顺序执行，`<slug>` 使用目录名（`extensions/<slug>`）：
+#### 为什么 npm 强制要有「人工首发」
+
+Trusted Publisher **只能绑到已存在的包**。新包第一版无法走 CI OIDC，必须本地 auth publish 一次，再绑 `publish.yml`。这是 npm 的限制，不是本仓多此一举。
+
+#### 正确顺序（只应 2 次浏览器：login + 一次写 OTP）
+
+`<slug>` = 目录名 `extensions/<slug>`。manifest `version` 即首发版本（通常 `0.1.0`）。
 
 ```bash
-# Agent：修改包并写 changeset 后
+# 1) 代码就绪 —— 此时不要写该包的 changeset
 just install
 just package-audit <slug>
-git commit && git push
+git commit && git push && # merge 到 main
 
-# 人工：release PR 此时不要 merge
-just package-login
-just package-bootstrap <slug>
-just package-trust <slug>
+# 2) 人工 / 本机（凭据默认留在 /tmp/.npmrc-user，不要 auth-clean）
+just package-login                          # 浏览器 #1：登录
+just package-first-publish <slug> <commit>  # publish + trust + baseline
+# 浏览器 #2：publish 的写操作 OTP；务必勾选 skip 2FA for 5 minutes
+# → trust 应不再弹 OTP；baseline 不需要 npm OTP
 
-# Agent：commit 必须是人工 publish 时的源码 commit
-just package-baseline <slug> <publish-commit>
 just package-status <slug>
-
-# 人工 review 后 merge release PR，验证首个 OIDC patch
-just package-status <slug>
-just package-auth-clean
 ```
+
+**禁止**再拆成 `package-bootstrap` → `package-trust` → `package-baseline` 当常规路径（三次敏感操作 = 三次 OTP 体验的来源）。`bootstrap`/`trust`/`baseline` 只保留给排障。
+
+**禁止**首发前给该包写 changeset：
+
+- 旧错误路径：`0.1.0` 人工发 + 初始 minor changeset → release PR 再发 `0.2.0`（双版本、双次发布）。
+- 正确：首发不写 changeset；下一笔真实变更再 `just changeset`，只走 CI。
 
 注意：
 
-- 不要从 monorepo 根运行裸 `npm publish`；脚本始终显式指定 workspace。
-- 新包未人工首发时无法绑定 Trusted Publisher，npm 会返回 `E404`。
-- 已上架包再 `package-bootstrap` / 重复首发路径是错的：那是「建包」流程，日常版本只走 release PR + CI OIDC。
-- `E409` 表示 Trusted Publisher 已有唯一绑定，核对现有配置即可，不要重复创建。
-- `npm access get status` 已显示 `public`、但 `npm view` / registry 暂时 404 时，等待传播，不要重复 publish。
-- 每个 npm 包独立绑定 `shelken/pi-extensions` 的 `publish.yml`；CI 不使用 `NPM_TOKEN`。
+- 不要从 monorepo 根裸 `npm publish`；始终 workspace / 脚本。
+- 新包未首发时 CI `PUT E404` 正常；先 `package-first-publish`，不要指望 release PR  alone 建包。
+- 已上架包禁止再 `package-first-publish` / `package-bootstrap`。
+- `E409` on trust：绑定已在；用 `npm trust list <name>` 核对，坏了再 `revoke` + `trust`（排障），不要重复 first-publish。
+- registry 传播延迟：`first-publish` 会轮询；不要因此重复 publish。
+- 每个包独立 Trusted Publisher：`shelken/pi-extensions` + `publish.yml`；CI 无 `NPM_TOKEN`。
+- **默认不要** `just package-auth-clean`。只在你明确要删本机临时登录时再跑。
 
 ### 日常发包
 
-首次公开完成后，不再运行 `package-login`、`package-bootstrap`、`package-trust` 或手动创建 tag/Release：
+首发完成后，**只**走 changeset + CI，不要再 login/bootstrap/trust/手动 tag：
 
 ```bash
 just changeset
 just release-ready
 git commit && git push
+# review 并 merge chore(release) PR
+just package-status <slug>   # 可选核对
 ```
 
-随后 review 并合并 Changesets release PR。workflow 通过 OIDC 自动发布 npm、生成 provenance、打 tag 和建 GitHub Release。发布后可运行：
-
-```bash
-just package-status <slug>
-```
-
-若 CI 报 `ENEEDAUTH`，检查 `registry-url`、`id-token: write`、npm CLI 版本、Trusted Publisher 和 manifest repository；不要回退到长期 token。
+OIDC 成功的标志：`npm view <name> dist.attestations` 有 provenance。若 CI `ENEEDAUTH` / 已上架包 `E404`：查 Trusted Publisher 是否仍绑本仓 `publish.yml`，必要时 `revoke` 后重绑；不要回退长期 token，不要每次人工 publish。
 
 ### CI 发布失败排查
 
@@ -201,18 +205,19 @@ gh run list --workflow=publish.yml --limit 5
 | `E409` on trust | 绑定已存在 | 改 npm 控制台现有绑定，勿重复创建 |
 | CI 已发 npm、无 tag/Release | publish 中断在 tag 步骤，或只人工补了 npm | `just package-baseline <slug> <publish-commit>` |
 
-**补发已上架但 CI 漏掉的版本**（人工浏览器登录，不用 bootstrap）：
+**补发已上架但 CI 漏掉的版本**（仅止血；先修 Trusted Publisher）：
 
 ```bash
-just package-login
+# 若 login 文件还在可跳过 login
+just package-login   # 仅当 /tmp/.npmrc-user 不存在
 npm publish --workspace=@shelken/<name> --access public --userconfig /tmp/.npmrc-user
-just package-baseline <slug> <publish-commit>   # 幂等补 tag + GitHub Release
-just package-auth-clean
+just package-baseline <slug> <publish-commit>
+# 不要默认 auth-clean
 ```
 
-- `<publish-commit>`：与本次要发布的源码一致的 commit（通常是已 merge 的 release commit 或当时 workspace 所在 HEAD）。
-- 补发前确认 npm 上还没有该 version，避免重复 publish。
-- 根因若是 Trusted Publisher 配置漂移，补发只是止血；修绑定后下次仍应走纯 CI。
+- 补发前确认 npm 尚无该 version。
+- 补发不替代修 OIDC：`npm trust list` → 坏则 `revoke` + `package-trust`；验证下次 CI 带 provenance。
+- 成功包有 `dist.attestations.provenance`；从未有 provenance 的包 = OIDC 一直没通。
 
 ## 配置参考
 

@@ -29,19 +29,23 @@ package-audit package:
     just verify
     just secrets
 
-# 登录临时 npmrc（需要浏览器 2FA）
+# 登录临时 npmrc（浏览器一次；凭据默认保留，勿主动 clean）
 package-login:
     npm login --userconfig /tmp/.npmrc-user
 
-# 人工首发当前 workspace 版本（需要浏览器 2FA）
+# 新包首发一站式：publish + Trusted Publisher + baseline（推荐；勿再拆 bootstrap/trust）
+package-first-publish package commit="HEAD":
+    node scripts/public-package.mjs first-publish "{{package}}" "{{commit}}"
+
+# 仅 publish（排障；正常首发用 package-first-publish）
 package-bootstrap package:
     node scripts/public-package.mjs bootstrap "{{package}}"
 
-# 为已存在的 npm 包绑定 GitHub OIDC（需要浏览器 2FA）
+# 仅绑 OIDC（排障；正常首发用 package-first-publish）
 package-trust package:
     node scripts/public-package.mjs trust "{{package}}"
 
-# 补齐人工首发的 scoped tag 和 GitHub Release
+# 补齐 scoped tag 和 GitHub Release（first-publish 已含；CI 漏 tag 时单独用）
 package-baseline package commit="HEAD":
     node scripts/public-package.mjs baseline "{{package}}" "{{commit}}"
 
@@ -49,7 +53,7 @@ package-baseline package commit="HEAD":
 package-status package:
     node scripts/public-package.mjs status "{{package}}"
 
-# 删除临时 npm 登录凭据
+# 仅当你明确要清登录时才跑；默认不要 clean
 package-auth-clean:
     rm -f /tmp/.npmrc-user
 
