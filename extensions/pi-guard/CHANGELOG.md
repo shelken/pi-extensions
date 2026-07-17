@@ -1,5 +1,11 @@
 # @shelken/pi-guard
 
+## 0.5.0
+
+### Minor Changes
+
+- 规则入库时物化 home 绝对副本（`~` / `$HOME` / `${HOME}` → 当前用户 HOME）；匹配前对 command/path 同样展开，匹配阶段只见处理后的路径。`find ~` 现可拦 `find /Users/you` 与 `find $HOME`；`-find ~` 同步移除绝对副本
+
 ## 0.4.0
 
 ### Minor Changes

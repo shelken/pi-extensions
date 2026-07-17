@@ -71,6 +71,7 @@ export function loadPolicyFromPaths(
     readGlobal?: () => ReadConfigResult;
     readProject?: () => ReadConfigResult;
   },
+  expand?: { home?: string; cwd?: string },
 ): LoadPolicyResult {
   const failures: LoadFailure[] = [];
   const globalRead = readers?.readGlobal
@@ -86,6 +87,8 @@ export function loadPolicyFromPaths(
   const built: BuildPolicyResult = buildPolicy({
     globalSource,
     projectSource,
+    home: expand?.home,
+    cwd: expand?.cwd,
   });
 
   for (const err of built.errors) {

@@ -1,4 +1,5 @@
 import {
+  expandHomeInText,
   pathRuleMatchesFull,
   pathRuleMatchesInCommand,
   resolveBlockReason,
@@ -32,9 +33,11 @@ export type GuardResult =
   | { block: true; reason: string };
 
 export function evaluateGuard(input: GuardInput, policy: Policy): GuardResult {
+  // Match stage only sees home-expanded text (`~` / `$HOME` → absolute).
   if (input.tool === "bash") {
+    const command = expandHomeInText(input.command, input.home);
     for (const rule of policy.commands) {
-      if (textMatchesPattern(input.command, rule.value)) {
+      if (textMatchesPattern(command, rule.value)) {
         return {
           block: true,
           reason: resolveBlockReason(rule, "command", policy.default_reason),
@@ -44,7 +47,7 @@ export function evaluateGuard(input: GuardInput, policy: Policy): GuardResult {
     for (const rule of policy.paths) {
       if (
         pathRuleMatchesInCommand(
-          input.command,
+          command,
           rule.value,
           input.cwd,
           input.home,
@@ -59,7 +62,7 @@ export function evaluateGuard(input: GuardInput, policy: Policy): GuardResult {
     return { block: false };
   }
 
-  const pathValue = input.path?.trim() ?? "";
+  const pathValue = expandHomeInText(input.path?.trim() ?? "", input.home);
   if (pathValue === "") {
     return { block: false };
   }

@@ -38,6 +38,8 @@ export {
 
 export {
   absoluteForm,
+  expandHomeInText,
+  expandRuleValues,
   normPath,
   pathRuleMatchesFull,
   pathRuleMatchesInCommand,
@@ -77,7 +79,10 @@ export default function piGuard(pi: ExtensionAPI): void {
   function ensurePolicy(ctx: NotifyCtx): Policy {
     if (policy) return policy;
     const paths = getPermissionPaths(ctx.cwd, getAgentDir());
-    const loaded = loadPolicyFromPaths(paths);
+    const loaded = loadPolicyFromPaths(paths, undefined, {
+      home: homedir(),
+      cwd: ctx.cwd,
+    });
     policy = loaded.policy;
     reportFailures(ctx, loaded.failures);
     return policy;

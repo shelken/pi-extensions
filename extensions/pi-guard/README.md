@@ -41,6 +41,7 @@ deny_paths:
 
 - 减号仅 string 项：`^-` 且非 `--`；对象项不能用减号字段
 - 命令侧：无 `*` = **短语匹配**（两侧须为边界，非前缀 includes）；有 `*` = 用户显式通配（`*` 任意字符可跨 `/`）。例：`git add .` 不中 `git add .agents/…`；要前缀写 `git add .*`
+- **home 展开（入库 + 匹配）**：规则写入时 `~` / `$HOME` / `${HOME}` 物化出当前用户绝对路径副本（如 `find ~` → 额外 `find /Users/you`）；匹配前对 command/path 同样展开，匹配阶段只见绝对路径。`-find ~` 会连同绝对副本一起移除
 - 未知顶层键忽略；坏 YAML 该层 fail-open（console + 一次 UI 警告）
 
 同构样例：`docs/wayfinder/samples/permissions.{global,project}.example.yaml`  

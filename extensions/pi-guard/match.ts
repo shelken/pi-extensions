@@ -64,22 +64,69 @@ export function expandUser(p: string, home: string): string {
 }
 
 /**
- * Normalize a concrete path (no glob intent): ~, relative→cwd, normalize.
+ * Free-text home expand for rules and match inputs.
+ * `${HOME}` / `$HOME` / `~` / `~/…` → absolute home; `~user` unchanged.
+ * Empty home → no-op. Match stage always runs on this output.
+ */
+export function expandHomeInText(text: string, home: string): string {
+  if (!home) return text;
+  let s = text.replaceAll("${HOME}", home);
+  s = s.replace(/\$HOME\b/g, home);
+  // ~ or ~/…, not ~user (username continues with word chars)
+  s = s.replace(
+    /(^|[^A-Za-z0-9_])~(?=\/|$|[^A-Za-z0-9_/])/g,
+    (_m, pre: string) => pre + home,
+  );
+  return s;
+}
+
+/**
+ * Normalize a concrete path (no glob intent): home forms, relative→cwd, normalize.
  * Does not realpath.
  */
 export function normPath(p: string, cwd: string, home: string): string {
-  const t = expandUser(p.trim(), home);
+  const t = expandHomeInText(p.trim(), home);
   return path.normalize(path.resolve(cwd, t));
 }
 
 /**
  * Absolute form of a rule path, preserving `*`.
- * Same ~ / relative / normalize rules as norm, without resolving globs away.
+ * Same home / relative / normalize rules as norm, without resolving globs away.
  */
 export function absoluteForm(rule: string, cwd: string, home: string): string {
-  const t = expandUser(rule.trim(), home);
+  const t = expandHomeInText(rule.trim(), home);
   // path.resolve keeps `*` segments; normalize collapses . / ..
   return path.normalize(path.resolve(cwd, t));
+}
+
+function stillHasHomeToken(s: string): boolean {
+  return (
+    /\$\{HOME\}/.test(s) ||
+    /\$HOME\b/.test(s) ||
+    /(^|[^A-Za-z0-9_])~(?=\/|$|[^A-Za-z0-9_/])/.test(s)
+  );
+}
+
+/**
+ * Materialize rule values at ingest: original + home-expanded
+ * (+ path absolute form when home tokens are resolved). Match stage only
+ * sees home-expanded inputs against these values.
+ */
+export function expandRuleValues(
+  value: string,
+  kind: "command" | "path",
+  home: string,
+  cwd: string,
+): string[] {
+  const out = new Set<string>();
+  out.add(value);
+  const expanded = expandHomeInText(value, home);
+  out.add(expanded);
+  if (kind === "path" && !stillHasHomeToken(expanded)) {
+    // skip when ~ /$HOME unresolved — path.resolve would turn `~` into cwd junk
+    out.add(absoluteForm(expanded, cwd, home));
+  }
+  return [...out];
 }
 
 /** Full-path match for read/write/edit candidates. */

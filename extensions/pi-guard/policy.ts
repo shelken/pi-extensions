@@ -1,5 +1,6 @@
 import { parse as parseYaml } from "yaml";
 import type { Policy, Rule } from "./evaluate.ts";
+import { expandRuleValues } from "./match.ts";
 
 export type LayerOp =
   | { type: "add"; value: string; reason?: string }
@@ -144,35 +145,85 @@ export function parseLayerYaml(source: string): ParseLayerResult {
   return { ok: true, layer };
 }
 
-export function applyOps(rules: Rule[], ops: LayerOp[]): Rule[] {
+export type ExpandCtx = { home: string; cwd: string };
+
+function materializeRules(
+  rules: Rule[],
+  kind: "command" | "path",
+  ctx: ExpandCtx,
+): Rule[] {
+  const out: Rule[] = [];
+  const seen = new Set<string>();
+  for (const rule of rules) {
+    for (const value of expandRuleValues(
+      rule.value,
+      kind,
+      ctx.home,
+      ctx.cwd,
+    )) {
+      if (seen.has(value)) continue;
+      seen.add(value);
+      out.push(
+        rule.reason === undefined
+          ? { value, source: rule.source }
+          : { value, reason: rule.reason, source: rule.source },
+      );
+    }
+  }
+  return out;
+}
+
+export function applyOps(
+  rules: Rule[],
+  ops: LayerOp[],
+  kind: "command" | "path",
+  ctx: ExpandCtx,
+): Rule[] {
   let out = rules.slice();
   for (const op of ops) {
     if (op.type === "remove") {
-      out = out.filter((r) => r.value !== op.value);
+      const drop = new Set(
+        expandRuleValues(op.value, kind, ctx.home, ctx.cwd),
+      );
+      out = out.filter((r) => !drop.has(r.value));
       continue;
     }
-    const next: Rule =
-      op.reason === undefined
-        ? { value: op.value, source: "user" }
-        : { value: op.value, reason: op.reason, source: "user" };
-    const i = out.findIndex((r) => r.value === op.value);
-    if (i >= 0) out[i] = next;
-    else out.push(next);
+    for (const value of expandRuleValues(
+      op.value,
+      kind,
+      ctx.home,
+      ctx.cwd,
+    )) {
+      const next: Rule =
+        op.reason === undefined
+          ? { value, source: "user" }
+          : { value, reason: op.reason, source: "user" };
+      const i = out.findIndex((r) => r.value === value);
+      if (i >= 0) out[i] = next;
+      else out.push(next);
+    }
   }
   return out;
 }
 
 /**
  * Merge builtins → global → project.
+ * On ingest, home forms (`~` / `$HOME`) expand into absolute sibling rules.
  * Missing sources are empty layers. Bad YAML layers are skipped (fail-open).
  */
 export function buildPolicy(input: {
   globalSource?: string | null;
   projectSource?: string | null;
+  home?: string;
+  cwd?: string;
 }): BuildPolicyResult {
   const errors: string[] = [];
-  let commands = BUILTIN_COMMANDS.slice();
-  let paths = BUILTIN_PATHS.slice();
+  const ctx: ExpandCtx = {
+    home: input.home ?? "",
+    cwd: input.cwd ?? ".",
+  };
+  let commands = materializeRules(BUILTIN_COMMANDS, "command", ctx);
+  let paths = materializeRules(BUILTIN_PATHS, "path", ctx);
   let default_reason: string | undefined;
 
   const layers: Array<{ name: string; source: string | null | undefined }> = [
@@ -192,8 +243,8 @@ export function buildPolicy(input: {
     if (parsed.layer.default_reason !== undefined) {
       default_reason = parsed.layer.default_reason;
     }
-    commands = applyOps(commands, parsed.layer.commandOps);
-    paths = applyOps(paths, parsed.layer.pathOps);
+    commands = applyOps(commands, parsed.layer.commandOps, "command", ctx);
+    paths = applyOps(paths, parsed.layer.pathOps, "path", ctx);
   }
 
   const policy: Policy =

@@ -137,25 +137,30 @@ wget *|sh
 ### 5.1 命令 pattern
 
 - 大小写敏感
-- 无 `*`：**短语匹配**——pattern 在 command 中出现，且左右为边界（串首/尾，或 shell 分隔符空白/`|;&<>(){}[]`/`'"` 等）；`git add .` ⊄ `git add .agents/…`，`find ~` ⊄ `find ~/Code`
+- 无 `*`：**短语匹配**——pattern 在 command 中出现，且左右为边界（串首/尾，或 shell 分隔符空白/`|;&<>(){}[]`/`'"` 等）；`git add .` ⊄ `git add .agents/…`，`find ~` ⊄ `find ~/Code`（展开后即 `find $HOME` ⊄ `find $HOME/Code`）
 - 有 `*`：用户显式通配；`*` → 任意字符（含 `/`、空格）；在 command 上 **子串** 通配命中
-- 不解析 shell、不拆 token、不管引号/`$var`/`bash -c` 混淆（v1 不做）
+- **入库展开**：写入 policy 时，每条 command 规则额外物化 home 绝对副本（`~` / `~/…` / `$HOME` / `${HOME}` → 当前 `homedir()`；不支持 `~user`）。例：`find ~` → 保留原文 + `find /Users/you`
+- **匹配前展开**：command 先做同一套 home 展开，再短语/通配匹配——**匹配阶段只见处理后的路径**
+- 移除（`-value`）对 value 做同样展开后，原文与绝对副本一并删
+- 不解析 shell、不拆 token、不管引号 / 其他 `$var` / `bash -c` 混淆（仅 home 相关 token）
 
 ### 5.2 路径
 
 `norm(p, cwd)`：
 
 1. trim  
-2. `~` / `~/…` → `HOME`（不支持 `~user`）  
+2. `~` / `~/…` / `$HOME` / `${HOME}` → `HOME`（不支持 `~user`）  
 3. 相对 → `path.resolve(cwd, …)`（同 pi `resolveToCwd`）  
 4. `path.normalize`  
 5. **不** realpath；大小写敏感  
 
 通配：仅 `*`，**可跨 `/`**；无 `**`。
 
-**read/write/edit**：`glob_match(norm(input.path), absolute_form(rule))` 全路径匹配。
+**入库展开**：path 规则同样物化 home 绝对副本；相对路径另加 `cwd` 绝对形。
 
-**bash 扫路径**：每条 path 规则两根针——① 配置原文 ② 绝对形；与命令侧同一套 `textMatchesPattern`（含路径根边界）。
+**read/write/edit**：输入先 home 展开，再 `glob_match(norm(input.path), absolute_form(rule))` 全路径匹配。
+
+**bash 扫路径**：command 先 home 展开；每条 path 规则两根针——① 配置原文 ② 绝对形；与命令侧同一套 `textMatchesPattern`。
 
 详见：`docs/wayfinder/2026-07-14-pi-guard-path-match-semantics.md`
 

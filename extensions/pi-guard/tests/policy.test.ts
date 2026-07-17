@@ -73,17 +73,35 @@ deny_commands:
   });
 });
 
+const HOME = "/home/me";
+const CWD = "/proj";
+
 describe("buildPolicy", () => {
   it("starts from builtins when layers missing", () => {
     const { policy, errors } = buildPolicy({});
     expect(errors).toEqual([]);
+    // no home → no expansion siblings
     expect(policy.commands).toEqual(BUILTIN_COMMANDS);
     expect(policy.paths).toEqual(BUILTIN_PATHS);
     expect(policy.default_reason).toBeUndefined();
   });
 
+  it("materializes home-absolute sibling rules at ingest", () => {
+    const { policy } = buildPolicy({ home: HOME, cwd: CWD });
+    expect(policy.commands.some((r) => r.value === "find ~")).toBe(true);
+    expect(policy.commands.some((r) => r.value === `find ${HOME}`)).toBe(true);
+    expect(policy.commands.some((r) => r.value === "rm -rf ~")).toBe(true);
+    expect(policy.commands.some((r) => r.value === `rm -rf ${HOME}`)).toBe(
+      true,
+    );
+    expect(policy.paths.some((r) => r.value === "~/.ssh/*")).toBe(true);
+    expect(policy.paths.some((r) => r.value === `${HOME}/.ssh/*`)).toBe(true);
+  });
+
   it("merges builtins → global → project with upsert and remove", () => {
     const { policy } = buildPolicy({
+      home: HOME,
+      cwd: CWD,
       globalSource: `
 default_reason: "from global"
 deny_commands:
@@ -110,6 +128,7 @@ deny_paths:
 
     const cmd = Object.fromEntries(policy.commands.map((r) => [r.value, r.reason]));
     expect(cmd["find ~"]).toBeUndefined();
+    expect(cmd[`find ${HOME}`]).toBeUndefined(); // remove expands both
     expect(cmd["npm publish"]).toBe("project npm");
     expect(cmd["git push -f"]).toBeUndefined(); // string add, no reason
     expect(policy.commands.some((r) => r.value === "git push -f")).toBe(true);
@@ -117,13 +136,18 @@ deny_paths:
 
     const paths = Object.fromEntries(policy.paths.map((r) => [r.value, r.reason]));
     expect(paths["~/.specific.zsh"]).toBeUndefined();
+    expect(paths[`${HOME}/.specific.zsh`]).toBeUndefined();
     expect(paths["~/.netrc"]).toBe("netrc");
+    expect(paths[`${HOME}/.netrc`]).toBe("netrc");
     expect(policy.paths.some((r) => r.value === ".env")).toBe(true);
+    expect(policy.paths.some((r) => r.value === `${CWD}/.env`)).toBe(true);
     expect(policy.paths.some((r) => r.value === "~/.ssh/*")).toBe(true);
   });
 
   it("ignores a bad layer without polluting others", () => {
     const { policy, errors } = buildPolicy({
+      home: HOME,
+      cwd: CWD,
       globalSource: "deny_commands: [",
       projectSource: `
 deny_commands:
