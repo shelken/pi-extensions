@@ -4,6 +4,12 @@
 
 ### Minor Changes
 
+- [`1fbabc0`](https://github.com/shelken/pi-extensions/commit/1fbabc085036fb9a17cd1afa6ec13b8c5e8f6cb4) Thanks [@shelken](https://github.com/shelken)! - 规则入库时物化 home 绝对副本（`~` / `$HOME` → 当前用户路径）；匹配前对 command/path 同样展开，使 `find ~` 能拦住 `find $HOME` 与绝对 home 路径
+
+## 0.5.0
+
+### Minor Changes
+
 - 规则入库时物化 home 绝对副本（`~` / `$HOME` / `${HOME}` → 当前用户 HOME）；匹配前对 command/path 同样展开，匹配阶段只见处理后的路径。`find ~` 现可拦 `find /Users/you` 与 `find $HOME`；`-find ~` 同步移除绝对副本
 
 ## 0.4.0

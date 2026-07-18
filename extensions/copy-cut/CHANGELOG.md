@@ -1,5 +1,11 @@
 # @shelken/copy-cut
 
+## 0.2.1
+
+### Patch Changes
+
+- [`f053939`](https://github.com/shelken/pi-extensions/commit/f053939ec9a2c99d098e95ad42894dd2286dfd55) Thanks [@shelken](https://github.com/shelken)! - 修复 cut 快捷键在多数终端不触发：用 onTerminalInput 兼容 legacy / macOS 按键序列
+
 ## 0.2.0
 
 ### Minor Changes
