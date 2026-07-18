@@ -10,6 +10,12 @@
 
 空输入时无操作、无提示。
 
+除 `registerShortcut` 外，还用 `onTerminalInput` 兼容：
+
+- Kitty CSI-u / modifyOtherKeys
+- legacy `ESC`+`X`
+- macOS Option+Shift+x 字符 `˛`
+
 ## 安装
 
 ```bash
@@ -22,8 +28,12 @@ pi install npm:@shelken/copy-cut
 
 无配置文件。快捷键写死为 `alt+shift+x`。
 
-## 验证
+若同时装了 powerline-footer，建议关掉其 cut，避免抢键：
 
-```bash
-bun --filter @shelken/copy-cut test
+```json
+{
+  "powerlineShortcuts": {
+    "cutEditor": null
+  }
+}
 ```
