@@ -14,7 +14,10 @@ describe("pi-dynamic-models extension", () => {
     expect(on).toHaveBeenCalledWith("session_start", expect.any(Function));
     expect(registerCommand).toHaveBeenCalledWith(
       "dynamic-models",
-      expect.objectContaining({ handler: expect.any(Function) }),
+      expect.objectContaining({
+        handler: expect.any(Function),
+        getArgumentCompletions: expect.any(Function),
+      }),
     );
     for (const [name, config] of registerProvider.mock.calls) {
       expect(typeof name).toBe("string");

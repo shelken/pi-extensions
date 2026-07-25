@@ -787,6 +787,17 @@ function listProviderCacheNames(): string[] {
 function registerCommands(pi: ExtensionAPI): void {
   pi.registerCommand("dynamic-models", {
     description: "动态模型：status（默认）或 refresh 强制刷新",
+    getArgumentCompletions: (prefix) => {
+      const items = [
+        { value: "status", label: "status", description: "查看启用与缓存状态（默认）" },
+        { value: "refresh", label: "refresh", description: "强制刷新远端模型" },
+      ];
+      const p = prefix.trim().toLowerCase();
+      const filtered = p
+        ? items.filter((i) => i.value.startsWith(p) || i.label.startsWith(p))
+        : items;
+      return filtered.length > 0 ? filtered : null;
+    },
     handler: async (args, ctx) => {
       const sub = (args.trim().split(/\s+/)[0] || "status").toLowerCase();
       if (sub === "refresh" || sub === "r") {
