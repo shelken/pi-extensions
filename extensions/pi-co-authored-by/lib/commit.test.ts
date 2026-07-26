@@ -96,13 +96,13 @@ echo one > a.txt
 git add a.txt
 git commit -q -m 'simple subject'
 git config --local --get core.hooksPath || true
-test ! -f .git/hooks/prepare-commit-msg
 git log -1 --format=%B
 `);
 
 			expect(output).toContain("simple subject");
 			expect(output).toContain(CO_AUTHOR);
 			expect(output).toContain(GENERATED_BY);
+			// bash 退出后 cleanup 应摘掉临时 hook，且不写仓库 core.hooksPath
 			expect(
 				execFileSync("bash", ["-lc", "git config --local --get core.hooksPath || true"], {
 					cwd: repo.cwd,
@@ -180,6 +180,22 @@ git log --oneline || true
 			expect(output).toContain("git version");
 			expect(output).toContain("A  a.txt");
 			expect(output).not.toContain(CO_AUTHOR);
+		});
+	});
+
+	it("does not expose core.hooksPath via git config during the bash session", () => {
+		withGitRepo((repo) => {
+			const output = repo.run(`
+echo one > a.txt
+git add a.txt
+git commit -q -m 'no hooksPath subject'
+printf 'HOOKS_PATH=[%s]\n' "$(git config --get core.hooksPath || true)"
+git log -1 --format=%B
+`);
+
+			expect(output).toContain("HOOKS_PATH=[]");
+			expect(output).toContain(CO_AUTHOR);
+			expect(output).toContain(GENERATED_BY);
 		});
 	});
 
@@ -302,6 +318,98 @@ git log --format=%B --max-count=2
 			expect(output).toContain(OTHER_CO_AUTHOR);
 			expect(countOccurrences(output, GENERATED_BY)).toBe(2);
 			expect(readFileSync(join(repo.hooksDir, "prepare-commit-msg"), "utf8")).not.toContain(MODEL_NAME);
+		});
+	});
+
+	it("keeps trailers when a concurrent shell exits while another commits via absolute git", () => {
+		withGitRepo((repo) => {
+			const gitBin = execFileSync("bash", ["-lc", "command -v git"], {
+				encoding: "utf8",
+			}).trim();
+			const ready = join(repo.cwd, ".b-ready");
+			const env = createIsolatedGitEnvironment();
+			const shellAPath = join(repo.cwd, ".shell-a.sh");
+			const shellBPath = join(repo.cwd, ".shell-b.sh");
+
+			writeFileSync(
+				shellAPath,
+				wrapBashWithCommitHook(
+					`
+set -euo pipefail
+git status >/dev/null
+while [ ! -f '${ready}' ]; do sleep 0.05; done
+`,
+					repo.hooksDir,
+					MODEL_NAME,
+					PI_VERSION,
+				),
+				{ mode: 0o755 },
+			);
+			writeFileSync(
+				shellBPath,
+				wrapBashWithCommitHook(
+					`
+set -euo pipefail
+git status >/dev/null
+touch '${ready}'
+sleep 0.4
+echo b > b.txt
+'${gitBin}' add b.txt
+'${gitBin}' commit -q -m 'concurrent abs subject'
+'${gitBin}' log -1 --format=%B
+`,
+					repo.hooksDir,
+					MODEL_NAME,
+					PI_VERSION,
+				),
+				{ mode: 0o755 },
+			);
+
+			const output = execFileSync(
+				"bash",
+				[
+					"-lc",
+					`
+set -euo pipefail
+bash '${shellAPath}' >/dev/null 2>&1 &
+APID=$!
+sleep 0.15
+bash '${shellBPath}'
+wait $APID || true
+`,
+				],
+				{
+					cwd: repo.cwd,
+					env,
+					encoding: "utf8",
+					stdio: ["ignore", "pipe", "pipe"],
+				},
+			);
+
+			expect(output).toContain("concurrent abs subject");
+			expect(output).toContain(CO_AUTHOR);
+			expect(output).toContain(GENERATED_BY);
+			expect(existsSync(join(repo.cwd, ".git/hooks/prepare-commit-msg"))).toBe(false);
+		});
+	});
+
+	it("cleans leftover install from a previous crashed shell", () => {
+		withGitRepo((repo) => {
+			const userHook = join(repo.cwd, ".git/hooks/prepare-commit-msg");
+			const userBackup = join(repo.cwd, ".git/hooks/prepare-commit-msg.pi-user");
+			writeFileSync(userBackup, "#!/bin/sh\ntrue\n", { mode: 0o755 });
+			execFileSync("cp", [join(repo.hooksDir, "prepare-commit-msg"), userHook]);
+			execFileSync("chmod", ["+x", userHook]);
+			expect(readFileSync(userHook, "utf8")).toContain("PI_CO_AUTHORED_BY_HOOK_MARKER");
+			expect(existsSync(userBackup)).toBe(true);
+
+			repo.run(`
+git status >/dev/null
+`);
+
+			expect(existsSync(userBackup)).toBe(false);
+			expect(existsSync(userHook)).toBe(true);
+			expect(readFileSync(userHook, "utf8")).not.toContain("PI_CO_AUTHORED_BY_HOOK_MARKER");
 		});
 	});
 });
