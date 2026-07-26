@@ -7,7 +7,7 @@ Co-Authored-By: <model> <noreply@pi.dev>
 Generated-By: pi <version>
 ```
 
-实现：session 级临时 `core.hooksPath` + `prepare-commit-msg`；结束时清理。
+实现：bash 期间在真实 hooks 目录临时安装 `prepare-commit-msg`（不改 `core.hooksPath`）；pid 引用计数，shell 退出时最后一个引用卸装并恢复原 hook。
 
 初始 fork 自 [bruno-garcia/pi-co-authored-by](https://github.com/bruno-garcia/pi-co-authored-by)。
 
