@@ -4,7 +4,7 @@
  * 约束（启动性能）：
  * - factory / 启动路径：只读磁盘 cache，禁止任何网络
  * - 网络只允许在 session_start 之后异步跑（setTimeout 0，不挡进 session）
- * - 有 provider 磁盘缓存时 session_start 也不打网；仅 force / 无缓存才请求 API
+ * - session_start 只在 provider 缓存超过 TTL 或 force 时异步请求 API
  */
 
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
@@ -25,6 +25,7 @@ import {
   lookupModel,
   toPiCost,
   toPiInput,
+  toPiThinkingLevelMap,
   type RegistryData,
 } from "./src/matcher.ts";
 import { getBuiltInModelDefs, getBuiltInModelIds } from "./src/builtin.ts";
@@ -33,9 +34,12 @@ import {
   filterNewModelIds,
   formatProviderSummary,
   formatStatusLine,
+  getAutoThinkingLevelMap,
   hashModelIds,
   isUsableChatModel,
+  providerFetchFailureFallback,
   resolveEnableProviders,
+  shouldRefreshProviderCache,
   shouldSkipByHash,
   type ProviderRunSummary,
 } from "./src/logic.ts";
@@ -77,8 +81,8 @@ const LOG_DIR = join(AGENT_DIR, "logs");
 const LOG_FILE = join(LOG_DIR, "pi-dynamic-models.log");
 const REGISTRY_URL = "https://models.dev/api.json";
 const REGISTRY_CACHE_MAX_AGE_MS = 6 * 60 * 60 * 1000;
-/** 仅用于日志区分 fresh/aged；有磁盘缓存时启动不再因过期打网 */
-const PROVIDER_CACHE_MAX_AGE_MS = 10 * 60 * 1000;
+/** provider 模型列表缓存 TTL；过期后 session_start 重新请求 */
+const PROVIDER_CACHE_MAX_AGE_MS = 6 * 60 * 60 * 1000;
 /** 所有网络请求统一超时；超时后走磁盘缓存 */
 const NETWORK_TIMEOUT_MS = 3_000;
 let isDebug = false;
@@ -108,6 +112,7 @@ type AutoModel = {
   cost: ReturnType<typeof toPiCost>;
   contextWindow: number;
   maxTokens: number;
+  thinkingLevelMap?: Record<string, string | null>;
 };
 
 function log(msg: string): void {
@@ -399,8 +404,12 @@ async function fetchRemoteModels(cfg: ProviderConfig): Promise<string[]> {
   }
 }
 
-function buildAutoModel(id: string, registry: FlatRegistry): AutoModel {
-  const entry = lookupModel(id, registry);
+function buildAutoModel(
+  id: string,
+  registry: FlatRegistry,
+  providerName: string,
+): AutoModel {
+  const entry = lookupModel(id, registry, providerName);
   if (!entry) {
     return {
       id,
@@ -418,6 +427,11 @@ function buildAutoModel(id: string, registry: FlatRegistry): AutoModel {
     id,
     name: `${model.name ?? id} (AUTO)`,
     reasoning: model.reasoning ?? false,
+    thinkingLevelMap:
+      toPiThinkingLevelMap(
+        model.reasoning_options,
+        getAutoThinkingLevelMap(model.reasoning ?? false),
+      ),
     input: toPiInput(model.modalities?.input, model.attachment),
     cost: toPiCost(model.cost),
     contextWindow: model.limit?.context ?? 128_000,
@@ -488,6 +502,7 @@ function buildAndFilterModels(
   newIds: string[],
   registry: FlatRegistry,
   excludePatterns: string[] | undefined,
+  providerName: string,
 ): {
   models: AutoModel[];
   matched: number;
@@ -502,13 +517,13 @@ function buildAndFilterModels(
   const models: AutoModel[] = [];
 
   for (const id of afterExclude) {
-    const model = buildAutoModel(id, registry);
+    const model = buildAutoModel(id, registry, providerName);
     if (!isUsableChatModel(model)) {
       filtered++;
       debugLog(`    - ${id} → filtered (ctx:${model.contextWindow})`);
       continue;
     }
-    const entry = lookupModel(id, registry);
+    const entry = lookupModel(id, registry, providerName);
     if (!entry) {
       defaults++;
       debugLog(`    + ${id} → (defaults, no registry match)`);
@@ -615,7 +630,12 @@ function eagerRegisterFromCache(pi: ExtensionAPI): void {
         continue;
       }
 
-      const built = buildAndFilterModels(newIds, registry, config.excludePatterns);
+      const built = buildAndFilterModels(
+        newIds,
+        registry,
+        config.excludePatterns,
+        providerName,
+      );
       summaries.push(tryRegisterProvider(pi, providerName, providerCfg, modelsJson, built, false));
     }
 
@@ -648,17 +668,17 @@ async function discoverIds(
 ): Promise<{ ids: string[]; source: "fresh" | "stale" | "network" } | null> {
   const pt = Date.now();
   const disk = readProviderCache(providerName);
+  const cacheIsFresh = disk ? isProviderCacheFresh(providerName) : false;
 
-  // 非 force：只要磁盘上有过缓存记录就不再打网（含空列表/失败负缓存）
-  if (!force && disk) {
-    const age = isProviderCacheFresh(providerName) ? "fresh" : "stale";
+  // 非 force 仅命中 TTL 内缓存；过期缓存保留为网络失败时的 fallback。
+  if (disk && !shouldRefreshProviderCache(force, true, cacheIsFresh)) {
     const n = disk.modelIds?.length ?? 0;
-    log(`  [${providerName}] cache hit ${age} (${n} models, ${Date.now() - pt}ms)`);
+    log(`  [${providerName}] cache hit fresh (${n} models, ${Date.now() - pt}ms)`);
     if (n === 0) return null;
-    return { ids: disk.modelIds, source: age === "fresh" ? "fresh" : "stale" };
+    return { ids: disk.modelIds, source: "fresh" };
   }
 
-  // force 或完全无缓存文件：才请求 API
+  // force、无缓存或缓存过期：异步请求 API；失败时回退旧缓存（不写盘，避免 mtime 变新鲜）
   try {
     const ids = await fetchRemoteModels(providerCfg);
     writeProviderCache(providerName, {
@@ -668,14 +688,10 @@ async function discoverIds(
     return { ids, source: "network" };
   } catch (err) {
     log(`  [${providerName}] ✗ unreachable: ${err}`);
-    // 负缓存：下次启动别再撞死 endpoint
-    writeProviderCache(providerName, {
-      hash: disk?.hash ?? "failed",
-      modelIds: disk?.modelIds ?? [],
-    });
-    if (!disk || disk.modelIds.length === 0) return null;
-    log(`  [${providerName}] → fallback cache (${disk.modelIds.length} models)`);
-    return { ids: disk.modelIds, source: "stale" };
+    const fallback = providerFetchFailureFallback(disk?.modelIds);
+    if (!fallback) return null;
+    log(`  [${providerName}] → fallback cache (${fallback.ids.length} models)`);
+    return { ids: fallback.ids, source: fallback.source };
   }
 }
 
@@ -735,7 +751,12 @@ async function initModels(pi: ExtensionAPI, options: InitOptions = {}): Promise<
           return null;
         }
 
-        const built = buildAndFilterModels(newIds, registry, config.excludePatterns);
+        const built = buildAndFilterModels(
+          newIds,
+          registry,
+          config.excludePatterns,
+          providerName,
+        );
         return tryRegisterProvider(pi, providerName, providerCfg, modelsJson, built, force);
       }),
     );

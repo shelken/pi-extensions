@@ -5,6 +5,50 @@ export function hashModelIds(ids: string[]): string {
   return createHash("md5").update([...ids].sort().join("\0")).digest("hex");
 }
 
+/** force 或缺失/过期时重新发现 provider 模型。 */
+export function shouldRefreshProviderCache(
+  force: boolean,
+  hasCache: boolean,
+  isFresh: boolean,
+): boolean {
+  return force || !hasCache || !isFresh;
+}
+
+/**
+ * 远端列表拉取失败：只用磁盘旧 ids 回退，禁止写缓存（写盘会刷新 mtime，把失败伪装成 6h 新鲜）。
+ */
+export function providerFetchFailureFallback(
+  diskModelIds: string[] | undefined,
+): { ids: string[]; source: "stale"; writeCache: false } | null {
+  if (!diskModelIds || diskModelIds.length === 0) return null;
+  return { ids: diskModelIds, source: "stale", writeCache: false };
+}
+
+/** models.dev 未提供 effort 时使用的硬编码映射。 */
+export function getAutoThinkingLevelMap(
+  reasoning: boolean,
+):
+  | {
+      minimal: "low";
+      low: "low";
+      medium: "medium";
+      high: "high";
+      xhigh: "xhigh";
+      max: "max";
+    }
+  | undefined {
+  return reasoning
+    ? {
+        minimal: "low",
+        low: "low",
+        medium: "medium",
+        high: "high",
+        xhigh: "xhigh",
+        max: "max",
+      }
+    : undefined;
+}
+
 /** 仅返回 models.json 尚未声明的 id。 */
 export function filterNewModelIds(discoveredIds: string[], existing: Set<string>): string[] {
   return discoveredIds.filter((id) => !existing.has(id));

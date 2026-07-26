@@ -28,6 +28,7 @@ export function getBuiltInModelDefs(providerName: string): ModelLike[] {
       name: m.name ?? m.id,
       api: m.api,
       reasoning: m.reasoning ?? false,
+      thinkingLevelMap: m.thinkingLevelMap,
       input: (m.input ?? ["text"]) as ("text" | "image")[],
       cost: m.cost ?? { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
       contextWindow: m.contextWindow ?? 128_000,

@@ -7,9 +7,45 @@ import {
   hashModelIds,
   isUsableChatModel,
   matchesExcludePattern,
+  providerFetchFailureFallback,
   resolveEnableProviders,
+  shouldRefreshProviderCache,
   shouldSkipByHash,
+  getAutoThinkingLevelMap,
 } from "../src/logic.ts";
+
+describe("provider cache refresh", () => {
+  it("refreshes a stale cache instead of treating it as permanently valid", () => {
+    expect(shouldRefreshProviderCache(false, true, true)).toBe(false);
+    expect(shouldRefreshProviderCache(false, true, false)).toBe(true);
+    expect(shouldRefreshProviderCache(false, false, false)).toBe(true);
+    expect(shouldRefreshProviderCache(true, true, true)).toBe(true);
+  });
+
+  it("on fetch failure only falls back to disk ids and never requests a cache rewrite", () => {
+    expect(providerFetchFailureFallback(undefined)).toBeNull();
+    expect(providerFetchFailureFallback([])).toBeNull();
+    expect(providerFetchFailureFallback(["m1", "m2"])).toEqual({
+      ids: ["m1", "m2"],
+      source: "stale",
+      writeCache: false,
+    });
+  });
+});
+
+describe("automatic thinking levels", () => {
+  it("returns a complete fallback map for reasoning models", () => {
+    expect(getAutoThinkingLevelMap(true)).toEqual({
+      minimal: "low",
+      low: "low",
+      medium: "medium",
+      high: "high",
+      xhigh: "xhigh",
+      max: "max",
+    });
+    expect(getAutoThinkingLevelMap(false)).toBeUndefined();
+  });
+});
 
 describe("hashModelIds / shouldSkipByHash", () => {
   it("is order-independent", () => {

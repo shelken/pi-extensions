@@ -12,10 +12,16 @@ export interface PiCost {
   cacheWrite: number;
 }
 
+export interface RegistryReasoningOption {
+  type?: string;
+  values?: string[];
+}
+
 export interface RegistryModel {
   id: string;
   name?: string;
   reasoning?: boolean;
+  reasoning_options?: RegistryReasoningOption[];
   attachment?: boolean;
   modalities?: { input?: string[]; output?: string[] };
   limit?: { context?: number; output?: number };
@@ -119,9 +125,15 @@ function pickBestEntry(
   entries: RegistryEntry[],
   modelId: string,
   routeHint?: string,
+  providerHint?: string,
 ): RegistryEntry | undefined {
   if (entries.length === 0) return undefined;
   if (entries.length === 1) return entries[0];
+
+  if (providerHint) {
+    const configuredProvider = entries.find((entry) => entry.provider === providerHint);
+    if (configuredProvider) return configuredProvider;
+  }
 
   const pref = PREFERRED_PROVIDERS.find((p) => modelId.toLowerCase().includes(p.pattern));
   if (pref) {
@@ -150,6 +162,7 @@ function pickBestEntry(
 export function lookupModel(
   modelId: string,
   registry: Map<string, RegistryEntry[]>,
+  providerHint?: string,
 ): RegistryEntry | undefined {
   const candidates: RegistryEntry[] = [];
   const dedup = new Set<string>();
@@ -186,7 +199,7 @@ export function lookupModel(
   for (const id of ids) collect(id);
 
   if (candidates.length > 0) {
-    return pickBestEntry(candidates, bare, routeHint);
+    return pickBestEntry(candidates, bare, routeHint, providerHint);
   }
 
   for (const suffix of MODEL_SUFFIXES) {
@@ -208,7 +221,7 @@ export function lookupModel(
     }
 
     if (candidates.length > 0) {
-      return pickBestEntry(candidates, bare, routeHint);
+      return pickBestEntry(candidates, bare, routeHint, providerHint);
     }
   }
 
@@ -219,11 +232,33 @@ export function lookupModel(
     progressive = progressive.slice(0, dashIdx);
     collect(progressive);
     if (candidates.length > 0) {
-      return pickBestEntry(candidates, bare, routeHint);
+      return pickBestEntry(candidates, bare, routeHint, providerHint);
     }
   }
 
   return undefined;
+}
+
+export type PiThinkingLevelMap = Partial<
+  Record<"off" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max", string | null>
+>;
+
+export function toPiThinkingLevelMap(
+  options?: RegistryReasoningOption[],
+  fallback?: PiThinkingLevelMap,
+): PiThinkingLevelMap | undefined {
+  const effort = options?.find((option) => option.type === "effort");
+  if (!effort?.values?.length) return fallback;
+
+  const values = new Map(effort.values.map((value) => [value.toLowerCase(), value]));
+  const levels = ["minimal", "low", "medium", "high", "xhigh", "max"] as const;
+  const map = {
+    off: values.get("none") ?? null,
+    ...Object.fromEntries(
+      levels.map((level) => [level, values.get(level) ?? null]),
+    ),
+  } as PiThinkingLevelMap;
+  return map;
 }
 
 export function toPiInput(

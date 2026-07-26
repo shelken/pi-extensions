@@ -8,6 +8,9 @@ export type ModelLike = {
   name?: string;
   api?: string;
   reasoning?: boolean;
+  thinkingLevelMap?: Partial<
+    Record<"off" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max", string | null>
+  >;
   input?: ("text" | "image")[];
   cost?: {
     input: number;

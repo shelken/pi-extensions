@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { flattenRegistry, lookupModel, toPiCost } from "../src/matcher.ts";
+import {
+  flattenRegistry,
+  lookupModel,
+  toPiCost,
+  toPiThinkingLevelMap,
+} from "../src/matcher.ts";
 
 function registry() {
   return flattenRegistry({
@@ -120,6 +125,57 @@ function registry() {
 }
 
 describe("dynamic model matcher", () => {
+  it("prefers the models.dev provider matching the configured provider", () => {
+    const reg = flattenRegistry({
+      openai: { models: { "gpt-5": { id: "gpt-5", reasoning: true } } },
+      cpa: { models: { "gpt-5": { id: "gpt-5", reasoning: true } } },
+    });
+    expect(lookupModel("gpt-5", reg, "cpa")?.provider).toBe("cpa");
+  });
+
+  it("maps models.dev effort values to pi thinking levels", () => {
+    expect(
+      toPiThinkingLevelMap([{ type: "effort", values: ["high", "xhigh", "max"] }]),
+    ).toEqual({
+      off: null,
+      minimal: null,
+      low: null,
+      medium: null,
+      high: "high",
+      xhigh: "xhigh",
+      max: "max",
+    });
+    const fallback = {
+      minimal: "low",
+      low: "low",
+      medium: "medium",
+      high: "high",
+      xhigh: "xhigh",
+      max: "max",
+    };
+    expect(
+      toPiThinkingLevelMap(
+        [{ type: "effort", values: ["high", "max"] }],
+        fallback,
+      ),
+    ).toEqual({
+      off: null,
+      minimal: null,
+      low: null,
+      medium: null,
+      high: "high",
+      xhigh: null,
+      max: "max",
+    });
+    expect(toPiThinkingLevelMap([{ type: "toggle" }], fallback)).toEqual(fallback);
+  });
+
+  it("maps all models.dev cost fields", () => {
+    expect(
+      toPiCost({ input: 1, output: 2, cache_read: 3, cache_write: 4 }),
+    ).toEqual({ input: 1, output: 2, cacheRead: 3, cacheWrite: 4 });
+  });
+
   it("prefers a fully aligned registry entry over a routed alias", () => {
     const entry = lookupModel("gemini-3-flash", registry());
     expect(entry?.provider).toBe("opencode");
