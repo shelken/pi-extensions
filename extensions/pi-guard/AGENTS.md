@@ -6,11 +6,17 @@
 
 `index.ts`: 扩展入口（session_start / tool_call）
 `evaluate.ts`: `evaluateGuard` 与 Policy 类型
-`match.ts`: 命令/路径匹配与 reason
+`command-match.ts`: deny_commands（简单命令 argv）
+`match.ts`: 路径 needle / home 展开 / reason
 `policy.ts`: 内置清单、YAML 层解析与合并
 `config-load.ts`: permissions.yaml 路径与磁盘加载
 `tests/`: 测试
 `package.json` / `README.md` / `LICENSE`: 包元数据
+
+## 匹配边界
+
+- 命令：argv 前缀；不递归 `bash -c` / `eval`
+- 路径 needle：`textMatchesPattern`（与命令模型分离）
 
 ## 基本约束
 

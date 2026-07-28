@@ -8,6 +8,7 @@
     "index.ts",
     "evaluate.ts",
     "match.ts",
+    "command-match.ts",
     "policy.ts",
     "config-load.ts"
   ],

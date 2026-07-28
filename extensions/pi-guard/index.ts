@@ -36,6 +36,8 @@ export {
   type ParseLayerResult,
 } from "./policy.ts";
 
+export { commandMatchesPattern } from "./command-match.ts";
+
 export {
   absoluteForm,
   expandHomeInText,

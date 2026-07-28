@@ -128,7 +128,7 @@ wget *|sh
 
 无 per-rule 内置 reason。用户 `-value` 可移除。
 
-无 `*` 为短语边界匹配（非前缀 includes）；前缀/通配必须显式写 `*`。
+命令匹配单位是 **简单命令 argv**（见 §5.1），不是整行子串。
 
 详见：`docs/wayfinder/2026-07-14-pi-guard-builtin-denylist.md`
 
@@ -136,13 +136,21 @@ wget *|sh
 
 ### 5.1 命令 pattern
 
+匹配单位是 **shell 简单命令 argv**，不是 command 字符串子串。
+
+1. 词法扫描（单双引号、`\`；重定向为 op）
+2. 按 `| || && ; &`、换行、`()` 拆简单命令；丢掉重定向及其目标
+3. 去掉前导 `NAME=value` 与进程包装（固定集：`sudo`/`doas`/`env`(有后续命令时)/`timeout`/`nice`/`nohup`/`command`/`builtin`/`exec`/`setsid`/`stdbuf`/`ionice`/`watch`/`xargs`/`time`）
+4. pattern 词序对剩余 argv 做**前缀**匹配
+
 - 大小写敏感
-- 无 `*`：**短语匹配**——pattern 在 command 中出现，且左右为边界（串首/尾，或 shell 分隔符空白/`|;&<>(){}[]`/`'"` 等）；`git add .` ⊄ `git add .agents/…`，`find ~` ⊄ `find ~/Code`（展开后即 `find $HOME` ⊄ `find $HOME/Code`）
-- 有 `*`：用户显式通配；`*` → 任意字符（含 `/`、空格）；在 command 上 **子串** 通配命中
-- **入库展开**：写入 policy 时，每条 command 规则额外物化 home 绝对副本（`~` / `~/…` / `$HOME` / `${HOME}` → 当前 `homedir()`；不支持 `~user`）。例：`find ~` → 保留原文 + `find /Users/you`
-- **匹配前展开**：command 先做同一套 home 展开，再短语/通配匹配——**匹配阶段只见处理后的路径**
-- 移除（`-value`）对 value 做同样展开后，原文与绝对副本一并删
-- 不解析 shell、不拆 token、不管引号 / 其他 `$var` / `bash -c` 混淆（仅 home 相关 token）
+- 无结构通配：argv 前缀；首词允许 basename；非首词全等，或 argv=pattern+仅 glob 元字符（`rm -rf /` 仍中 `rm -rf /*`，不中 `rm -rf /tmp`）；词内 `*` 为该槽 glob（`git add .*`）
+- 结构通配（同时含 `*` 与 `|;&` 等）：整行 glob（`curl *| bash`）
+- 例：`env` 中 `env`/`sudo env`/`FOO=1 env`；不中 `echo env`、`rg '…|env'`
+- **入库展开**：写入 policy 时物化 home 绝对副本（`~`/`$HOME` → `homedir()`）
+- **匹配前展开**：command 先 home 展开再匹配
+- 移除（`-value`）对 value 同样展开后删原文与绝对副本
+- **非目标**：不递归 `bash -c`/`eval`、不展开其它 `$var`、不做完整 bash AST
 
 ### 5.2 路径
 

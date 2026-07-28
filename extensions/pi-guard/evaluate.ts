@@ -1,9 +1,9 @@
+import { commandMatchesPattern } from "./command-match.ts";
 import {
   expandHomeInText,
   pathRuleMatchesFull,
   pathRuleMatchesInCommand,
   resolveBlockReason,
-  textMatchesPattern,
 } from "./match.ts";
 
 export type Rule = {
@@ -37,7 +37,7 @@ export function evaluateGuard(input: GuardInput, policy: Policy): GuardResult {
   if (input.tool === "bash") {
     const command = expandHomeInText(input.command, input.home);
     for (const rule of policy.commands) {
-      if (textMatchesPattern(command, rule.value)) {
+      if (commandMatchesPattern(command, rule.value)) {
         return {
           block: true,
           reason: resolveBlockReason(rule, "command", policy.default_reason),

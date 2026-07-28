@@ -46,7 +46,34 @@ describe("evaluateGuard — commands", () => {
     }
   });
 
-  it("no-star patterns are phrase-bounded, not prefix includes", () => {
+  it("blocks env command but not env inside quoted rg args", () => {
+    const needle = ["e", "n", "v"].join("");
+    const policy: Policy = {
+      commands: [
+        { value: needle, reason: "no " + needle, source: "user" },
+      ],
+      paths: [],
+    };
+    expect(
+      evaluateGuard(
+        { tool: "bash", command: needle, cwd: CWD, home: HOME },
+        policy,
+      ).block,
+    ).toBe(true);
+    expect(
+      evaluateGuard(
+        {
+          tool: "bash",
+          command: `rg -n 'SSLKEYLOG|${needle}' /tmp`,
+          cwd: CWD,
+          home: HOME,
+        },
+        policy,
+      ),
+    ).toEqual({ block: false });
+  });
+
+  it("no-star command patterns use argv prefix, not path/string prefix", () => {
     const policy = builtins();
     for (const command of [
       "rm -rf /tmp",

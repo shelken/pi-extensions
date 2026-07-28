@@ -26,10 +26,9 @@ function isPhraseBoundary(ch: string | undefined): boolean {
 }
 
 /**
- * Command / needle match.
- * - with `*`: 用户显式通配，子串 glob（`*` → 任意字符含 `/`）
- * - no `*`: 短语匹配——pattern 两侧须为边界（串首/尾或 shell 分隔符），
- *   禁止 `git add .` 命中 `git add .agents/...`、`find ~` 命中 `find ~/…`
+ * Free-text / path-needle match（deny_commands 见 commandMatchesPattern）.
+ * - with `*`: 子串 glob（`*` → 任意字符含 `/`）
+ * - no `*`: 短语匹配——两侧须为边界（串首/尾或 shell 分隔符）
  */
 export function textMatchesPattern(text: string, pattern: string): boolean {
   if (pattern.includes("*")) {
