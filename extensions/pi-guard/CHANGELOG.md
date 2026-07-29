@@ -1,5 +1,11 @@
 # @shelken/pi-guard
 
+## 0.6.0
+
+### Minor Changes
+
+- [`2229136`](https://github.com/shelken/pi-extensions/commit/22291367104c07c283c1be4f7efdb3b5795edd99) Thanks [@shelken](https://github.com/shelken)! - deny_commands 改为按 shell 简单命令 argv 匹配，消除 `env` 误伤参数/引号内子串
+
 ## 0.5.0
 
 ### Minor Changes

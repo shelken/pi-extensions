@@ -1,5 +1,15 @@
 # @shelken/pi-dynamic-models
 
+## 0.2.1
+
+### Patch Changes
+
+- [`8635da4`](https://github.com/shelken/pi-extensions/commit/8635da46bd6a3eecd24473d803f93197cfe9cf68) Thanks [@shelken](https://github.com/shelken)! - /dynamic-models 增加 status/refresh 参数补全与描述
+
+- [`373e2e6`](https://github.com/shelken/pi-extensions/commit/373e2e66d31d015f6b779e0e7ad433797f509ddd) Thanks [@shelken](https://github.com/shelken)! - 修复 provider 模型缓存过期后不再更新的问题；缓存 TTL 调整为 6 小时。
+  网络失败不再写缓存（避免 mtime 伪装成 6h 新鲜）。
+  优先 models.dev reasoning effort；未提供时用硬编码 thinking 映射；完整映射 cost。
+
 ## 0.2.0
 
 ### Minor Changes

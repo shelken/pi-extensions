@@ -1,5 +1,12 @@
 # pi-co-authored-by
 
+## 0.2.9
+
+### Patch Changes
+
+- [`232f848`](https://github.com/shelken/pi-extensions/commit/232f848e6a887b275505e1c399ac7ea60e05fa12) Thanks [@shelken](https://github.com/shelken)! - 不再通过 GIT_CONFIG 注入 core.hooksPath；改为 bash 期间临时安装 prepare-commit-msg。
+  pid 引用计数：多 shell 并发与 SIGKILL 残留不会误卸/卡死 hook。
+
 ## 0.2.8
 
 ### Patch Changes
