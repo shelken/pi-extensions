@@ -41,3 +41,13 @@
 2. 修正入口、包名、根 `pi.extensions`
 3. 从 pi settings 去掉旧独立入口，保留 mono 入口
 4. 验证通过再提交、推送；最后才归档旧仓库
+
+## Agent skills
+
+### Issue tracker
+
+Issues 与 spec 都作为 GitHub issue 管理（`gh` CLI）。Spec 本地镜像在 `docs/specs/<feature>-spec.md`。见 `docs/agents/issue-tracker.md`。
+
+### Domain docs
+
+Single-context：根 `CONTEXT.md` + `docs/adr/`。见 `docs/agents/domain.md`。
