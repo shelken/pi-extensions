@@ -1,0 +1,46 @@
+{
+  "name": "@shelken/pi-title",
+  "version": "0.1.0",
+  "description": "Cache-reusing automatic session title for pi: reuses the current session's cached prefix to generate a title only when the previous round hit the provider cache.",
+  "type": "module",
+  "private": true,
+  "license": "MIT",
+  "keywords": [
+    "pi",
+    "pi-package",
+    "pi-extension",
+    "session",
+    "title",
+    "cache"
+  ],
+  "exports": {
+    ".": "./index.ts"
+  },
+  "pi": {
+    "extensions": [
+      "./index.ts"
+    ]
+  },
+  "scripts": {
+    "test": "vitest run"
+  },
+  "peerDependencies": {
+    "@earendil-works/pi-ai": ">=0.83.0",
+    "@earendil-works/pi-coding-agent": ">=0.83.0",
+    "@earendil-works/pi-tui": ">=0.83.0"
+  },
+  "peerDependenciesMeta": {
+    "@earendil-works/pi-ai": {
+      "optional": true
+    },
+    "@earendil-works/pi-coding-agent": {
+      "optional": true
+    },
+    "@earendil-works/pi-tui": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "vitest": "^4.0.18"
+  }
+}
