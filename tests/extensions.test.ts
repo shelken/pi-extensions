@@ -26,7 +26,8 @@ const ROOT = resolve(import.meta.dirname, "..");
 async function loadEntries(): Promise<Array<{ name: string; path: string }>> {
 	const cfg = JSON.parse(await readFile(join(ROOT, "package.json"), "utf8"));
 	const rels: string[] = cfg.pi?.extensions ?? [];
-	return rels.map((rel) => {
+	// `-` 前缀表示禁用（pi 语义），不参与加载测试
+	return rels.filter((rel) => !rel.startsWith("-")).map((rel) => {
 		// rel 形如 "./extensions/<pkg>/..."；取第三段作子包名
 		const name = rel.split("/")[2];
 		return { name, path: join(ROOT, rel) };

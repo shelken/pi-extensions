@@ -5,6 +5,7 @@ import {
 	removeCommitHookDirectory,
 	wrapBashWithCommitHook,
 } from "./lib/commit.ts";
+import { isGitCommitCommand } from "./lib/git-commit.ts";
 
 export default function (pi: ExtensionAPI) {
 	let hooksDir: string | undefined;
@@ -25,6 +26,8 @@ export default function (pi: ExtensionAPI) {
 
 	pi.on("tool_call", async (event, ctx) => {
 		if (!isToolCallEventType("bash", event)) return;
+		// 只包装直接执行的 git commit；其他命令原样放行，避免影响其他扩展
+		if (!isGitCommitCommand(event.input.command)) return;
 
 		const model = ctx.model;
 		const modelName = model ? (model.name || `${model.provider}/${model.id}`) : "unknown";

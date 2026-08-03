@@ -7,13 +7,14 @@ Co-Authored-By: <model> <noreply@pi.dev>
 Generated-By: pi <version>
 ```
 
-实现：bash 期间在真实 hooks 目录临时安装 `prepare-commit-msg`（不改 `core.hooksPath`）；pid 引用计数，shell 退出时最后一个引用卸装并恢复原 hook。
+实现：识别 bash 命令中直接执行的 `git commit`（支持常见前缀与组合，脚本内间接 commit 不算），将命令交给外部 runner 在真实 hooks 目录临时安装 `prepare-commit-msg`（不改 `core.hooksPath`）；pid 引用计数，shell 退出时最后一个引用卸装并恢复原 hook。非 commit 命令原样放行，不影响其他扩展。
 
 初始 fork 自 [bruno-garcia/pi-co-authored-by](https://github.com/bruno-garcia/pi-co-authored-by)。
 
 ## 功能
 
 - 只挂钩 `bash` 工具调用
+- 只处理直接执行的 `git commit`；`printf`、`git status`、脚本内 commit 等一律不改
 - 模型名取当前 session；没有则 `unknown`
 - 与仓库已有 hook 兼容（先跑临时 hook，再链式原 hook）
 

@@ -1,4 +1,4 @@
-import { chmodSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -8,9 +8,10 @@ export const GENERATED_BY_NAME = "Generated-By";
 /** Create a session-scoped Git hooks directory for commit trailer injection. */
 export function createCommitHookDirectory(): string {
 	const hooksDir = mkdtempSync(join(tmpdir(), "pi-co-authored-by-hooks-"));
-	const hookPath = join(hooksDir, "prepare-commit-msg");
-	writeFileSync(hookPath, buildPrepareCommitMsgHook(), { mode: 0o755 });
-	chmodSync(hookPath, 0o755);
+	writeFileSync(join(hooksDir, "prepare-commit-msg"), buildPrepareCommitMsgHook(), {
+		mode: 0o755,
+	});
+	writeFileSync(join(hooksDir, "run"), buildRunnerScript(), { mode: 0o755 });
 	return hooksDir;
 }
 
@@ -21,8 +22,8 @@ export function removeCommitHookDirectory(hooksDir: string | undefined): void {
 }
 
 /**
- * 注入 trailer 元数据，并在当前仓库临时安装 prepare-commit-msg。
- * 不设置 core.hooksPath，避免污染 git config；shell 退出时恢复原 hook。
+ * 用外部 runner 包裹 git commit：其他改写器只能看到不可拆的 wrapper 调用，
+ * 不会二次解析内部 shell；元数据经环境变量传入，命令作为单个引号参数。
  */
 export function wrapBashWithCommitHook(
 	cmd: string,
@@ -32,19 +33,20 @@ export function wrapBashWithCommitHook(
 ): string {
 	const coAuthor = `${CO_AUTHOR_NAME}: ${modelName} <noreply@pi.dev>`;
 	const generatedBy = `${GENERATED_BY_NAME}: pi ${piVersion}`;
+	const runPath = join(hooksDir, "run");
 
-	return `${buildEnvironmentPrefix(hooksDir, coAuthor, generatedBy)}\n${cmd}`;
+	return [
+		`PI_CO_AUTHORED_BY_CO_AUTHOR=${shellQuote(coAuthor)}`,
+		`PI_CO_AUTHORED_BY_GENERATED_BY=${shellQuote(generatedBy)}`,
+		shellQuote(runPath),
+		shellQuote(cmd),
+	].join(" ");
 }
 
-function buildEnvironmentPrefix(
-	hooksDir: string,
-	coAuthor: string,
-	generatedBy: string,
-): string {
-	const hookSrc = join(hooksDir, "prepare-commit-msg");
-	return `export PI_CO_AUTHORED_BY_CO_AUTHOR=${shellQuote(coAuthor)}
-export PI_CO_AUTHORED_BY_GENERATED_BY=${shellQuote(generatedBy)}
-export PI_CO_AUTHORED_BY_HOOK_SRC=${shellQuote(hookSrc)}
+function buildRunnerScript(): string {
+	return `#!/bin/bash
+# PI_CO_AUTHORED_BY_RUNNER
+export PI_CO_AUTHORED_BY_HOOK_SRC="$(dirname "$0")/prepare-commit-msg"
 
 __pi_co_authored_by_installed_hooks=""
 
@@ -152,7 +154,10 @@ __pi_co_authored_by_ensure_hook
 git() {
   __pi_co_authored_by_ensure_hook
   command git "$@"
-}`;
+}
+
+eval "$1"
+`;
 }
 
 function buildPrepareCommitMsgHook(): string {
