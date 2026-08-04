@@ -1,36 +1,15 @@
 {
   "name": "@shelken/pi-extensions",
   "private": true,
+  "version": "0.1.0",
   "type": "module",
   "packageManager": "bun@1.3.13",
-  "keywords": [
-    "pi-package",
-    "pi",
-    "extensions"
-  ],
+  "scripts": {
+    "verify": "just verify"
+  },
   "workspaces": [
     "extensions/*"
   ],
-  "scripts": {
-    "check": "tsc --noEmit",
-    "test": "node --test scripts/*.node-test.mjs && bun --filter '*' test && vitest run",
-    "verify": "bun run check && bun run test",
-    "deps:update": "bun update --latest --recursive && bun run verify",
-    "deps:update:dry": "bun update --latest --recursive --dry-run"
-  },
-  "pi": {
-    "extensions": [
-      "./extensions/pi-auto-model-prompts/index.ts",
-      "./extensions/pi-dynamic-models/index.ts",
-      "./extensions/pi-guard/index.ts",
-      "./extensions/pi-co-authored-by/index.ts",
-      "./extensions/pi-command-history/index.ts",
-      "-./extensions/pi-add-dir/index.ts",
-      "-./extensions/pi-title/index.ts",
-      "./extensions/simple-plannotator/index.ts",
-      "./extensions/copy-cut/index.ts"
-    ]
-  },
   "devDependencies": {
     "@changesets/changelog-github": "0.7.0",
     "@changesets/cli": "2.31.0",
