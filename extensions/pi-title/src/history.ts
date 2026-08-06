@@ -11,6 +11,8 @@ export interface HistoryEntry {
 	cacheWrite: number;
 	inputTokens: number;
 	outputTokens: number;
+	/** Title request's own cache hit rate (0-1). Absent in early records. */
+	cacheHitRate?: number;
 	model: string;
 	provider: string;
 	triggeredBy: "auto";

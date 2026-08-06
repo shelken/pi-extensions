@@ -7,6 +7,10 @@ export interface TitleConfig {
 	customPrompt: string;
 	overrideManual: boolean;
 	maxTitleLength: number;
+	/** Minimum previous-round cache hit rate (0-1) required to trigger a title. */
+	cacheThreshold: number;
+	/** Title request hit rate below this (0-1) triggers a low-cache warn. */
+	warnThreshold: number;
 }
 
 export const DEFAULT_PROMPT =
@@ -18,6 +22,8 @@ export const DEFAULT_CONFIG: TitleConfig = {
 	customPrompt: DEFAULT_PROMPT,
 	overrideManual: false,
 	maxTitleLength: 20,
+	cacheThreshold: 0.5,
+	warnThreshold: 0.95,
 };
 
 export type ConfigLayer = Partial<Record<keyof TitleConfig, unknown>>;
@@ -50,6 +56,12 @@ export function mergeConfig(layers: Array<ConfigLayer | undefined>): TitleConfig
 			layer.maxTitleLength > 0
 		) {
 			result.maxTitleLength = layer.maxTitleLength;
+		}
+		if (typeof layer.cacheThreshold === "number") {
+			result.cacheThreshold = Math.min(Math.max(layer.cacheThreshold, 0), 1);
+		}
+		if (typeof layer.warnThreshold === "number") {
+			result.warnThreshold = Math.min(Math.max(layer.warnThreshold, 0), 1);
 		}
 	}
 	return result;

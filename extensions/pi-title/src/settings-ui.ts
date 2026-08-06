@@ -1,22 +1,28 @@
-import { SettingsList, type SettingItem, type SettingsListTheme } from "@earendil-works/pi-tui";
+import { getSettingsListTheme } from "@earendil-works/pi-coding-agent";
+import {
+	SettingsList,
+	type Component,
+	type SettingItem,
+} from "@earendil-works/pi-tui";
 import { DEFAULT_PROMPT, type TitleConfig } from "./config.ts";
+import { borderedPanel } from "./panel.ts";
 
 const ROUND_INTERVALS = ["1", "2", "3", "5", "8", "10"];
 const MAX_LENGTHS = ["10", "15", "20", "30", "50"];
 const BOOL = ["true", "false"];
+const THRESHOLDS = ["0.3", "0.4", "0.5", "0.6", "0.7", "0.8", "0.9", "0.95", "1.0"];
 
 /**
- * Config editor on pi-tui's select-based SettingsList. Numeric fields cycle
- * through presets; customPrompt can be reset to the built-in default (a bespoke
- * prompt is set in config.json). Each change calls onSave, which persists to the
- * global config.json and reloads runtime state. Esc closes via onCancel.
+ * Config editor floating panel (pattern ported from pi-codebuddy-provider's
+ * settings-ui): SettingsList inside a DynamicBorder container, keyboard focus via
+ * ui.custom, Esc closes through onDone. Each change calls onSave, which persists
+ * to the global config.json and reloads runtime state.
  */
 export function createSettingsComponent(opts: {
 	config: TitleConfig;
-	theme: SettingsListTheme;
 	onSave: (config: TitleConfig) => void;
 	onDone: () => void;
-}): SettingsList {
+}): Component {
 	let config: TitleConfig = { ...opts.config };
 
 	const buildItems = (): SettingItem[] => [
@@ -40,6 +46,20 @@ export function createSettingsComponent(opts: {
 			description: "Truncate generated titles to this many characters.",
 			currentValue: String(config.maxTitleLength),
 			values: MAX_LENGTHS,
+		},
+		{
+			id: "cacheThreshold",
+			label: "cacheThreshold",
+			description: "Minimum previous-round cache hit rate (0-1) required to trigger a title.",
+			currentValue: String(config.cacheThreshold),
+			values: THRESHOLDS,
+		},
+		{
+			id: "warnThreshold",
+			label: "warnThreshold",
+			description: "Warn when the title request's cache hit rate falls below this (0-1).",
+			currentValue: String(config.warnThreshold),
+			values: THRESHOLDS,
 		},
 		{
 			id: "overrideManual",
@@ -66,8 +86,8 @@ export function createSettingsComponent(opts: {
 
 	list = new SettingsList(
 		buildItems(),
-		8,
-		opts.theme,
+		Math.min(buildItems().length + 2, 12),
+		getSettingsListTheme(),
 		(id: string, newValue: string) => {
 			switch (id) {
 				case "enabled":
@@ -78,6 +98,12 @@ export function createSettingsComponent(opts: {
 					break;
 				case "maxTitleLength":
 					save({ ...config, maxTitleLength: Number(newValue) }, id, newValue);
+					break;
+				case "cacheThreshold":
+					save({ ...config, cacheThreshold: Number(newValue) }, id, newValue);
+					break;
+				case "warnThreshold":
+					save({ ...config, warnThreshold: Number(newValue) }, id, newValue);
 					break;
 				case "overrideManual":
 					save({ ...config, overrideManual: newValue === "true" }, id, newValue);
@@ -92,5 +118,7 @@ export function createSettingsComponent(opts: {
 		() => opts.onDone(),
 	);
 
-	return list;
+	const container = borderedPanel("pi-title 设置  ·  Esc 关闭", list);
+
+	return container;
 }

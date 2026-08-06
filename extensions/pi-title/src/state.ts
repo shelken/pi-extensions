@@ -1,10 +1,19 @@
 import type { TitleConfig } from "./config.ts";
 
+export interface RoundUsage {
+	/** Prompt tokens charged as cache reads (prefix hit). */
+	cacheRead: number;
+	/** Prompt tokens written into cache (prefix misses). */
+	cacheWrite: number;
+	/** Uncached prompt tokens (prefix misses without write). */
+	input: number;
+}
+
 export interface GateState {
 	/** Completed user rounds since the last title trigger (or model change). */
 	userRoundCount: number;
-	/** cacheRead tokens reported by the most recent agent_end. */
-	lastRoundCacheRead: number;
+	/** Cache hit rate of the most recent agent_end (0-1, 0 when no prompt tokens). */
+	lastRoundHitRate: number;
 	/** Model id active during the most recent agent_end. */
 	lastRoundModel: string | undefined;
 	/** True once a non-extension actor set the session name. */
@@ -16,19 +25,30 @@ export interface GateState {
 export function initialState(): GateState {
 	return {
 		userRoundCount: 0,
-		lastRoundCacheRead: 0,
+		lastRoundHitRate: 0,
 		lastRoundModel: undefined,
 		userManuallyTitled: false,
 		lastSetTitle: undefined,
 	};
 }
 
-/** A user round completed: bump the counter and snapshot the round's cache/model. */
-export function onAgentEnd(state: GateState, cacheRead: number, model: string): GateState {
+/**
+ * Cache hit rate for one round, matching pi's /usage panel semantics:
+ * promptTokens = input + cacheRead + cacheWrite; hitRate = cacheRead / promptTokens.
+ * No prompt tokens → 0 (can't claim a hit).
+ */
+export function computeHitRate(usage: RoundUsage): number {
+	const promptTokens = usage.input + usage.cacheRead + usage.cacheWrite;
+	if (promptTokens <= 0) return 0;
+	return usage.cacheRead / promptTokens;
+}
+
+/** A user round completed: bump the counter and snapshot the round's hit-rate/model. */
+export function onAgentEnd(state: GateState, usage: RoundUsage, model: string): GateState {
 	return {
 		...state,
 		userRoundCount: state.userRoundCount + 1,
-		lastRoundCacheRead: cacheRead,
+		lastRoundHitRate: computeHitRate(usage),
 		lastRoundModel: model,
 	};
 }
@@ -45,15 +65,16 @@ export function onTriggered(state: GateState): GateState {
 
 /**
  * Decide whether to generate a title now.
- * Gate: enabled, counter hit a multiple of roundInterval, the last round actually
- * read cache, the model hasn't drifted from that cached round, and the user hasn't
- * manually named the session (unless overrideManual).
+ * Gate: enabled, counter hit a multiple of roundInterval, the last round's cache
+ * hit rate met the configured threshold (a tiny cacheRead over a huge input is a
+ * miss in practice), the model hasn't drifted from that cached round, and the
+ * user hasn't manually named the session (unless overrideManual).
  */
 export function shouldTrigger(state: GateState, config: TitleConfig, currentModel: string): boolean {
 	if (!config.enabled) return false;
 	if (state.userRoundCount <= 0) return false;
 	if (state.userRoundCount % config.roundInterval !== 0) return false;
-	if (state.lastRoundCacheRead <= 0) return false;
+	if (state.lastRoundHitRate < config.cacheThreshold) return false;
 	if (state.lastRoundModel === undefined || state.lastRoundModel !== currentModel) return false;
 	if (state.userManuallyTitled && !config.overrideManual) return false;
 	return true;

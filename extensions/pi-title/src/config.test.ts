@@ -41,6 +41,16 @@ describe("mergeConfig", () => {
 		expect(mergeConfig([{ roundInterval: 2.5 }]).roundInterval).toBe(DEFAULT_CONFIG.roundInterval);
 		expect(mergeConfig([{ maxTitleLength: 0 }]).maxTitleLength).toBe(DEFAULT_CONFIG.maxTitleLength);
 	});
+
+	it("accepts and clamps threshold fields to [0,1]", () => {
+		expect(mergeConfig([{ cacheThreshold: 0.5 }]).cacheThreshold).toBe(0.5);
+		expect(mergeConfig([{ warnThreshold: 0.95 }]).warnThreshold).toBe(0.95);
+		expect(mergeConfig([{ cacheThreshold: 1.5 }]).cacheThreshold).toBe(1);
+		expect(mergeConfig([{ warnThreshold: -0.2 }]).warnThreshold).toBe(0);
+		expect(mergeConfig([{ cacheThreshold: "high" }]).cacheThreshold).toBe(
+			DEFAULT_CONFIG.cacheThreshold,
+		);
+	});
 });
 
 describe("loadConfigFile", () => {

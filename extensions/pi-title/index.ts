@@ -17,9 +17,10 @@ import type {
 } from "@earendil-works/pi-ai";
 import { resolveConfig, writeConfigFile, type TitleConfig } from "./src/config.ts";
 import { appendHistory, readHistory, type HistoryEntry } from "./src/history.ts";
-import { createHistoryTable } from "./src/history-ui.ts";
+import { createHistoryComponent } from "./src/history-ui.ts";
 import { createSettingsComponent } from "./src/settings-ui.ts";
 import {
+	computeHitRate,
 	initialState,
 	onAgentEnd,
 	onModelChange,
@@ -30,11 +31,7 @@ import {
 	shouldTrigger,
 	type GateState,
 } from "./src/state.ts";
-import type { SettingsListTheme } from "@earendil-works/pi-tui";
 import { buildTitlePrompt, normalizeTitle } from "./src/title.ts";
-
-const WIDGET_HISTORY = "pi-title-history";
-const WIDGET_SETTINGS = "pi-title-settings";
 
 function modelKey(model: Model<Api>): string {
 	return `${model.provider}/${model.id}`;
@@ -75,7 +72,16 @@ export default function piTitle(pi: ExtensionAPI): void {
 		const lastAssistant = [...event.messages]
 			.reverse()
 			.find((m): m is AssistantMessage => m.role === "assistant");
-		state = onAgentEnd(state, lastAssistant?.usage.cacheRead ?? 0, modelKey(ctx.model));
+		const usage = lastAssistant?.usage;
+		state = onAgentEnd(
+			state,
+			{
+				cacheRead: usage?.cacheRead ?? 0,
+				cacheWrite: usage?.cacheWrite ?? 0,
+				input: usage?.input ?? 0,
+			},
+			modelKey(ctx.model),
+		);
 	});
 
 	pi.on("agent_settled", async (_event, ctx) => {
@@ -120,6 +126,19 @@ export default function piTitle(pi: ExtensionAPI): void {
 				.join("");
 			const title = normalizeTitle(text, config.maxTitleLength);
 			const usage = result.usage;
+			const hitRate = computeHitRate({
+				cacheRead: usage.cacheRead,
+				cacheWrite: usage.cacheWrite,
+				input: usage.input,
+			});
+			// Low cache-hit on the title request itself: the prefix didn't carry over.
+			// Warn every time — no rate limit (user's explicit choice).
+			if (hitRate < config.warnThreshold) {
+				ctx.ui.notify(
+					`pi-title: 自动标题缓存命中率仅 ${(hitRate * 100).toFixed(1)}% (低于 ${(config.warnThreshold * 100).toFixed(0)}%)`,
+					"warning",
+				);
+			}
 			const entry: HistoryEntry = {
 				sessionId: ctx.sessionManager.getSessionId(),
 				time: new Date().toISOString(),
@@ -129,6 +148,7 @@ export default function piTitle(pi: ExtensionAPI): void {
 				cacheWrite: usage.cacheWrite,
 				inputTokens: usage.input,
 				outputTokens: usage.output,
+				cacheHitRate: hitRate,
 				model: modelKey(ctx.model),
 				provider: ctx.model.provider,
 				triggeredBy: "auto",
@@ -151,8 +171,9 @@ export default function piTitle(pi: ExtensionAPI): void {
 		description: "Show this session's auto-title history (cache hits, tokens, model).",
 		handler: async (_args, ctx) => {
 			const entries = readHistory(historyPath, ctx.sessionManager.getSessionId());
-			ctx.ui.setWidget(WIDGET_HISTORY, () =>
-				createHistoryTable(entries, () => ctx.ui.setWidget(WIDGET_HISTORY, undefined)),
+			await ctx.ui.custom(
+				(_tui, _theme, _kb, done) => createHistoryComponent(entries, () => done(undefined)),
+				{ overlay: true, overlayOptions: { anchor: "center", width: 90, maxHeight: "60%" } },
 			);
 		},
 	});
@@ -162,28 +183,22 @@ export default function piTitle(pi: ExtensionAPI): void {
 		handler: async (_args, ctx) => {
 			const current = config;
 			if (!current) return;
-			ctx.ui.setWidget(WIDGET_SETTINGS, (_tui, theme) => {
-				const settingsTheme: SettingsListTheme = {
-					label: (text, sel) => theme.fg(sel ? "accent" : "text", text),
-					value: (text, sel) => theme.fg(sel ? "accent" : "muted", text),
-					description: (text) => theme.fg("dim", text),
-					cursor: theme.fg("accent", "❯"),
-					hint: (text) => theme.fg("dim", text),
-				};
-				return createSettingsComponent({
-					config: current,
-					theme: settingsTheme,
-					onSave: (next) => {
-						try {
-							writeConfigFile(globalConfigPath, next);
-							config = next;
-						} catch (err) {
-							log(err);
-						}
-					},
-					onDone: () => ctx.ui.setWidget(WIDGET_SETTINGS, undefined),
-				});
-			});
+			await ctx.ui.custom(
+				(_tui, _theme, _kb, done) =>
+					createSettingsComponent({
+						config: current,
+						onSave: (next) => {
+							try {
+								writeConfigFile(globalConfigPath, next);
+								config = next;
+							} catch (err) {
+								log(err);
+							}
+						},
+						onDone: () => done(undefined),
+					}),
+				{ overlay: true, overlayOptions: { anchor: "center", width: 60, maxHeight: "60%" } },
+			);
 		},
 	});
 }

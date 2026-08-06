@@ -4,10 +4,11 @@
 
 ## 功能
 
-- **缓存门闩**：上一轮 `cacheRead > 0` 才起标题；未命中绝不发请求。
+- **缓存门闩**：上一轮命中率（`cacheRead/(input+cacheRead+cacheWrite)`）达 `cacheThreshold`（默认 0.5）才起标题；未命中或命中率过低绝不发请求。
+- **低命中率提醒**：标题请求自身命中率低于 `warnThreshold`（默认 0.95）时每次提醒（无频率限制）。
 - **按轮触发**：每 N 个 user round（默认 3）起一次，换模型自动归零。
 - **尊重手动命名**：你 `/name` 设过的标题不被覆盖，`/name ""` 清空后恢复自动。
-- **审计留痕**：每次起标题写入 `history.jsonl`（含真实 `cacheRead`，可验证是否真命中）。
+- **审计留痕**：每次起标题写入 `history.jsonl`（含真实 `cacheRead` 与 `cacheHitRate`，可验证是否真命中）。
 - **TUI**：`/title-history` 看本 session 历史，`/title-settings` 改配置。
 
 ## 快速上手
@@ -29,6 +30,8 @@
   "roundInterval": 3,
   "maxTitleLength": 20,
   "overrideManual": false,
+  "cacheThreshold": 0.5,
+  "warnThreshold": 0.95,
   "customPrompt": "基于本次对话的最新内容，为这段对话起一个简洁标题。不超过 {maxTitleLength} 个字。直接输出标题文本，不要任何前缀、引号或标点包裹，不要调用任何工具。"
 }
 ```
@@ -39,6 +42,8 @@
 | `roundInterval` | `3` | 每多少个 user round 起一次标题 |
 | `maxTitleLength` | `20` | 标题截断长度（按码点，CJK 安全） |
 | `overrideManual` | `false` | 为 `true` 时覆盖手动设的标题 |
+| `cacheThreshold` | `0.5` | 门闩最低命中率（0-1），低于则不起标题 |
+| `warnThreshold` | `0.95` | 标题请求命中率低于此值（0-1）时提醒 |
 | `customPrompt` | 见上 | 起标题提示词，`{maxTitleLength}` 会被替换 |
 
 历史文件：`{pi-agent-dir}/extensions/pi-title/history.jsonl`（append-only，每行一条）。
