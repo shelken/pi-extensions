@@ -1,6 +1,6 @@
 {
   "name": "@shelken/pi-title",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Cache-reusing automatic session title for pi: reuses the current session's cached prefix to generate a title only when the previous round hit the provider cache.",
   "type": "module",
   "private": true,
