@@ -1,6 +1,7 @@
 import { join } from "node:path";
 import {
 	buildSessionContext,
+	convertToLlm,
 	getAgentDir,
 	type ExtensionAPI,
 	type ExtensionContext,
@@ -107,11 +108,13 @@ export default function piTitle(pi: ExtensionAPI): void {
 			const tools = pi.getAllTools().filter((t) => activeNames.has(t.name)) as Tool[];
 			const context: Context = {
 				systemPrompt: ctx.getSystemPrompt(),
-				// Cast for cache-prefix fidelity: pass the exact AgentMessage[] the live round
-				// serializes (same provider client), rather than filtering to Message[] which
-				// could diverge from the live prefix and bust the cache. Any unserializable
-				// entry surfaces as cacheRead=0, recorded in history for audit.
-				messages: [...(messages as unknown as Message[]), titleMessage],
+				// Live rounds go through convertToLlm (custom → user, bashExecution → user) before
+				// hitting the provider. The title request must apply the same transform: custom
+				// messages (context-prune summary, web-search results) keep role "custom" in
+				// buildSessionContext output, and provider converters (e.g. codebuddy's
+				// contextToOpenAIMessages) drop unknown roles — that busted the cache prefix at
+				// the first custom message (~97k uncached input tokens on the 08-07 incident).
+				messages: [...(convertToLlm(messages) as unknown as Message[]), titleMessage],
 				tools,
 			};
 			const stream = provider.streamSimple(ctx.model, context, {
