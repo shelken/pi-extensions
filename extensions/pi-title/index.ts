@@ -160,8 +160,12 @@ export default function piTitle(pi: ExtensionAPI): void {
 			}
 			if (!title) return;
 			if (state.userManuallyTitled && !config.overrideManual) return;
-			pi.setSessionName(title);
+			// Record our write BEFORE setSessionName: setSessionName synchronously
+			// emits session_info_changed, whose handler runs before the line after
+			// this call — without the pre-record, the handler sees our own name as
+			// foreign and locks userManuallyTitled, killing all future triggers.
 			state = onTitleSet(state, title);
+			pi.setSessionName(title);
 		} finally {
 			inFlight = false;
 		}
