@@ -147,4 +147,12 @@ describe("manual detection", () => {
 	it("fresh session with no name stays unlocked", () => {
 		expect(onSessionStart(initialState(), undefined).userManuallyTitled).toBe(false);
 	});
+
+	it("self-write before setSessionName (emit order) stays unlocked", () => {
+		// setSessionName synchronously emits session_info_changed before the
+		// extension's onTitleSet line runs. Pre-recording lastSetTitle first makes
+		// the handler see our own name and ignore it.
+		const s = onSessionInfoChanged(onTitleSet(initialState(), "mine"), "mine");
+		expect(s.userManuallyTitled).toBe(false);
+	});
 });
