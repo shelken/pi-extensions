@@ -24,6 +24,16 @@ export function providerFetchFailureFallback(
   return { ids: diskModelIds, source: "stale", writeCache: false };
 }
 
+/** 失败冷却是否生效：最近失败在冷却期内 → true（不应发网）。 */
+export function inFailureCooldown(
+  lastFailedUnix: number | undefined,
+  now: number,
+  cooldownMs: number,
+): boolean {
+  if (!lastFailedUnix) return false;
+  return now - lastFailedUnix < cooldownMs;
+}
+
 /** models.dev 未提供 effort 时使用的硬编码映射。 */
 export function getAutoThinkingLevelMap(
   reasoning: boolean,

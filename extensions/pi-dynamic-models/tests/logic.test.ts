@@ -5,6 +5,7 @@ import {
   formatProviderSummary,
   formatStatusLine,
   hashModelIds,
+  inFailureCooldown,
   isUsableChatModel,
   matchesExcludePattern,
   providerFetchFailureFallback,
@@ -30,6 +31,25 @@ describe("provider cache refresh", () => {
       source: "stale",
       writeCache: false,
     });
+  });
+});
+
+describe("failure cooldown", () => {
+  const now = 1_000_000_000_000;
+  const cooldown = 10 * 60 * 1000;
+
+  it("no lastFailedUnix means no cooldown", () => {
+    expect(inFailureCooldown(undefined, now, cooldown)).toBe(false);
+  });
+
+  it("failure within cooldown window blocks network", () => {
+    expect(inFailureCooldown(now - 1_000, now, cooldown)).toBe(true);
+    expect(inFailureCooldown(now - cooldown + 1, now, cooldown)).toBe(true);
+  });
+
+  it("failure outside cooldown window allows network", () => {
+    expect(inFailureCooldown(now - cooldown, now, cooldown)).toBe(false);
+    expect(inFailureCooldown(now - cooldown - 60_000, now, cooldown)).toBe(false);
   });
 });
 
