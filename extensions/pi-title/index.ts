@@ -127,7 +127,7 @@ export default function piTitle(pi: ExtensionAPI): void {
 				.filter((c): c is { type: "text"; text: string } => c.type === "text")
 				.map((c) => c.text)
 				.join("");
-			const title = normalizeTitle(text, config.maxTitleLength);
+			const title = normalizeTitle(text);
 			const usage = result.usage;
 			const hitRate = computeHitRate({
 				cacheRead: usage.cacheRead,
@@ -146,6 +146,7 @@ export default function piTitle(pi: ExtensionAPI): void {
 				sessionId: ctx.sessionManager.getSessionId(),
 				time: new Date().toISOString(),
 				title,
+				rawTitle: text,
 				cached: usage.cacheRead > 0,
 				cacheRead: usage.cacheRead,
 				cacheWrite: usage.cacheWrite,
@@ -156,11 +157,6 @@ export default function piTitle(pi: ExtensionAPI): void {
 				provider: ctx.model.provider,
 				triggeredBy: "auto",
 			};
-			try {
-				appendHistory(historyPath, entry);
-			} catch (err) {
-				log(err);
-			}
 			if (!title) return;
 			if (state.userManuallyTitled && !config.overrideManual) return;
 			// Record our write BEFORE setSessionName: setSessionName synchronously
@@ -168,6 +164,11 @@ export default function piTitle(pi: ExtensionAPI): void {
 			// this call — without the pre-record, the handler sees our own name as
 			// foreign and locks userManuallyTitled, killing all future triggers.
 			state = onTitleSet(state, title);
+			try {
+				appendHistory(historyPath, entry);
+			} catch (err) {
+				log(err);
+			}
 			pi.setSessionName(title);
 		} finally {
 			inFlight = false;

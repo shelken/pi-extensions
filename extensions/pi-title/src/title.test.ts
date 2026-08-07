@@ -3,29 +3,27 @@ import { buildTitlePrompt, normalizeTitle } from "./title.ts";
 
 describe("normalizeTitle", () => {
 	it("trims surrounding whitespace", () => {
-		expect(normalizeTitle("  标题  ", 20)).toBe("标题");
+		expect(normalizeTitle("  标题  ")).toBe("标题");
 	});
 
 	it("strips ASCII wrapping quotes", () => {
-		expect(normalizeTitle('"My Title"', 20)).toBe("My Title");
-		expect(normalizeTitle("'My Title'", 20)).toBe("My Title");
+		expect(normalizeTitle('"My Title"')).toBe("My Title");
+		expect(normalizeTitle("'My Title'")).toBe("My Title");
 	});
 
 	it("strips CJK wrapping quotes", () => {
-		expect(normalizeTitle("「会话标题」", 20)).toBe("会话标题");
-		expect(normalizeTitle("“会话标题”", 20)).toBe("会话标题");
+		expect(normalizeTitle("「会话标题」")).toBe("会话标题");
+		expect(normalizeTitle("“会话标题”")).toBe("会话标题");
 	});
 
-	it("truncates to maxTitleLength code points (CJK-safe)", () => {
-		expect(normalizeTitle("一二三四五六", 4)).toBe("一二三四");
-	});
-
-	it("leaves short titles untouched", () => {
-		expect(normalizeTitle("短标题", 20)).toBe("短标题");
+	it("leaves long titles untouched (length is prompt's job)", () => {
+		expect(normalizeTitle("一二三四五六七八九十一二三四五六七八九十一二三四五六七八九十一二三四五六")).toBe(
+			"一二三四五六七八九十一二三四五六七八九十一二三四五六七八九十一二三四五六",
+		);
 	});
 
 	it("returns empty string for whitespace-only input", () => {
-		expect(normalizeTitle("   ", 20)).toBe("");
+		expect(normalizeTitle("   ")).toBe("");
 	});
 });
 

@@ -1,14 +1,11 @@
 const SURROUNDING_QUOTES = /^[\s"'“”‘’「」『』《》]+|[\s"'“”‘’「」『』《》]+$/g;
 
 /**
- * Clean a raw model reply into a title: trim, strip wrapping quotes/whitespace,
- * truncate to maxTitleLength code points (CJK-safe).
+ * Clean a raw model reply into a title: trim, strip wrapping quotes/whitespace.
+ * Length is left to the prompt — no truncation here.
  */
-export function normalizeTitle(raw: string, maxTitleLength: number): string {
-	const stripped = raw.trim().replace(SURROUNDING_QUOTES, "").trim();
-	const codePoints = [...stripped];
-	if (codePoints.length <= maxTitleLength) return stripped;
-	return codePoints.slice(0, maxTitleLength).join("");
+export function normalizeTitle(raw: string): string {
+	return raw.trim().replace(SURROUNDING_QUOTES, "").trim();
 }
 
 /** Substitute the {maxTitleLength} placeholder in the user's custom prompt. */

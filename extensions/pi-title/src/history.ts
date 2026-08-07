@@ -5,7 +5,10 @@ export interface HistoryEntry {
 	sessionId: string;
 	/** ISO-8601 timestamp. */
 	time: string;
+	/** Final title actually set on the session. */
 	title: string;
+	/** Raw model output before normalization (trimmed quotes kept as-is). */
+	rawTitle?: string;
 	cached: boolean;
 	cacheRead: number;
 	cacheWrite: number;

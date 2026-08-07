@@ -14,14 +14,14 @@ export interface TitleConfig {
 }
 
 export const DEFAULT_PROMPT =
-	"基于本次对话的最新内容，为这段对话起一个简洁标题。不超过 {maxTitleLength} 个字。直接输出标题文本，不要任何前缀、引号或标点包裹，不要调用任何工具。";
+	"基于本次对话的最新内容，为这段对话起一个简洁标题。不要超过 {maxTitleLength} 个汉字或等长内容，不要用省略号或引号，直接输出标题文本，不要调用任何工具。";
 
 export const DEFAULT_CONFIG: TitleConfig = {
 	enabled: true,
 	roundInterval: 3,
 	customPrompt: DEFAULT_PROMPT,
 	overrideManual: false,
-	maxTitleLength: 20,
+	maxTitleLength: 35,
 	cacheThreshold: 0.5,
 	warnThreshold: 0.95,
 };

@@ -33,10 +33,11 @@ describe("history", () => {
 	});
 
 	it("round-trips and creates parent dirs", () => {
-		appendHistory(path, entry({ title: "a" }));
+		appendHistory(path, entry({ title: "a", rawTitle: "  a more verbose raw output  " }));
 		const rows = readHistory(path, "s1");
 		expect(rows).toHaveLength(1);
 		expect(rows[0].title).toBe("a");
+		expect(rows[0].rawTitle).toBe("  a more verbose raw output  ");
 	});
 
 	it("filters by sessionId and returns newest first", () => {
