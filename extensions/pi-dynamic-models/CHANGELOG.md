@@ -1,5 +1,11 @@
 # @shelken/pi-dynamic-models
 
+## 0.2.2
+
+### Patch Changes
+
+- [`f68bc68`](https://github.com/shelken/pi-extensions/commit/f68bc68888233ce863c1105550a33fcf7255ec1c) Thanks [@shelken](https://github.com/shelken)! - 并发锁与失败冷却：多进程同时启动时不再重复拉取 registry/provider 网络请求；不可达 provider 失败后 10 分钟内冷却，不再每次 session_start 白等超时
+
 ## 0.2.1
 
 ### Patch Changes

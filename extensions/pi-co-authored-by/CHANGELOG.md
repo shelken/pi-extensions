@@ -1,5 +1,11 @@
 # pi-co-authored-by
 
+## 0.2.10
+
+### Patch Changes
+
+- [`45e8eb4`](https://github.com/shelken/pi-extensions/commit/45e8eb4c3572c3982c7c9cefb9bc5559ff889813) Thanks [@shelken](https://github.com/shelken)! - 只包装直接执行的 git commit：非 commit 命令不再注入 hook 脚本，避免与其他命令改写扩展互相干扰
+
 ## 0.2.9
 
 ### Patch Changes
