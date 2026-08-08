@@ -17,6 +17,7 @@ import type {
 	UserMessage,
 } from "@earendil-works/pi-ai";
 import { resolveConfig, writeConfigFile, type TitleConfig } from "./src/config.ts";
+import { logTitle, msgFingerprint } from "./src/diagnose.ts";
 import { appendHistory, readHistory, type HistoryEntry } from "./src/history.ts";
 import { createHistoryComponent } from "./src/history-ui.ts";
 import { createSettingsComponent } from "./src/settings-ui.ts";
@@ -74,6 +75,9 @@ export default function piTitle(pi: ExtensionAPI): void {
 			.reverse()
 			.find((m): m is AssistantMessage => m.role === "assistant");
 		const usage = lastAssistant?.usage;
+		logTitle(
+			`[agent_end] model=${modelKey(ctx.model)} usage=${JSON.stringify({ input: usage?.input, output: usage?.output, cacheRead: usage?.cacheRead, cacheWrite: usage?.cacheWrite })} msgs=${msgFingerprint(event.messages)} sysLen=${ctx.getSystemPrompt()?.length ?? -1} tools=${[...pi.getActiveTools()].sort().join(",")}`,
+		);
 		state = onAgentEnd(
 			state,
 			{
@@ -106,6 +110,9 @@ export default function piTitle(pi: ExtensionAPI): void {
 			};
 			const activeNames = new Set(pi.getActiveTools());
 			const tools = pi.getAllTools().filter((t) => activeNames.has(t.name)) as Tool[];
+			logTitle(
+				`[title-req] model=${modelKey(ctx.model)} msgs=${msgFingerprint([...(convertToLlm(messages) as unknown as Message[]), titleMessage])} sysLen=${ctx.getSystemPrompt()?.length ?? -1} tools=${tools.map((t) => t.name).sort().join(",")}`,
+			);
 			const context: Context = {
 				systemPrompt: ctx.getSystemPrompt(),
 				// Live rounds go through convertToLlm (custom → user, bashExecution → user) before
@@ -136,6 +143,9 @@ export default function piTitle(pi: ExtensionAPI): void {
 			});
 			// Low cache-hit on the title request itself: the prefix didn't carry over.
 			// Warn every time — no rate limit (user's explicit choice).
+			logTitle(
+				`[title-res] model=${modelKey(ctx.model)} raw=${JSON.stringify(text.slice(0, 300))} usage=${JSON.stringify({ input: usage.input, output: usage.output, cacheRead: usage.cacheRead, cacheWrite: usage.cacheWrite })} hitRate=${hitRate} title=${JSON.stringify(title)}`,
+			);
 			if (hitRate < config.warnThreshold) {
 				ctx.ui.notify(
 					`pi-title: 自动标题缓存命中率仅 ${(hitRate * 100).toFixed(1)}% (低于 ${(config.warnThreshold * 100).toFixed(0)}%)`,
@@ -170,6 +180,9 @@ export default function piTitle(pi: ExtensionAPI): void {
 				log(err);
 			}
 			pi.setSessionName(title);
+		} catch (err) {
+			logTitle(`[title-err] ${String(err)}`);
+			throw err;
 		} finally {
 			inFlight = false;
 		}
