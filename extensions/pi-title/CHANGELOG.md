@@ -1,5 +1,15 @@
 # @shelken/pi-title
 
+## 0.2.1
+
+### Patch Changes
+
+- [`edf94bb`](https://github.com/shelken/pi-extensions/commit/edf94bb22b7cf0f292af7e39fdb1fc41bda1488b) Thanks [@shelken](https://github.com/shelken)! - 修复自动标题请求绕过 ModelRuntime 认证链路的问题。标题请求改用 `modelRegistry.complete`，自动复用 pi 从环境变量或凭据存储解析出的认证信息，避免内置 provider 返回空流并被误报为 0% 缓存命中率。
+
+- [#39](https://github.com/shelken/pi-extensions/pull/39) [`2dc47a9`](https://github.com/shelken/pi-extensions/commit/2dc47a926e79d07c8cdd84c7541d9b0aeeb58f99) Thanks [@shelken](https://github.com/shelken)! - 修复自动标题只生成一次：`setSessionName` 同步触发 `session_info_changed`，handler 在 `onTitleSet` 之前执行，把自设标题误判为手动命名并永久锁死后续触发。改为先记录 `lastSetTitle` 再 `setSessionName`，自触发被正确忽略。
+
+- [`969df23`](https://github.com/shelken/pi-extensions/commit/969df231d4f533e4477eaee41fb8d89dffaa2a02) Thanks [@shelken](https://github.com/shelken)! - 移除标题截断:不再按 maxTitleLength 硬切(避免中文标题被腰斩),长度约束交给 prompt;history 新增 rawTitle 记录模型原始输出;默认 maxTitleLength 改为 35
+
 ## 0.2.0
 
 ### Minor Changes
