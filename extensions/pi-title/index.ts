@@ -98,8 +98,6 @@ export default function piTitle(pi: ExtensionAPI): void {
 
 	async function generateTitle(ctx: ExtensionContext): Promise<void> {
 		if (!config || !ctx.model) return;
-		const provider = ctx.modelRegistry.getProvider(ctx.model.provider);
-		if (!provider) return;
 		inFlight = true;
 		try {
 			const { messages } = buildSessionContext(ctx.sessionManager.buildContextEntries());
@@ -124,12 +122,18 @@ export default function piTitle(pi: ExtensionAPI): void {
 				messages: [...(convertToLlm(messages) as unknown as Message[]), titleMessage],
 				tools,
 			};
-			const stream = provider.streamSimple(ctx.model, context, {
+			// complete 走 ModelRuntime.prepareRequest：自动注入 auth（env/凭据），
+			// 与主会话同一认证链路。直接用 provider.streamSimple 会绕过 auth 注入，
+			// 内置 provider（deepseek/opencode 等）在 api 层 getClientApiKey 处抛
+			// "No API key"，被 lazyStream 吞成空流（08-08 排查结论）。
+			const result = await ctx.modelRegistry.complete(ctx.model, context, {
 				sessionId: ctx.sessionManager.getSessionId(),
 				cacheRetention: "short",
 				...(ctx.thinkingLevel ? { reasoning: ctx.thinkingLevel as ThinkingLevel } : {}),
 			});
-			const result = await stream.result();
+			if (result.stopReason === "error") {
+				throw new Error(result.errorMessage ?? "pi-title request failed without an error message");
+			}
 			const text = result.content
 				.filter((c): c is { type: "text"; text: string } => c.type === "text")
 				.map((c) => c.text)
@@ -144,7 +148,7 @@ export default function piTitle(pi: ExtensionAPI): void {
 			// Low cache-hit on the title request itself: the prefix didn't carry over.
 			// Warn every time — no rate limit (user's explicit choice).
 			logTitle(
-				`[title-res] model=${modelKey(ctx.model)} raw=${JSON.stringify(text.slice(0, 300))} usage=${JSON.stringify({ input: usage.input, output: usage.output, cacheRead: usage.cacheRead, cacheWrite: usage.cacheWrite })} hitRate=${hitRate} title=${JSON.stringify(title)}`,
+				`[title-res] model=${modelKey(ctx.model)} raw=${JSON.stringify(text.slice(0, 300))} usage=${JSON.stringify({ input: usage.input, output: usage.output, cacheRead: usage.cacheRead, cacheWrite: usage.cacheWrite })} hitRate=${hitRate} title=${JSON.stringify(title)} stop=${result.stopReason} err=${JSON.stringify(result.errorMessage ?? null)}`,
 			);
 			if (hitRate < config.warnThreshold) {
 				ctx.ui.notify(
