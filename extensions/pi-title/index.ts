@@ -19,6 +19,7 @@ import type {
 import { resolveConfig, writeConfigFile, type TitleConfig } from "./src/config.ts";
 import { logTitle, msgFingerprint } from "./src/diagnose.ts";
 import { appendHistory, readHistory, type HistoryEntry } from "./src/history.ts";
+import { applyContextPruneIndex } from "./src/title-request.ts";
 import { createHistoryComponent } from "./src/history-ui.ts";
 import { createSettingsComponent } from "./src/settings-ui.ts";
 import {
@@ -100,7 +101,11 @@ export default function piTitle(pi: ExtensionAPI): void {
 		if (!config || !ctx.model) return;
 		inFlight = true;
 		try {
-			const { messages } = buildSessionContext(ctx.sessionManager.buildContextEntries());
+			const sessionContext = buildSessionContext(ctx.sessionManager.buildContextEntries());
+			const messages = applyContextPruneIndex(
+				sessionContext.messages,
+				ctx.sessionManager.getBranch(),
+			);
 			const titleMessage: UserMessage = {
 				role: "user",
 				content: buildTitlePrompt(config.customPrompt, config.maxTitleLength),

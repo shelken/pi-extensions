@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { convertToLlm } from "@earendil-works/pi-coding-agent";
+import { applyContextPruneIndex } from "./title-request.ts";
 
 describe("title request prefix fidelity", () => {
 	it("convertToLlm turns custom messages into user messages (live-round parity)", () => {
@@ -32,5 +33,29 @@ describe("title request prefix fidelity", () => {
 		const user = { role: "user", content: [{ type: "text", text: "继续" }], timestamp: 1 };
 		const converted = convertToLlm([user as never]);
 		expect(converted[0].role).toBe("user");
+	});
+
+	it("removes tool results recorded by context-prune", () => {
+		const indexed = { role: "toolResult", toolCallId: "call-indexed" };
+		const retained = { role: "toolResult", toolCallId: "call-retained" };
+		const messages = [{ role: "user" }, indexed, retained, { role: "assistant" }];
+		const entries = [
+			{
+				type: "custom",
+				customType: "context-prune-index",
+				data: { toolCalls: [{ toolCallId: "call-indexed" }] },
+			},
+		];
+
+		expect(applyContextPruneIndex(messages as never[], entries as never[])).toEqual([
+			messages[0],
+			retained,
+			messages[3],
+		]);
+	});
+
+	it("keeps messages unchanged without a context-prune index", () => {
+		const messages = [{ role: "user" }, { role: "toolResult", toolCallId: "call-1" }];
+		expect(applyContextPruneIndex(messages as never[], [])).toEqual(messages);
 	});
 });
