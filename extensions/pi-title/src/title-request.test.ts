@@ -54,6 +54,49 @@ describe("title request prefix fidelity", () => {
 		]);
 	});
 
+	it("relocates a committed summary before the context_prune housekeeping call", () => {
+		const coveredAssistant = {
+			role: "assistant",
+			content: [{ type: "toolCall", id: "call-covered", name: "bash", arguments: {} }],
+		};
+		const coveredResult = { role: "toolResult", toolCallId: "call-covered" };
+		const housekeepingAssistant = {
+			role: "assistant",
+			content: [{ type: "toolCall", id: "call-prune", name: "context_prune", arguments: {} }],
+		};
+		const housekeepingResult = { role: "toolResult", toolCallId: "call-prune" };
+		const summary = {
+			role: "custom",
+			customType: "context-prune-summary",
+			content: "summary",
+			details: { toolCallRefs: [{ shortId: "t1", toolCallId: "call-covered" }] },
+		};
+		const user = { role: "user", content: "continue" };
+		const messages = [
+			coveredAssistant,
+			coveredResult,
+			housekeepingAssistant,
+			housekeepingResult,
+			summary,
+			user,
+		];
+		const entries = [
+			{
+				type: "custom",
+				customType: "context-prune-index",
+				data: { toolCalls: [{ toolCallId: "call-covered" }] },
+			},
+		];
+
+		expect(applyContextPruneIndex(messages as never[], entries as never[])).toEqual([
+			coveredAssistant,
+			summary,
+			housekeepingAssistant,
+			housekeepingResult,
+			user,
+		]);
+	});
+
 	it("keeps messages unchanged without a context-prune index", () => {
 		const messages = [{ role: "user" }, { role: "toolResult", toolCallId: "call-1" }];
 		expect(applyContextPruneIndex(messages as never[], [])).toEqual(messages);
