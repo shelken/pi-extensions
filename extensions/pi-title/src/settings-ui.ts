@@ -29,51 +29,51 @@ export function createSettingsComponent(opts: {
 		{
 			id: "enabled",
 			label: "enabled",
-			description: "Master switch for automatic titling.",
+			description: "自动标题总开关，不影响 /title fresh。",
 			currentValue: String(config.enabled),
 			values: BOOL,
 		},
 		{
 			id: "roundInterval",
 			label: "roundInterval",
-			description: "Generate a title every N user rounds (when the cache gate passes).",
+			description: "缓存门闩通过时，每 N 轮用户对话生成一次标题。",
 			currentValue: String(config.roundInterval),
 			values: ROUND_INTERVALS,
 		},
 		{
 			id: "maxTitleLength",
 			label: "maxTitleLength",
-			description: "Truncate generated titles to this many characters.",
+			description: "提示模型遵守的标题长度上限。",
 			currentValue: String(config.maxTitleLength),
 			values: MAX_LENGTHS,
 		},
 		{
 			id: "cacheThreshold",
 			label: "cacheThreshold",
-			description: "Minimum previous-round cache hit rate (0-1) required to trigger a title.",
+			description: "上一轮缓存命中率达到此值（0-1）时才自动生成标题。",
 			currentValue: String(config.cacheThreshold),
 			values: THRESHOLDS,
 		},
 		{
 			id: "warnThreshold",
 			label: "warnThreshold",
-			description: "Warn when the title request's cache hit rate falls below this (0-1).",
+			description: "标题请求缓存命中率低于此值（0-1）时显示警告。",
 			currentValue: String(config.warnThreshold),
 			values: THRESHOLDS,
 		},
 		{
 			id: "overrideManual",
 			label: "overrideManual",
-			description: "Overwrite a manually-set session name instead of respecting it.",
+			description: "自动标题是否覆盖手动设置的会话名称。",
 			currentValue: String(config.overrideManual),
 			values: BOOL,
 		},
 		{
 			id: "customPrompt",
 			label: "customPrompt",
-			description: "Reset to the built-in default. A bespoke prompt is set in config.json.",
-			currentValue: config.customPrompt === DEFAULT_PROMPT ? "(default)" : "(custom)",
-			values: config.customPrompt === DEFAULT_PROMPT ? undefined : ["(default)"],
+			description: "在 config.json 中设置自定义提示词；此处可恢复内置默认值。",
+			currentValue: config.customPrompt === DEFAULT_PROMPT ? "(默认)" : "(自定义)",
+			values: config.customPrompt === DEFAULT_PROMPT ? undefined : ["(默认)"],
 		},
 	];
 
@@ -109,8 +109,8 @@ export function createSettingsComponent(opts: {
 					save({ ...config, overrideManual: newValue === "true" }, id, newValue);
 					break;
 				case "customPrompt":
-					if (newValue === "(default)") {
-						save({ ...config, customPrompt: DEFAULT_PROMPT }, id, "(default)");
+					if (newValue === "(默认)") {
+						save({ ...config, customPrompt: DEFAULT_PROMPT }, id, "(默认)");
 					}
 					break;
 			}

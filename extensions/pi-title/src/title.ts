@@ -1,5 +1,13 @@
 const SURROUNDING_QUOTES = /^[\s"'“”‘’「」『』《》]+|[\s"'“”‘’「」『』《》]+$/g;
 
+export const TITLE_SUBCOMMANDS = ["fresh", "history", "config"] as const;
+export type TitleSubcommand = (typeof TITLE_SUBCOMMANDS)[number];
+
+export function parseTitleSubcommand(args: string): TitleSubcommand | undefined {
+	const value = args.trim().toLowerCase();
+	return TITLE_SUBCOMMANDS.find((command) => command === value);
+}
+
 /**
  * Clean a raw model reply into a title: trim, strip wrapping quotes/whitespace.
  * Length is left to the prompt — no truncation here.

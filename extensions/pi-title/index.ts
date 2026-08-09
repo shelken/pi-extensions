@@ -34,11 +34,22 @@ import {
 	shouldTrigger,
 	type GateState,
 } from "./src/state.ts";
-import { buildTitlePrompt, normalizeTitle } from "./src/title.ts";
+import {
+	buildTitlePrompt,
+	normalizeTitle,
+	parseTitleSubcommand,
+	TITLE_SUBCOMMANDS,
+} from "./src/title.ts";
 
 function modelKey(model: Model<Api>): string {
 	return `${model.provider}/${model.id}`;
 }
+
+const TITLE_SUBCOMMAND_DESCRIPTIONS = {
+	fresh: "立即生成新标题",
+	history: "查看本会话的标题历史",
+	config: "修改 pi-title 配置",
+} as const;
 
 export default function piTitle(pi: ExtensionAPI): void {
 	let config: TitleConfig | undefined;
@@ -97,7 +108,10 @@ export default function piTitle(pi: ExtensionAPI): void {
 		void generateTitle(ctx).catch(log);
 	});
 
-	async function generateTitle(ctx: ExtensionContext): Promise<void> {
+	async function generateTitle(
+		ctx: ExtensionContext,
+		triggeredBy: HistoryEntry["triggeredBy"] = "auto",
+	): Promise<void> {
 		if (!config || !ctx.model) return;
 		inFlight = true;
 		try {
@@ -174,10 +188,15 @@ export default function piTitle(pi: ExtensionAPI): void {
 				cacheHitRate: hitRate,
 				model: modelKey(ctx.model),
 				provider: ctx.model.provider,
-				triggeredBy: "auto",
+				triggeredBy,
 			};
 			if (!title) return;
-			if (state.userManuallyTitled && !config.overrideManual) return;
+			if (
+				triggeredBy === "auto" &&
+				state.userManuallyTitled &&
+				!config.overrideManual
+			)
+				return;
 			// Record our write BEFORE setSessionName: setSessionName synchronously
 			// emits session_info_changed, whose handler runs before the line after
 			// this call — without the pre-record, the handler sees our own name as
@@ -197,20 +216,50 @@ export default function piTitle(pi: ExtensionAPI): void {
 		}
 	}
 
-	pi.registerCommand("title-history", {
-		description: "Show this session's auto-title history (cache hits, tokens, model).",
-		handler: async (_args, ctx) => {
-			const entries = readHistory(historyPath, ctx.sessionManager.getSessionId());
-			await ctx.ui.custom(
-				(_tui, _theme, _kb, done) => createHistoryComponent(entries, () => done(undefined)),
-				{ overlay: true, overlayOptions: { anchor: "center", width: 90, maxHeight: "60%" } },
+	pi.registerCommand("title", {
+		description: "生成新标题、查看历史或修改配置。",
+		getArgumentCompletions: (prefix) => {
+			const value = prefix.trim().toLowerCase();
+			const items = TITLE_SUBCOMMANDS.filter((command) => command.startsWith(value)).map(
+				(command) => ({
+					value: command,
+					label: command,
+					description: TITLE_SUBCOMMAND_DESCRIPTIONS[command],
+				}),
 			);
+			return items.length > 0 ? items : null;
 		},
-	});
+		handler: async (args, ctx) => {
+			const command = parseTitleSubcommand(args);
+			if (!command) {
+				ctx.ui.notify("Usage: /title <fresh|history|config>", "error");
+				return;
+			}
 
-	pi.registerCommand("title-settings", {
-		description: "Edit pi-title configuration (writes to global config.json).",
-		handler: async (_args, ctx) => {
+			if (command === "fresh") {
+				if (!config || !ctx.model) {
+					ctx.ui.notify("pi-title: no active model", "error");
+					return;
+				}
+				if (inFlight) {
+					ctx.ui.notify("pi-title: title generation is already running", "warning");
+					return;
+				}
+				state = onTriggered(state);
+				await generateTitle(ctx, "fresh");
+				return;
+			}
+
+			if (command === "history") {
+				const entries = readHistory(historyPath, ctx.sessionManager.getSessionId());
+				await ctx.ui.custom(
+					(_tui, _theme, _kb, done) =>
+						createHistoryComponent(entries, () => done(undefined)),
+					{ overlay: true, overlayOptions: { anchor: "center", width: 90, maxHeight: "60%" } },
+				);
+				return;
+			}
+
 			const current = config;
 			if (!current) return;
 			await ctx.ui.custom(

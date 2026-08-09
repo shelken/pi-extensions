@@ -18,7 +18,7 @@ export interface HistoryEntry {
 	cacheHitRate?: number;
 	model: string;
 	provider: string;
-	triggeredBy: "auto";
+	triggeredBy: "auto" | "fresh";
 }
 
 const REQUIRED_KEYS: Array<keyof HistoryEntry> = [

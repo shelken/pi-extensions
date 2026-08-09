@@ -47,7 +47,7 @@ export function createHistoryComponent(entries: HistoryEntry[], onDone: () => vo
 		render(width: number): string[] {
 			const lines: string[] = [""];
 			if (entries.length === 0) {
-				lines.push("(no auto-title generated for this session yet)");
+				lines.push("(no title generated for this session yet)");
 				return lines;
 			}
 			lines.push(row("TIME", "TITLE", "CACHED", "HIT_RATE", "CACHE_READ", "MODEL"));

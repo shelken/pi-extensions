@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildTitlePrompt, normalizeTitle } from "./title.ts";
+import { buildTitlePrompt, normalizeTitle, parseTitleSubcommand } from "./title.ts";
 
 describe("normalizeTitle", () => {
 	it("trims surrounding whitespace", () => {
@@ -24,6 +24,19 @@ describe("normalizeTitle", () => {
 
 	it("returns empty string for whitespace-only input", () => {
 		expect(normalizeTitle("   ")).toBe("");
+	});
+});
+
+describe("parseTitleSubcommand", () => {
+	it("accepts the three title subcommands", () => {
+		expect(parseTitleSubcommand(" fresh ")).toBe("fresh");
+		expect(parseTitleSubcommand("HISTORY")).toBe("history");
+		expect(parseTitleSubcommand("config")).toBe("config");
+	});
+
+	it("rejects missing and unknown subcommands", () => {
+		expect(parseTitleSubcommand("")).toBeUndefined();
+		expect(parseTitleSubcommand("settings")).toBeUndefined();
 	});
 });
 
