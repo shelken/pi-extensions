@@ -169,7 +169,7 @@ export function lookupModel(
   const routeHint = routeHintProvider(modelId);
 
   function collect(id: string): void {
-    const entries = registry.get(id);
+    const entries = registry.get(id) ?? registry.get(id.toLowerCase());
     if (!entries) return;
 
     for (const entry of entries) {

@@ -133,6 +133,19 @@ describe("dynamic model matcher", () => {
     expect(lookupModel("gpt-5", reg, "cpa")?.provider).toBe("cpa");
   });
 
+  it("matches a lowercase registry key when the query is mixed-case", () => {
+    const reg = flattenRegistry({
+      deepseek: {
+        models: {
+          "deepseek-v4-flash": { id: "deepseek-v4-flash", reasoning: true },
+        },
+      },
+    });
+    const entry = lookupModel("Deepseek-v4-flash", reg);
+    expect(entry?.provider).toBe("deepseek");
+    expect(entry?.model.reasoning).toBe(true);
+  });
+
   it("maps models.dev effort values to pi thinking levels", () => {
     expect(
       toPiThinkingLevelMap([{ type: "effort", values: ["high", "xhigh", "max"] }]),
