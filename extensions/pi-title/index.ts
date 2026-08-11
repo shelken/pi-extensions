@@ -17,6 +17,7 @@ import type {
 	UserMessage,
 } from "@earendil-works/pi-ai";
 import { resolveConfig, writeConfigFile, type TitleConfig } from "./src/config.ts";
+import { CacheMissDumper } from "./src/cache-miss-dump.ts";
 import { logTitle, msgFingerprint } from "./src/diagnose.ts";
 import { appendHistory, readHistory, type HistoryEntry } from "./src/history.ts";
 import { applyContextPruneIndex } from "./src/title-request.ts";
@@ -57,6 +58,7 @@ export default function piTitle(pi: ExtensionAPI): void {
 	let historyPath = "";
 	let globalConfigPath = "";
 	let inFlight = false;
+	const missDumper = new CacheMissDumper();
 
 	const log = (err: unknown): void => console.error("[pi-title]", err);
 
@@ -81,6 +83,11 @@ export default function piTitle(pi: ExtensionAPI): void {
 		state = onModelChange(state);
 	});
 
+	// Live 请求的完整 payload（agent 路径 onPayload 触发，标题请求不走此路径，无需区分）。
+	pi.on("before_provider_request", async (event) => {
+		missDumper.captureLiveRequest(event.payload);
+	});
+
 	pi.on("agent_end", async (event, ctx) => {
 		if (!ctx.model) return;
 		const lastAssistant = [...event.messages]
@@ -90,15 +97,16 @@ export default function piTitle(pi: ExtensionAPI): void {
 		logTitle(
 			`[agent_end] model=${modelKey(ctx.model)} usage=${JSON.stringify({ input: usage?.input, output: usage?.output, cacheRead: usage?.cacheRead, cacheWrite: usage?.cacheWrite })} msgs=${msgFingerprint(event.messages)} sysLen=${ctx.getSystemPrompt()?.length ?? -1} tools=${[...pi.getActiveTools()].sort().join(",")}`,
 		);
-		state = onAgentEnd(
-			state,
-			{
-				cacheRead: usage?.cacheRead ?? 0,
-				cacheWrite: usage?.cacheWrite ?? 0,
-				input: usage?.input ?? 0,
-			},
-			modelKey(ctx.model),
-		);
+		const roundUsage = {
+			cacheRead: usage?.cacheRead ?? 0,
+			cacheWrite: usage?.cacheWrite ?? 0,
+			input: usage?.input ?? 0,
+		};
+		missDumper.captureLiveUsage({
+			...roundUsage,
+			output: usage?.output ?? 0,
+		});
+		state = onAgentEnd(state, roundUsage, modelKey(ctx.model));
 	});
 
 	pi.on("agent_settled", async (_event, ctx) => {
@@ -149,6 +157,10 @@ export default function piTitle(pi: ExtensionAPI): void {
 				sessionId: ctx.sessionManager.getSessionId(),
 				cacheRetention: "short",
 				...(ctx.thinkingLevel ? { reasoning: ctx.thinkingLevel as ThinkingLevel } : {}),
+				onPayload: (payload: unknown) => {
+					missDumper.captureTitleRequest(payload);
+					return undefined;
+				},
 			});
 			if (result.stopReason === "error") {
 				throw new Error(result.errorMessage ?? "pi-title request failed without an error message");
@@ -174,6 +186,25 @@ export default function piTitle(pi: ExtensionAPI): void {
 					`pi-title: 自动标题缓存命中率仅 ${(hitRate * 100).toFixed(1)}% (低于 ${(config.warnThreshold * 100).toFixed(0)}%)`,
 					"warning",
 				);
+				try {
+					// 现场锁定：完整 payload 落盘供缓存前缀字节级对比（保留最近 10 份）。
+					missDumper.dump(join(getAgentDir(), "logs", "pi-title-miss"), {
+						time: new Date().toISOString(),
+						sessionId: ctx.sessionManager.getSessionId(),
+						model: modelKey(ctx.model),
+						provider: ctx.model.provider,
+						triggeredBy,
+						hitRate,
+						titleUsage: {
+							input: usage.input,
+							output: usage.output,
+							cacheRead: usage.cacheRead,
+							cacheWrite: usage.cacheWrite,
+						},
+					});
+				} catch (err) {
+					log(err);
+				}
 			}
 			const entry: HistoryEntry = {
 				sessionId: ctx.sessionManager.getSessionId(),

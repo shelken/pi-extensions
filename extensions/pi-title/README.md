@@ -6,6 +6,7 @@
 
 - **缓存门闩**：上一轮命中率（`cacheRead/(input+cacheRead+cacheWrite)`）达 `cacheThreshold`（默认 0.5）才起标题；未命中或命中率过低绝不发请求。
 - **低命中率提醒**：标题请求自身命中率低于 `warnThreshold`（默认 0.95）时每次提醒（无频率限制）。
+- **低命中率现场 dump**：提醒同时把 live 与标题请求的完整 provider payload 落盘到 `{pi-agent-dir}/logs/pi-title-miss/`（保留最近 10 份），供缓存前缀字节级对比。
 - **按轮触发**：每 N 个 user round（默认 3）起一次，换模型自动归零。
 - **尊重手动命名**：你 `/name` 设过的标题不被覆盖，`/name ""` 清空后恢复自动。
 - **审计留痕**：每次起标题写入 `history.jsonl`（含真实 `cacheRead` 与 `cacheHitRate`，可验证是否真命中）。
