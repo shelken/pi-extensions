@@ -14,6 +14,7 @@ import type {
 	UserMessage,
 } from "@earendil-works/pi-ai";
 import { resolveConfig, writeConfigFile, type TitleConfig } from "./src/config.ts";
+import { CacheMissDumper } from "./src/cache-miss-dump.ts";
 import { logTitle } from "./src/diagnose.ts";
 import { appendHistory, readHistory, type HistoryEntry } from "./src/history.ts";
 import { createHistoryComponent } from "./src/history-ui.ts";
@@ -74,6 +75,7 @@ export default function piTitle(pi: ExtensionAPI): void {
 	let historyPath = "";
 	let globalConfigPath = "";
 	let inFlight = false;
+	const missDumper = new CacheMissDumper();
 	// 最近一次 live 请求的完整 provider payload，按 sessionId 隔离。
 	// 标题请求复用此 payload（末尾追加标题消息），使缓存前缀与 live 字节级一致。
 	// 标题请求走 complete→stream，不经 sdk 的 onPayload，不触发 before_provider_request，
@@ -123,6 +125,7 @@ export default function piTitle(pi: ExtensionAPI): void {
 			input: usage?.input ?? 0,
 		};
 		state = onAgentEnd(state, roundUsage, modelKey(ctx.model));
+		missDumper.captureLiveUsage({ ...roundUsage, output: usage?.output ?? 0 });
 	});
 
 	pi.on("agent_settled", async (_event, ctx) => {
@@ -165,13 +168,17 @@ export default function piTitle(pi: ExtensionAPI): void {
 					// 只在消息列表末尾追加 buildParams 构造的标题消息（已是该 provider 正确格式）。
 					// 这样缓存前缀与 live 一致，命中；不依赖逐字段枚举，新 provider 自动覆盖。
 					const live = livePayloadBySession.get(sid);
-					if (!live) return undefined; // 无 live 缓存，退化用 buildParams 产物原样
+					if (!live) {
+						missDumper.captureTitleRequest(titlePayload);
+						return undefined; // 无 live 缓存，退化用 buildParams 产物原样
+					}
 					const merged = structuredClone(live);
 					const liveList = findMessageList(merged);
 					const titleList = findMessageList(titlePayload);
 					if (liveList && titleList && titleList.messages.length > 0) {
 						liveList.messages.push(titleList.messages[titleList.messages.length - 1]);
 					}
+					missDumper.captureTitleRequest(merged);
 					return merged;
 				},
 			});
@@ -197,6 +204,27 @@ export default function piTitle(pi: ExtensionAPI): void {
 					`pi-title: 自动标题缓存命中率仅 ${(hitRate * 100).toFixed(1)}% (低于 ${(config.warnThreshold * 100).toFixed(0)}%)`,
 					"warning",
 				);
+			}
+			if (config.debug) {
+				// debug 开启时每次标题请求都落盘 live+title 完整 payload，供缓存前缀字节级对比。
+				try {
+					missDumper.dump(join(getAgentDir(), "logs", "pi-title-miss"), {
+						time: new Date().toISOString(),
+						sessionId: sid,
+						model: modelKey(ctx.model),
+						provider: ctx.model.provider,
+						triggeredBy,
+						hitRate,
+						titleUsage: {
+							input: usage.input,
+							output: usage.output,
+							cacheRead: usage.cacheRead,
+							cacheWrite: usage.cacheWrite,
+						},
+					});
+				} catch (err) {
+					log(err);
+				}
 			}
 			const entry: HistoryEntry = {
 				sessionId: sid,

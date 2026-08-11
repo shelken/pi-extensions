@@ -69,6 +69,13 @@ export function createSettingsComponent(opts: {
 			values: BOOL,
 		},
 		{
+			id: "debug",
+			label: "debug",
+			description: "开启后每次标题请求都把 live 与 title 的完整 provider payload 落盘到 {pi-agent-dir}/logs/pi-title-miss/，供缓存前缀字节级对比。",
+			currentValue: String(config.debug),
+			values: BOOL,
+		},
+		{
 			id: "customPrompt",
 			label: "customPrompt",
 			description: "在 config.json 中设置自定义提示词；此处可恢复内置默认值。",

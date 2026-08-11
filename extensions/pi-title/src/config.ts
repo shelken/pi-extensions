@@ -11,6 +11,8 @@ export interface TitleConfig {
 	cacheThreshold: number;
 	/** Title request hit rate below this (0-1) triggers a low-cache warn. */
 	warnThreshold: number;
+	/** 开启后每次标题请求都把 live 与 title 的完整 provider payload 落盘，供缓存前缀字节级对比。 */
+	debug: boolean;
 }
 
 export const DEFAULT_PROMPT =
@@ -24,6 +26,7 @@ export const DEFAULT_CONFIG: TitleConfig = {
 	maxTitleLength: 35,
 	cacheThreshold: 0.5,
 	warnThreshold: 0.95,
+	debug: false,
 };
 
 export type ConfigLayer = Partial<Record<keyof TitleConfig, unknown>>;
@@ -63,6 +66,7 @@ export function mergeConfig(layers: Array<ConfigLayer | undefined>): TitleConfig
 		if (typeof layer.warnThreshold === "number") {
 			result.warnThreshold = Math.min(Math.max(layer.warnThreshold, 0), 1);
 		}
+		if (typeof layer.debug === "boolean") result.debug = layer.debug;
 	}
 	return result;
 }
