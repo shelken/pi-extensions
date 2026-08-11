@@ -1,7 +1,6 @@
 import { join } from "node:path";
 import {
 	buildSessionContext,
-	convertToLlm,
 	getAgentDir,
 	type ExtensionAPI,
 	type ExtensionContext,
@@ -10,17 +9,13 @@ import type {
 	Api,
 	AssistantMessage,
 	Context,
-	Message,
 	Model,
-	ThinkingLevel,
 	Tool,
 	UserMessage,
 } from "@earendil-works/pi-ai";
 import { resolveConfig, writeConfigFile, type TitleConfig } from "./src/config.ts";
-import { CacheMissDumper } from "./src/cache-miss-dump.ts";
-import { logTitle, msgFingerprint } from "./src/diagnose.ts";
+import { logTitle } from "./src/diagnose.ts";
 import { appendHistory, readHistory, type HistoryEntry } from "./src/history.ts";
-import { applyContextPruneIndex } from "./src/title-request.ts";
 import { createHistoryComponent } from "./src/history-ui.ts";
 import { createSettingsComponent } from "./src/settings-ui.ts";
 import {
@@ -52,13 +47,38 @@ const TITLE_SUBCOMMAND_DESCRIPTIONS = {
 	config: "修改 pi-title 配置",
 } as const;
 
+/**
+ * 在 provider 请求体里定位"消息列表"字段（messages / contents 等）。
+ * 通用 shape 判断：数组且首元素含 role 字段——覆盖 openai / anthropic / bedrock / google。
+ * 不按 provider 名枚举，新 provider 自动适配。
+ */
+function findMessageList(payload: unknown): { field: string; messages: unknown[] } | undefined {
+	if (typeof payload !== "object" || payload === null) return;
+	for (const [field, value] of Object.entries(payload as Record<string, unknown>)) {
+		if (
+			Array.isArray(value) &&
+			value.length > 0 &&
+			typeof value[0] === "object" &&
+			value[0] !== null &&
+			"role" in (value[0] as object)
+		) {
+			return { field, messages: value as unknown[] };
+		}
+	}
+	return undefined;
+}
+
 export default function piTitle(pi: ExtensionAPI): void {
 	let config: TitleConfig | undefined;
 	let state: GateState = initialState();
 	let historyPath = "";
 	let globalConfigPath = "";
 	let inFlight = false;
-	const missDumper = new CacheMissDumper();
+	// 最近一次 live 请求的完整 provider payload，按 sessionId 隔离。
+	// 标题请求复用此 payload（末尾追加标题消息），使缓存前缀与 live 字节级一致。
+	// 标题请求走 complete→stream，不经 sdk 的 onPayload，不触发 before_provider_request，
+	// 故此 handler 只会捕到 live，无需标志位区分。
+	const livePayloadBySession = new Map<string, unknown>();
 
 	const log = (err: unknown): void => console.error("[pi-title]", err);
 
@@ -73,6 +93,7 @@ export default function piTitle(pi: ExtensionAPI): void {
 	pi.on("session_start", async (_event, ctx) => {
 		loadConfig(ctx.cwd);
 		state = onSessionStart(state, ctx.sessionManager.getSessionName());
+		livePayloadBySession.delete(ctx.sessionManager.getSessionId());
 	});
 
 	pi.on("session_info_changed", async (event) => {
@@ -83,9 +104,8 @@ export default function piTitle(pi: ExtensionAPI): void {
 		state = onModelChange(state);
 	});
 
-	// Live 请求的完整 payload（agent 路径 onPayload 触发，标题请求不走此路径，无需区分）。
-	pi.on("before_provider_request", async (event) => {
-		missDumper.captureLiveRequest(event.payload);
+	pi.on("before_provider_request", async (event, ctx) => {
+		livePayloadBySession.set(ctx.sessionManager.getSessionId(), structuredClone(event.payload));
 	});
 
 	pi.on("agent_end", async (event, ctx) => {
@@ -95,17 +115,13 @@ export default function piTitle(pi: ExtensionAPI): void {
 			.find((m): m is AssistantMessage => m.role === "assistant");
 		const usage = lastAssistant?.usage;
 		logTitle(
-			`[agent_end] model=${modelKey(ctx.model)} usage=${JSON.stringify({ input: usage?.input, output: usage?.output, cacheRead: usage?.cacheRead, cacheWrite: usage?.cacheWrite })} msgs=${msgFingerprint(event.messages)} sysLen=${ctx.getSystemPrompt()?.length ?? -1} tools=${[...pi.getActiveTools()].sort().join(",")}`,
+			`[agent_end] model=${modelKey(ctx.model)} usage=${JSON.stringify({ input: usage?.input, output: usage?.output, cacheRead: usage?.cacheRead, cacheWrite: usage?.cacheWrite })} sysLen=${ctx.getSystemPrompt()?.length ?? -1} tools=${[...pi.getActiveTools()].sort().join(",")}`,
 		);
 		const roundUsage = {
 			cacheRead: usage?.cacheRead ?? 0,
 			cacheWrite: usage?.cacheWrite ?? 0,
 			input: usage?.input ?? 0,
 		};
-		missDumper.captureLiveUsage({
-			...roundUsage,
-			output: usage?.output ?? 0,
-		});
 		state = onAgentEnd(state, roundUsage, modelKey(ctx.model));
 	});
 
@@ -123,11 +139,6 @@ export default function piTitle(pi: ExtensionAPI): void {
 		if (!config || !ctx.model) return;
 		inFlight = true;
 		try {
-			const sessionContext = buildSessionContext(ctx.sessionManager.buildContextEntries());
-			const messages = applyContextPruneIndex(
-				sessionContext.messages,
-				ctx.sessionManager.getBranch(),
-			);
 			const titleMessage: UserMessage = {
 				role: "user",
 				content: buildTitlePrompt(config.customPrompt, config.maxTitleLength),
@@ -135,31 +146,33 @@ export default function piTitle(pi: ExtensionAPI): void {
 			};
 			const activeNames = new Set(pi.getActiveTools());
 			const tools = pi.getAllTools().filter((t) => activeNames.has(t.name)) as Tool[];
-			logTitle(
-				`[title-req] model=${modelKey(ctx.model)} msgs=${msgFingerprint([...(convertToLlm(messages) as unknown as Message[]), titleMessage])} sysLen=${ctx.getSystemPrompt()?.length ?? -1} tools=${tools.map((t) => t.name).sort().join(",")}`,
-			);
+			// context 仅用于让 buildParams 构造本 provider 格式的标题消息（onPayload 会取末尾
+			// 追加到 live payload）。前缀内容由 live payload 提供，无需重建会话消息。
 			const context: Context = {
 				systemPrompt: ctx.getSystemPrompt(),
-				// Live rounds go through convertToLlm (custom → user, bashExecution → user) before
-				// hitting the provider. The title request must apply the same transform: custom
-				// messages (context-prune summary, web-search results) keep role "custom" in
-				// buildSessionContext output, and provider converters (e.g. codebuddy's
-				// contextToOpenAIMessages) drop unknown roles — that busted the cache prefix at
-				// the first custom message (~97k uncached input tokens on the 08-07 incident).
-				messages: [...(convertToLlm(messages) as unknown as Message[]), titleMessage],
+				messages: [titleMessage],
 				tools,
 			};
+			const sid = ctx.sessionManager.getSessionId();
 			// complete 走 ModelRuntime.prepareRequest：自动注入 auth（env/凭据），
-			// 与主会话同一认证链路。直接用 provider.streamSimple 会绕过 auth 注入，
-			// 内置 provider（deepseek/opencode 等）在 api 层 getClientApiKey 处抛
-			// "No API key"，被 lazyStream 吞成空流（08-08 排查结论）。
+			// 与主会话同一认证链路（08-08 排查结论，不可退回 provider.streamSimple）。
 			const result = await ctx.modelRegistry.complete(ctx.model, context, {
-				sessionId: ctx.sessionManager.getSessionId(),
+				sessionId: sid,
 				cacheRetention: "short",
-				...(ctx.thinkingLevel ? { reasoning: ctx.thinkingLevel as ThinkingLevel } : {}),
-				onPayload: (payload: unknown) => {
-					missDumper.captureTitleRequest(payload);
-					return undefined;
+				onPayload: (titlePayload: unknown) => {
+					// 复用 live 请求体：顶层字段（thinking/reasoning_effort/max_tokens/
+					// temperature/stream/prompt_cache_key/……任何 provider 任何字段）字节级保留，
+					// 只在消息列表末尾追加 buildParams 构造的标题消息（已是该 provider 正确格式）。
+					// 这样缓存前缀与 live 一致，命中；不依赖逐字段枚举，新 provider 自动覆盖。
+					const live = livePayloadBySession.get(sid);
+					if (!live) return undefined; // 无 live 缓存，退化用 buildParams 产物原样
+					const merged = structuredClone(live);
+					const liveList = findMessageList(merged);
+					const titleList = findMessageList(titlePayload);
+					if (liveList && titleList && titleList.messages.length > 0) {
+						liveList.messages.push(titleList.messages[titleList.messages.length - 1]);
+					}
+					return merged;
 				},
 			});
 			if (result.stopReason === "error") {
@@ -176,38 +189,17 @@ export default function piTitle(pi: ExtensionAPI): void {
 				cacheWrite: usage.cacheWrite,
 				input: usage.input,
 			});
-			// Low cache-hit on the title request itself: the prefix didn't carry over.
-			// Warn every time — no rate limit (user's explicit choice).
 			logTitle(
-				`[title-res] model=${modelKey(ctx.model)} raw=${JSON.stringify(text.slice(0, 300))} usage=${JSON.stringify({ input: usage.input, output: usage.output, cacheRead: usage.cacheRead, cacheWrite: usage.cacheWrite })} hitRate=${hitRate} title=${JSON.stringify(title)} stop=${result.stopReason} err=${JSON.stringify(result.errorMessage ?? null)}`,
+				`[title-res] model=${modelKey(ctx.model)} raw=${JSON.stringify(text.slice(0, 300))} usage=${JSON.stringify({ input: usage.input, output: usage.output, cacheRead: usage.cacheRead, cacheWrite: usage.cacheWrite })} hitRate=${hitRate} title=${JSON.stringify(title)} stop=${result.stopReason}`,
 			);
 			if (hitRate < config.warnThreshold) {
 				ctx.ui.notify(
 					`pi-title: 自动标题缓存命中率仅 ${(hitRate * 100).toFixed(1)}% (低于 ${(config.warnThreshold * 100).toFixed(0)}%)`,
 					"warning",
 				);
-				try {
-					// 现场锁定：完整 payload 落盘供缓存前缀字节级对比（保留最近 10 份）。
-					missDumper.dump(join(getAgentDir(), "logs", "pi-title-miss"), {
-						time: new Date().toISOString(),
-						sessionId: ctx.sessionManager.getSessionId(),
-						model: modelKey(ctx.model),
-						provider: ctx.model.provider,
-						triggeredBy,
-						hitRate,
-						titleUsage: {
-							input: usage.input,
-							output: usage.output,
-							cacheRead: usage.cacheRead,
-							cacheWrite: usage.cacheWrite,
-						},
-					});
-				} catch (err) {
-					log(err);
-				}
 			}
 			const entry: HistoryEntry = {
-				sessionId: ctx.sessionManager.getSessionId(),
+				sessionId: sid,
 				time: new Date().toISOString(),
 				title,
 				rawTitle: text,
