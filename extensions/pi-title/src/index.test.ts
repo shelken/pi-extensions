@@ -83,4 +83,49 @@ describe("/title", () => {
 			"fresh",
 		);
 	});
+
+	it("bare /title notifies the current session title", async () => {
+		dir = mkdtempSync(join(tmpdir(), "pi-title-notify-"));
+		process.env.PI_CODING_AGENT_DIR = dir;
+		const configDir = join(dir, "extensions", "pi-title");
+		mkdirSync(configDir, { recursive: true });
+		writeFileSync(join(configDir, "config.json"), JSON.stringify({ enabled: false }));
+
+		const handlers = new Map<string, (event: unknown, ctx: any) => Promise<void>>();
+		const commands = new Map<
+			string,
+			{ handler: (args: string, ctx: any) => Promise<void>; getArgumentCompletions: (prefix: string) => unknown }
+		>();
+		const notify = vi.fn();
+		const pi = {
+			on: vi.fn((event: string, handler: (event: unknown, ctx: any) => Promise<void>) => {
+				handlers.set(event, handler);
+			}),
+			registerCommand: vi.fn((name: string, command: any) => commands.set(name, command)),
+			getActiveTools: () => [],
+			getAllTools: () => [],
+			setSessionName: vi.fn(),
+		} as unknown as ExtensionAPI;
+		const ctx = {
+			cwd: dir,
+			hasUI: true,
+			model: { provider: "test", id: "model" },
+			modelRegistry: { complete: vi.fn() },
+			thinkingLevel: "off",
+			getSystemPrompt: () => "system",
+			sessionManager: {
+				getSessionId: () => "session-1",
+				getSessionName: () => "My session title",
+				buildContextEntries: () => [],
+				getBranch: () => [],
+			},
+			ui: { notify },
+		};
+
+		piTitle(pi);
+		await handlers.get("session_start")?.({}, ctx);
+		await commands.get("title")?.handler("", ctx);
+
+		expect(notify).toHaveBeenCalledWith('pi-title: 当前标题 "My session title"', "info");
+	});
 });

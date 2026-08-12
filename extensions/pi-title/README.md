@@ -10,7 +10,7 @@
 - **按轮触发**：每 N 个 user round（默认 3）起一次，换模型自动归零。
 - **尊重手动命名**：你 `/name` 设过的标题不被覆盖，`/name ""` 清空后恢复自动。
 - **审计留痕**：每次起标题写入 `history.jsonl`（含真实 `cacheRead` 与 `cacheHitRate`，可验证是否真命中）。
-- **命令**：`/title fresh` 主动生成标题，`/title history` 查看本 session 历史，`/title config` 修改配置。
+- **命令**：`/title` 查看当前标题，`/title fresh` 主动生成标题，`/title history` 查看本 session 历史，`/title config` 修改配置。
 
 ## 快速上手
 

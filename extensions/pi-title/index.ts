@@ -283,7 +283,11 @@ export default function piTitle(pi: ExtensionAPI): void {
 		handler: async (args, ctx) => {
 			const command = parseTitleSubcommand(args);
 			if (!command) {
-				ctx.ui.notify("Usage: /title <fresh|history|config>", "error");
+				const name = ctx.sessionManager.getSessionName();
+				ctx.ui.notify(
+					name ? `pi-title: 当前标题 "${name}"` : "pi-title: 当前会话还没有标题",
+					"info",
+				);
 				return;
 			}
 
