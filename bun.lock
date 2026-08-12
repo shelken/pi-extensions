@@ -96,19 +96,17 @@
     },
     "extensions/pi-title": {
       "name": "@shelken/pi-title",
-      "version": "0.2.0",
+      "version": "0.2.1",
       "devDependencies": {
         "vitest": "^4.0.18",
       },
       "peerDependencies": {
         "@earendil-works/pi-ai": ">=0.83.0",
         "@earendil-works/pi-coding-agent": ">=0.84.1",
-        "@earendil-works/pi-tui": ">=0.83.0",
       },
       "optionalPeers": [
         "@earendil-works/pi-ai",
         "@earendil-works/pi-coding-agent",
-        "@earendil-works/pi-tui",
       ],
     },
     "extensions/simple-plannotator": {
