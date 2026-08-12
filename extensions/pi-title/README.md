@@ -6,8 +6,10 @@
 
 - **缓存门闩**：上一轮命中率（`cacheRead/(input+cacheRead+cacheWrite)`）达 `cacheThreshold`（默认 0.5）才起标题；未命中或命中率过低绝不发请求。
 - **低命中率提醒**：标题请求自身命中率低于 `warnThreshold`（默认 0.95）时每次提醒（无频率限制）。
-- **字节级复用 live 请求体**：标题请求经 `onPayload` 复用最近一次 live 请求的完整 provider payload（顶层字段全保留，仅末尾追加标题消息），缓存前缀与 live 一致、不逐字段适配。要求 provider 遵守 `onPayload` 契约（pi 内置 12 个 provider 均遵守，自定义 provider 不遵守则退化为 buildParams 产物原样）。
-- **按轮触发**：每 N 个 user round（默认 3）起一次，换模型自动归零。
+- **严格复用 live 请求体**：标题请求经 `onPayload` 复用最近一次 live 请求的完整 provider payload（顶层字段全保留，仅末尾追加标题消息）。无法识别 provider 消息列表时直接失败，绝不退化为不一致的重建上下文。
+- **reload 安全**：live payload 跨扩展 reload 保留。进程刚启动、换模型或切换 thinking level 后没有可复用 payload 时，`/title fresh` 会自动排到下一轮主对话结束后执行，不额外发送未缓存上下文。
+- **异步与防重入**：标题生成不阻塞其他命令；同 session 同时只运行一个标题请求，120 秒超时后中止并警告。
+- **按有效轮触发**：累计 N 个达到 `cacheThreshold` 的 settled user round（默认 3）后生成；空 usage/低命中轮不消耗间隔，reload 会从当前 branch 恢复计数，换模型归零。
 - **尊重手动命名**：你 `/name` 设过的标题不被覆盖，`/name ""` 清空后恢复自动。
 - **审计留痕**：每次起标题写入 `history.jsonl`（含真实 `cacheRead` 与 `cacheHitRate`，可验证是否真命中）。
 - **命令**：`/title` 查看当前标题，`/title fresh` 主动生成标题，`/title history` 查看本 session 历史，`/title config` 修改配置。
@@ -34,18 +36,20 @@
   "overrideManual": false,
   "cacheThreshold": 0.5,
   "warnThreshold": 0.95,
-  "customPrompt": "基于本次对话的最新内容，为这段对话起一个简洁标题。不超过 {maxTitleLength} 个字。直接输出标题文本，不要任何前缀、引号或标点包裹，不要调用任何工具。"
+  "debug": false,
+  "customPrompt": "现在不要操作其他任务。总结当前对话的实际任务，精炼成一个合适的标题；如果当前任务与最开始的任务独立无关，只总结最新任务。标题使用当前对话语言，仅输出标题文本，不超过 {maxTitleLength} 个字，不要调用工具。"
 }
 ```
 
 | 字段 | 默认 | 作用 |
 | --- | --- | --- |
 | `enabled` | `true` | 总开关 |
-| `roundInterval` | `3` | 每多少个 user round 起一次标题 |
+| `roundInterval` | `3` | 每多少个有效高缓存 user round 起一次标题 |
 | `maxTitleLength` | `35` | 提示模型遵守的标题长度上限 |
 | `overrideManual` | `false` | 为 `true` 时覆盖手动设的标题 |
 | `cacheThreshold` | `0.5` | 门闩最低命中率（0-1），低于则不起标题 |
 | `warnThreshold` | `0.95` | 标题请求命中率低于此值（0-1）时提醒 |
+| `debug` | `false` | 写入 live/title payload 诊断 dump |
 | `customPrompt` | 见上 | 起标题提示词，`{maxTitleLength}` 会被替换 |
 
 历史文件：`{pi-agent-dir}/extensions/pi-title/history.jsonl`（append-only，每行一条）。
@@ -56,7 +60,7 @@
 bun --filter @shelken/pi-title test
 ```
 
-测试覆盖 config、状态机、history、标题规范化和命令触发链路；TUI 渲染不单测。
+实现集中在 `index.ts`；测试只覆盖 live payload 复用、reload/延后生成、异步防重入和超时等关键调用链。
 
 ## 贡献
 
