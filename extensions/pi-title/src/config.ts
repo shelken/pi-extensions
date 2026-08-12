@@ -16,7 +16,7 @@ export interface TitleConfig {
 }
 
 export const DEFAULT_PROMPT =
-	"基于本次对话的最新内容，为这段对话起一个简洁标题。不要超过 {maxTitleLength} 个汉字或等长内容，不要用省略号或引号，直接输出标题文本，不要调用任何工具。";
+  "现在不要操作其他任务 总结从任务开始到现在的所有, 精炼成一个合适的标题, 标题使用当前上下文对话的语言; 如果当前任务和最开始的任务独立不相关, 仅总结最新任务; **仅**输出标题文本 不超过 {maxTitleLength} 个字"
 
 export const DEFAULT_CONFIG: TitleConfig = {
 	enabled: true,
