@@ -1,4 +1,6 @@
-# pi-title
+# pi-title（弃用）
+
+**此插件已弃用、不再维护，入口已从根 `package.json` 的 `pi.extensions` 移除。** 请卸载或保留仅作参考。
 
 复用 session 缓存前缀，自动给 pi 会话起标题。自动触发只在**上一轮命中 provider 缓存**时发起只读标题请求；也可以用 `/title fresh` 主动生成。请求复用当前会话前缀，无需单独配置模型。
 
