@@ -7,7 +7,7 @@
 - **缓存门闩**：上一轮命中率（`cacheRead/(input+cacheRead+cacheWrite)`）达 `cacheThreshold`（默认 0.5）才起标题；未命中或命中率过低绝不发请求。
 - **低命中率提醒**：标题请求自身命中率低于 `warnThreshold`（默认 0.95）时每次提醒（无频率限制）。
 - **严格复用 live 请求体**：标题请求经 `onPayload` 复用最近一次 live 请求的完整 provider payload（顶层字段全保留，仅末尾追加标题消息）。无法识别 provider 消息列表时直接失败，绝不退化为不一致的重建上下文。
-- **reload 安全**：live payload 跨扩展 reload 保留。进程刚启动、换模型或切换 thinking level 后没有可复用 payload 时，`/title fresh` 会自动排到下一轮主对话结束后执行，不额外发送未缓存上下文。
+- **reload 安全**：live payload 跨扩展 reload 保留。自动标题只在有可复用 payload 时触发；`/title fresh` 不受此限制，无 payload 时直接用不含对话历史的精简请求立即生成。
 - **异步与防重入**：标题生成不阻塞其他命令；同 session 同时只运行一个标题请求，120 秒超时后中止并警告。
 - **按有效轮触发**：累计 N 个达到 `cacheThreshold` 的 settled user round（默认 3）后生成；空 usage/低命中轮不消耗间隔，reload 会从当前 branch 恢复计数，换模型归零。
 - **尊重手动命名**：你 `/name` 设过的标题不被覆盖，`/name ""` 清空后恢复自动。
@@ -18,7 +18,7 @@
 
 1. 装好后无需任何配置，正常聊天即可。
 2. 用支持 prompt caching 的模型聊满 3 轮（且上一轮命中缓存），session 名会自动变成反映最新对话的标题。
-3. 想立即生成标题：运行 `/title fresh`。该命令不检查自动触发门槛，低缓存命中率提醒仍会显示。
+3. 想立即生成标题：运行 `/title fresh`，成功后通知显示新标题。该命令不检查自动触发门槛，低缓存命中率提醒仍会显示。
 4. 想查看历史：运行 `/title history`。
 5. 想调间隔、长度或提示词：运行 `/title config`，或直接编辑 config.json。
 
@@ -60,7 +60,7 @@
 bun --filter @shelken/pi-title test
 ```
 
-实现集中在 `index.ts`；测试只覆盖 live payload 复用、reload/延后生成、异步防重入和超时等关键调用链。
+实现集中在 `index.ts`；测试只覆盖 live payload 复用、reload、异步防重入和超时等关键调用链。
 
 ## 贡献
 

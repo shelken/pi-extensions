@@ -8,6 +8,20 @@ import piTitle from "./index.ts";
 type Handler = (event: any, ctx: any) => any;
 type Complete = (model: unknown, context: unknown, options: any) => Promise<any>;
 
+// vitest 4 移除了 waitFor：轮询断言直到通过或超时
+async function waitFor(check: () => void | Promise<void>, timeout = 1000): Promise<void> {
+	const start = Date.now();
+	for (;;) {
+		try {
+			await check();
+			return;
+		} catch (err) {
+			if (Date.now() - start > timeout) throw err;
+			await new Promise((done) => setTimeout(done, 20));
+		}
+	}
+}
+
 const dirs: string[] = [];
 const originalAgentDir = process.env.PI_CODING_AGENT_DIR;
 const response = {
@@ -130,7 +144,7 @@ describe("pi-title", () => {
 			]).flat(),
 		);
 		await second.handlers.get("session_start")?.({ reason: "reload" }, second.ctx);
-		await vi.waitFor(() => expect(second.complete).toHaveBeenCalledOnce());
+		await waitFor(() => expect(second.complete).toHaveBeenCalledOnce());
 	});
 
 	it("keeps the exact live payload across extension reload", async () => {
@@ -143,22 +157,21 @@ describe("pi-title", () => {
 		const second = setup(dir);
 		await second.handlers.get("session_start")?.({ reason: "reload" }, second.ctx);
 		await second.commands.get("title")?.handler("fresh", second.ctx);
-		await vi.waitFor(() => expect(second.complete).toHaveBeenCalledOnce());
+		await waitFor(() => expect(second.complete).toHaveBeenCalledOnce());
 		expect(JSON.stringify(second.getMerged())).toContain("完整 live 上下文");
 		expect((second.getMerged() as { messages: unknown[] }).messages).toHaveLength(2);
 	});
 
-	it("queues fresh until the next live turn without rebuilding context", async () => {
+	it("fresh without live payload sends a standalone request immediately", async () => {
 		const app = setup(tempConfig());
 		await app.handlers.get("session_start")?.({ reason: "startup" }, app.ctx);
 		await app.commands.get("title")?.handler("fresh", app.ctx);
-		expect(app.complete).not.toHaveBeenCalled();
-		expect(app.notify).not.toHaveBeenCalled();
-
-		await captureLive(app, "下一轮完整 live 上下文");
-		await app.handlers.get("agent_settled")?.({}, app.ctx);
-		await vi.waitFor(() => expect(app.complete).toHaveBeenCalledOnce());
-		expect(JSON.stringify(app.getMerged())).toContain("下一轮完整 live 上下文");
+		await waitFor(() => expect(app.complete).toHaveBeenCalledOnce());
+		// 无 live payload：直接用 provider 自建请求体，不附加对话历史
+		expect(JSON.stringify(app.getMerged())).toContain("标题请求");
+		expect((app.getMerged() as { messages: unknown[] }).messages).toHaveLength(1);
+		await waitFor(() => expect(app.setSessionName).toHaveBeenCalledWith("正确标题"));
+		expect(app.notify).toHaveBeenCalledWith('pi-title: 标题已更新为 "正确标题"', "info");
 	});
 
 	it("fresh returns immediately and rejects same-session reentry", async () => {
@@ -188,7 +201,10 @@ describe("pi-title", () => {
 			"warning",
 		);
 		resolve(response);
-		await vi.waitFor(() => expect(app.setSessionName).toHaveBeenCalledWith("正确标题"));
+		await waitFor(() => expect(app.setSessionName).toHaveBeenCalledWith("正确标题"));
+		await waitFor(() =>
+			expect(app.notify).toHaveBeenCalledWith('pi-title: 标题已更新为 "正确标题"', "info"),
+		);
 	});
 
 	it("aborts a stuck title request after 120 seconds and warns", async () => {
@@ -200,7 +216,9 @@ describe("pi-title", () => {
 		await app.handlers.get("session_start")?.({ reason: "startup" }, app.ctx);
 		await captureLive(app);
 		await app.commands.get("title")?.handler("fresh", app.ctx);
-		await vi.advanceTimersByTimeAsync(120_000);
+		// bun test 的 vitest 4 缺 advanceTimersByTimeAsync，用同步版 + microtask flush
+		vi.advanceTimersByTime(120_000);
+		for (let i = 0; i < 10; i++) await Promise.resolve();
 		expect(app.notify).toHaveBeenCalledWith(
 			"pi-title: 标题生成超时（120s），已放弃本次",
 			"warning",
@@ -228,7 +246,7 @@ describe("pi-title", () => {
 		await settle(10, 1000);
 		expect(app.complete).not.toHaveBeenCalled();
 		await settle(10, 1000);
-		await vi.waitFor(() => expect(app.complete).toHaveBeenCalledOnce());
+		await waitFor(() => expect(app.complete).toHaveBeenCalledOnce());
 	});
 
 	it("does not treat its own title as a manual title", async () => {
@@ -242,12 +260,12 @@ describe("pi-title", () => {
 		};
 		await app.handlers.get("agent_end")?.(agentEnd, app.ctx);
 		await app.handlers.get("agent_settled")?.({}, app.ctx);
-		await vi.waitFor(() => expect(app.complete).toHaveBeenCalledTimes(1));
+		await waitFor(() => expect(app.complete).toHaveBeenCalledTimes(1));
 		await app.handlers.get("session_info_changed")?.({ name: "正确标题" }, app.ctx);
 
 		await captureLive(app, "第二轮");
 		await app.handlers.get("agent_end")?.(agentEnd, app.ctx);
 		await app.handlers.get("agent_settled")?.({}, app.ctx);
-		await vi.waitFor(() => expect(app.complete).toHaveBeenCalledTimes(2));
+		await waitFor(() => expect(app.complete).toHaveBeenCalledTimes(2));
 	});
 });

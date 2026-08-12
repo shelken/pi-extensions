@@ -285,10 +285,7 @@ export default function piTitle(pi: ExtensionAPI): void {
 			return;
 		}
 		const live = runtime.liveBySession.get(sid);
-		if (!live) {
-			if (triggeredBy === "fresh") runtime.pendingFresh.add(sid);
-			return;
-		}
+		if (!live && triggeredBy !== "fresh") return;
 
 		if (triggeredBy === "fresh") runtime.pendingFresh.delete(sid);
 		const liveSnapshot = structuredClone(live);
@@ -325,9 +322,17 @@ export default function piTitle(pi: ExtensionAPI): void {
 					cacheRetention: "short",
 					signal: controller.signal,
 					onPayload: (builtPayload: unknown) => {
-						const liveMessages = findMessages(liveSnapshot);
 						const titleMessages = findMessages(builtPayload);
-						if (!liveMessages || !titleMessages?.length) {
+						if (!titleMessages?.length) {
+							throw new Error("provider payload 不含消息列表");
+						}
+						// 无 live payload 时直接用 provider 自建请求体，不附加对话历史
+						if (liveSnapshot === undefined) {
+							mergedPayload = builtPayload;
+							return builtPayload;
+						}
+						const liveMessages = findMessages(liveSnapshot);
+						if (!liveMessages) {
 							throw new Error("provider payload 不含可合并的消息列表");
 						}
 						mergedPayload = structuredClone(liveSnapshot);
@@ -409,6 +414,9 @@ export default function piTitle(pi: ExtensionAPI): void {
 				}
 				gate.lastSetTitle = title;
 				pi.setSessionName(title);
+				if (triggeredBy === "fresh") {
+					ctx.ui.notify(`pi-title: 标题已更新为 "${title}"`, "info");
+				}
 			} catch (err) {
 				if (controller.signal.aborted) {
 					if (controller.signal.reason === "timeout") {
@@ -542,7 +550,7 @@ export default function piTitle(pi: ExtensionAPI): void {
 		if (!ctx.model || !ctx.hasUI) return;
 		const sid = ctx.sessionManager.getSessionId();
 		if (runtime.pendingFresh.has(sid)) {
-			if (runtime.liveBySession.has(sid) && !runtime.jobsBySession.has(sid)) {
+			if (!runtime.jobsBySession.has(sid)) {
 				runtime.pendingFresh.delete(sid);
 				startTitle(ctx, "fresh");
 			}
