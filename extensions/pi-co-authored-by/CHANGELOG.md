@@ -1,5 +1,11 @@
 # pi-co-authored-by
 
+## 0.2.11
+
+### Patch Changes
+
+- [`f820167`](https://github.com/shelken/pi-extensions/commit/f82016766d84520334d70a0fb90dd348aa7c6d12) Thanks [@shelken](https://github.com/shelken)! - 修复与其它 Co-Authored-By 注入器共存时的双写:链式执行既有 hook 时,跳过自身会注入 Co-Authored-By 的 hook(如 dsh-co-authored-by 残留),避免同一提交出现重复 trailer
+
 ## 0.2.10
 
 ### Patch Changes
