@@ -180,7 +180,9 @@ fi
 
 hooks_dir="$(dirname "$0")"
 user_hook="$hooks_dir/prepare-commit-msg.pi-user"
-if [ -x "$user_hook" ]; then
+# 跳过会注入 Co-Authored-By 的既有 hook(如 dsh 等其它注入器的残留 hook),
+# 避免同一提交被多个注入器写入重复 trailer
+if [ -x "$user_hook" ] && ! grep -q 'Co-Authored-By' "$user_hook" 2>/dev/null; then
   "$user_hook" "$@"
 fi
 `;

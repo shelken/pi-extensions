@@ -276,6 +276,34 @@ git log -1 --format=%B
 		});
 	});
 
+	it("skips chaining a Co-Authored-By injector hook (dsh residue) to avoid duplicate trailers", () => {
+		withGitRepo((repo) => {
+			// 模拟 dsh-co-authored-by 残留的注入 hook
+			writeFileSync(
+				join(repo.cwd, ".git/hooks/prepare-commit-msg"),
+				`#!/bin/sh
+# DSH_CO_AUTHORED_BY_HOOK
+set -eu
+command git -c trailer.co-authored-by.ifExists=addIfDifferent \\
+  interpret-trailers --in-place --trailer 'Co-Authored-By: dsh-model <noreply@deepseek.com>' "$1"
+`,
+				{ mode: 0o755 },
+			);
+
+			const output = repo.run(`
+echo one > a.txt
+git add a.txt
+git commit -q -m 'dual injector subject'
+git log -1 --format=%B
+`);
+
+			expect(output).toContain(CO_AUTHOR);
+			expect(output).toContain(GENERATED_BY);
+			expect(countOccurrences(output, "Co-Authored-By:")).toBe(1);
+			expect(output).not.toContain("noreply@deepseek.com");
+		});
+	});
+
 	it("propagates user hook failures", () => {
 		withGitRepo((repo) => {
 			const hookLog = join(repo.cwd, ".hook-log");
