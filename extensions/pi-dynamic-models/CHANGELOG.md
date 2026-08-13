@@ -1,5 +1,11 @@
 # @shelken/pi-dynamic-models
 
+## 0.2.3
+
+### Patch Changes
+
+- [`38ed017`](https://github.com/shelken/pi-extensions/commit/38ed017bd979a463713e53109acf26ca0c7d296c) Thanks [@shelken](https://github.com/shelken)! - 修复模型匹配大小写不对称：registry 为小写 id、查询为大写（如网关返回 `Deepseek-v4-flash`）时无法匹配，导致回退默认参数。
+
 ## 0.2.2
 
 ### Patch Changes
