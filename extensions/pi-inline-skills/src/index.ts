@@ -342,6 +342,7 @@ export function mergeAutocompleteItems(options: {
   const orderedItems = options.preferCommands
     ? [...currentItems, ...options.skillItems]
     : [...options.skillItems, ...currentItems]
+  const skillLabels = new Set(options.skillItems.map((item) => item.label))
   const seen = new Set<string>()
   const items = orderedItems.filter((item) => {
     // pi 内置对行首 slash 命令也出补全（value 不带斜杠），插件自带 value 带斜杠，
@@ -350,6 +351,9 @@ export function mergeAutocompleteItems(options: {
       item.value.startsWith("/") || item.label.startsWith("skill:")
         ? item.label
         : `${item.label}\u0000${item.value}`
+    // 行首时 pi 原生的 skill 项先到；让位给插件项（value 带斜杠），
+    // 否则 applyCompletion 收到插件的 prefix 会走错分支（不补空格、多一个斜杠）。
+    if (skillLabels.has(key) && !item.value.startsWith("/")) return false
     if (seen.has(key)) return false
     seen.add(key)
     return true

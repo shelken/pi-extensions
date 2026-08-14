@@ -31,9 +31,10 @@ describe("mergeAutocompleteItems", () => {
       prefix: "wayfi",
     })
     expect(merged.items).toHaveLength(1)
+    // 去重后保留插件项（value 带斜杠），使其走插件 applyCompletion 补空格
     expect(merged.items[0]).toEqual({
       label: "skill:wayfinder",
-      value: "skill:wayfinder",
+      value: "/wayfinder",
       description: "[u] Plan a huge chunk of work",
     })
   })
