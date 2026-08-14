@@ -12,6 +12,7 @@
 | `pi-command-history` | `@shelken/pi-command-history` | `extensions/pi-command-history/index.ts` | 按工作目录持久化输入历史，支持快捷键回填。 |
 | `pi-dynamic-models` | `@shelken/pi-dynamic-models` | `extensions/pi-dynamic-models/index.ts` | 自动发现 provider 远端模型，并用 models.dev registry 补全模型参数。 |
 | `pi-guard` | `@shelken/pi-guard` | `extensions/pi-guard/index.ts` | 硬禁 agent 危险 bash 与机密路径读写。 |
+| `pi-inline-skills` | `@shelken/pi-inline-skills` | `extensions/pi-inline-skills/src/index.ts` | 输入 `/` 时内联补全 skill，并自动展开已加载 skill 内容。 |
 | `pi-title` | `@shelken/pi-title` | `extensions/pi-title/index.ts` | **弃用**：已禁用入口。曾复用 session 缓存前缀自动生成会话标题。 |
 | `simple-plannotator` | `@shelken/simple-plannotator` | `extensions/simple-plannotator/index.ts` | 基于浏览器的代码审查和 Markdown 标注（`/pnr` `/pna` `/pnl`）。 |
 | `copy-cut` | `@shelken/copy-cut` | `extensions/copy-cut/index.ts` | `alt+shift+x` 剪切输入框文本到剪贴板。 |

@@ -1,0 +1,36 @@
+{
+  "name": "@shelken/pi-inline-skills",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Inline /skill autocomplete in the pi editor",
+  "type": "module",
+  "keywords": ["pi-package", "autocomplete", "skills"],
+  "scripts": {
+    "test": "vitest run",
+    "check": "tsc --noEmit"
+  },
+  "peerDependencies": {
+    "@earendil-works/pi-coding-agent": "*",
+    "@earendil-works/pi-tui": "*"
+  },
+  "peerDependenciesMeta": {
+    "@earendil-works/pi-coding-agent": {
+      "optional": true
+    },
+    "@earendil-works/pi-tui": {
+      "optional": true
+    }
+  },
+  "pi": {
+    "extensions": [
+      "./src/index.ts"
+    ]
+  },
+  "devDependencies": {
+    "@earendil-works/pi-coding-agent": "latest",
+    "@earendil-works/pi-tui": "latest",
+    "bun-types": "latest",
+    "typescript": "latest",
+    "vitest": "latest"
+  }
+}

@@ -23,6 +23,7 @@
       "./extensions/pi-auto-model-prompts/index.ts",
       "./extensions/pi-dynamic-models/index.ts",
       "./extensions/pi-guard/index.ts",
+      "./extensions/pi-inline-skills/src/index.ts",
       "./extensions/pi-co-authored-by/index.ts",
       "./extensions/pi-command-history/index.ts",
       "-./extensions/pi-add-dir/index.ts",

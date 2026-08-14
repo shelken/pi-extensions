@@ -53,6 +53,7 @@ function mockPi() {
 		registerTool: noop,
 		registerProvider: noop,
 		registerShortcut: noop,
+		registerMessageRenderer: noop,
 		appendEntry: noop,
 		sendUserMessage: noop,
 		sendMessage: noop,
