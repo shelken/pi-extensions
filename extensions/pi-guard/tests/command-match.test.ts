@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { commandMatchesPattern } from "../command-match.ts";
+import { commandMatchesPattern } from "../src/command-match.ts";
 
 describe("commandMatchesPattern", () => {
   it("does not treat env inside a single-quoted argument as the env command", () => {

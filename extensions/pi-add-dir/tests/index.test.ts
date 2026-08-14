@@ -1,6 +1,6 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { describe, expect, it, vi } from "vitest";
-import addDirExtension from "../index.ts";
+import addDirExtension from "../src/index.ts";
 
 describe("pi-add-dir extension", () => {
   it("registers its events, commands, and tools", () => {

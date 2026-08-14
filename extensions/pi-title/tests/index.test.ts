@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import piTitle from "./index.ts";
+import piTitle from "../src/index.ts";
 
 type Handler = (event: any, ctx: any) => any;
 type Complete = (model: unknown, context: unknown, options: any) => Promise<any>;

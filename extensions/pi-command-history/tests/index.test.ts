@@ -1,6 +1,6 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { describe, expect, it, vi } from "vitest";
-import commandHistory from "../index.ts";
+import commandHistory from "../src/index.ts";
 
 describe("pi-command-history extension", () => {
   it("registers history events and shortcuts", () => {

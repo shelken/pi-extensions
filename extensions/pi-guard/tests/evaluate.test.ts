@@ -1,7 +1,7 @@
 import path from "node:path";
 import { describe, expect, it } from "vitest";
-import { evaluateGuard, type Policy } from "../evaluate.ts";
-import { buildPolicy } from "../policy.ts";
+import { evaluateGuard, type Policy } from "../src/evaluate.ts";
+import { buildPolicy } from "../src/policy.ts";
 
 const HOME = "/home/me";
 const CWD = "/proj";

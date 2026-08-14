@@ -7,7 +7,7 @@ import {
   loadHistory,
   MAX_HISTORY,
   pushUniqueHistory,
-} from "../index.ts";
+} from "../src/index.ts";
 
 let tmpDir: string;
 

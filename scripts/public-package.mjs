@@ -68,7 +68,7 @@ export function manifestErrors({ slug, packageDir, manifest, readme, rootReadme 
   if (manifest.repository?.url !== REPOSITORY_URL) errors.push(`repository.url 必须是 ${REPOSITORY_URL}`);
   if (manifest.repository?.directory !== `extensions/${slug}`) errors.push(`repository.directory 必须是 extensions/${slug}`);
   if (manifest.publishConfig?.access !== "public") errors.push("publishConfig.access 必须是 public");
-  if (!manifest.pi?.extensions?.includes("./index.ts")) errors.push("pi.extensions 必须包含 ./index.ts");
+  if (!manifest.pi?.extensions?.includes("./src/index.ts")) errors.push("pi.extensions 必须包含 ./src/index.ts");
   if (!existsSync(join(packageDir, "LICENSE"))) errors.push("缺少 LICENSE");
   if (!readme.includes(`pi install npm:${expectedName}`)) errors.push("README 缺少 npm 安装命令");
   if (!rootReadme.includes(expectedName)) errors.push("根 README 缺少 npm 包名");

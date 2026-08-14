@@ -6,7 +6,7 @@ import {
   formatLoadFailure,
   getPermissionPaths,
   loadPolicyFromPaths,
-} from "../config-load.ts";
+} from "../src/config-load.ts";
 
 describe("getPermissionPaths", () => {
   it("uses agent dir + project .pi", () => {

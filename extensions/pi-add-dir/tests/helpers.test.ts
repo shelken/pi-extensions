@@ -16,7 +16,7 @@ import {
   scanDirContext,
   writeTempState,
   type AddedDir,
-} from "../helpers.ts";
+} from "../src/helpers.ts";
 
 let tmpRoot: string;
 

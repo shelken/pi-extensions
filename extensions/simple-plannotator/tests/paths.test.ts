@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { homedir } from "node:os";
-import { expandHomePath, normalizeUserPath } from "../index.ts";
+import { expandHomePath, normalizeUserPath } from "../src/index.ts";
 
 describe("path helpers", () => {
   it("展开 ~", () => {

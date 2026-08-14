@@ -6,14 +6,14 @@ const validManifest = {
   name: "@shelken/example",
   version: "1.0.0",
   license: "MIT",
-  files: ["index.ts"],
+  files: ["src"],
   repository: {
     type: "git",
     url: "git+https://github.com/shelken/pi-extensions.git",
     directory: "extensions/example",
   },
   publishConfig: { access: "public" },
-  pi: { extensions: ["./index.ts"] },
+  pi: { extensions: ["./src/index.ts"] },
 };
 
 test("manifestErrors accepts a publishable package", () => {

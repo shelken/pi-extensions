@@ -1,6 +1,6 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { describe, expect, it, vi } from "vitest";
-import coAuthoredBy from "../index.ts";
+import coAuthoredBy from "../src/index.ts";
 
 describe("pi-co-authored-by extension", () => {
   it("registers its lifecycle and bash hooks", () => {

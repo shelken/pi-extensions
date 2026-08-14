@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isGitCommitCommand, splitSegments, tokenize } from "../lib/git-commit.ts";
+import { isGitCommitCommand, splitSegments, tokenize } from "../src/git-commit.ts";
 
 describe("isGitCommitCommand", () => {
 	it("detects plain git commit", () => {

@@ -7,7 +7,7 @@ import {
 	createCommitHookDirectory,
 	removeCommitHookDirectory,
 	wrapBashWithCommitHook,
-} from "./commit.ts";
+} from "../src/commit.ts";
 
 const MODEL_NAME = "Model O'Clock";
 const OTHER_MODEL_NAME = "Other Model";

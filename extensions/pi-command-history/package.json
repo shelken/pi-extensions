@@ -5,7 +5,7 @@
   "type": "module",
   "license": "MIT",
   "files": [
-    "index.ts"
+    "src"
   ],
   "repository": {
     "type": "git",
@@ -24,7 +24,7 @@
   ],
   "pi": {
     "extensions": [
-      "./index.ts"
+      "./src/index.ts"
     ]
   },
   "peerDependencies": {

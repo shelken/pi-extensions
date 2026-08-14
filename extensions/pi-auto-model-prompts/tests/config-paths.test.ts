@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import autoModelPrompts, { loadConfig, getConfigPaths, findPrompt, getPromptDirs } from "./index.ts";
+import autoModelPrompts, { loadConfig, getConfigPaths, findPrompt, getPromptDirs } from "../src/index.ts";
 
 function withTempHome<T>(fn: (home: string, cwd: string) => T): T {
   const home = mkdtempSync(join(tmpdir(), "pi-amp-home-"));

@@ -4,7 +4,7 @@ import {
   BUILTIN_PATHS,
   buildPolicy,
   parseLayerYaml,
-} from "../policy.ts";
+} from "../src/policy.ts";
 
 describe("parseLayerYaml", () => {
   it("parses string and object items", () => {

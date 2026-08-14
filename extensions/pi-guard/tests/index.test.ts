@@ -11,7 +11,7 @@ vi.mock("@earendil-works/pi-coding-agent", async (importOriginal) => {
   };
 });
 
-import piGuard from "../index.ts";
+import piGuard from "../src/index.ts";
 
 function install() {
   const handlers = new Map<string, Function>();

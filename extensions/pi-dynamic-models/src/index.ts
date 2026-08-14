@@ -31,8 +31,8 @@ import {
   toPiInput,
   toPiThinkingLevelMap,
   type RegistryData,
-} from "./src/matcher.ts";
-import { getBuiltInModelDefs, getBuiltInModelIds } from "./src/builtin.ts";
+} from "./matcher.ts";
+import { getBuiltInModelDefs, getBuiltInModelIds } from "./builtin.ts";
 import {
   filterByExcludePatterns,
   filterNewModelIds,
@@ -47,8 +47,8 @@ import {
   shouldRefreshProviderCache,
   shouldSkipByHash,
   type ProviderRunSummary,
-} from "./src/logic.ts";
-import { collectExistingIds, mergeProviderModelList } from "./src/merge.ts";
+} from "./logic.ts";
+import { collectExistingIds, mergeProviderModelList } from "./merge.ts";
 
 interface PluginConfig {
   enable: boolean;

@@ -4,18 +4,18 @@
 
 ## 子 package
 
-| Package | npm | 入口 | 用途 |
-|---|---|---|---|
-| `pi-add-dir` | `@shelken/pi-add-dir` | `extensions/pi-add-dir/index.ts` | 向当前会话添加外部目录，并加载其上下文文件和 skills。 |
-| `pi-auto-model-prompts` | `@shelken/pi-auto-model-prompts` | `extensions/pi-auto-model-prompts/index.ts` | 按模型加载额外 system prompt。 |
-| `pi-co-authored-by` | `@shelken/pi-co-authored-by` | `extensions/pi-co-authored-by/index.ts` | agent 执行 `git commit` 时追加 Co-Authored-By / Generated-By trailer。 |
-| `pi-command-history` | `@shelken/pi-command-history` | `extensions/pi-command-history/index.ts` | 按工作目录持久化输入历史，支持快捷键回填。 |
-| `pi-dynamic-models` | `@shelken/pi-dynamic-models` | `extensions/pi-dynamic-models/index.ts` | 自动发现 provider 远端模型，并用 models.dev registry 补全模型参数。 |
-| `pi-guard` | `@shelken/pi-guard` | `extensions/pi-guard/index.ts` | 硬禁 agent 危险 bash 与机密路径读写。 |
-| `pi-inline-skills` | `@shelken/pi-inline-skills` | `extensions/pi-inline-skills/src/index.ts` | 输入 `/` 时内联补全 skill，并自动展开已加载 skill 内容。 |
-| `pi-title` | `@shelken/pi-title` | `extensions/pi-title/index.ts` | **弃用**：已禁用入口。曾复用 session 缓存前缀自动生成会话标题。 |
-| `simple-plannotator` | `@shelken/simple-plannotator` | `extensions/simple-plannotator/index.ts` | 基于浏览器的代码审查和 Markdown 标注（`/pnr` `/pna` `/pnl`）。 |
-| `copy-cut` | `@shelken/copy-cut` | `extensions/copy-cut/index.ts` | `alt+shift+x` 剪切输入框文本到剪贴板。 |
+| Package | npm | 用途 |
+|---|---|---|
+| `pi-add-dir` | `@shelken/pi-add-dir` | 向当前会话添加外部目录，并加载其上下文文件和 skills。 |
+| `pi-auto-model-prompts` | `@shelken/pi-auto-model-prompts` | 按模型加载额外 system prompt。 |
+| `pi-co-authored-by` | `@shelken/pi-co-authored-by` | agent 执行 `git commit` 时追加 Co-Authored-By / Generated-By trailer。 |
+| `pi-command-history` | `@shelken/pi-command-history` | 按工作目录持久化输入历史，支持快捷键回填。 |
+| `pi-dynamic-models` | `@shelken/pi-dynamic-models` | 自动发现 provider 远端模型，并用 models.dev registry 补全模型参数。 |
+| `pi-guard` | `@shelken/pi-guard` | 硬禁 agent 危险 bash 与机密路径读写。 |
+| `pi-inline-skills` | `@shelken/pi-inline-skills` | 输入 `/` 时内联补全 skill，并自动展开已加载 skill 内容。 |
+| `pi-title` | `@shelken/pi-title` | **弃用**：已禁用入口。曾复用 session 缓存前缀自动生成会话标题。 |
+| `simple-plannotator` | `@shelken/simple-plannotator` | 基于浏览器的代码审查和 Markdown 标注（`/pnr` `/pna` `/pnl`）。 |
+| `copy-cut` | `@shelken/copy-cut` | `alt+shift+x` 剪切输入框文本到剪贴板。 |
 
 新增、移除或改名任何子 package 时，必须同步更新本表和根 `package.json` 的 `pi.extensions`。
 
@@ -28,7 +28,7 @@
 ```diff
   "pi": {
     "extensions": [
--     "./extensions/pi-command-history/index.ts",
+-     "./extensions/pi-command-history/src/index.ts",
     ]
   }
 ```

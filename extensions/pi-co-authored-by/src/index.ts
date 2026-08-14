@@ -4,8 +4,8 @@ import {
 	createCommitHookDirectory,
 	removeCommitHookDirectory,
 	wrapBashWithCommitHook,
-} from "./lib/commit.ts";
-import { isGitCommitCommand } from "./lib/git-commit.ts";
+} from "./commit.ts";
+import { isGitCommitCommand } from "./git-commit.ts";
 
 export default function (pi: ExtensionAPI) {
 	let hooksDir: string | undefined;

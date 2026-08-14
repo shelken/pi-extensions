@@ -1,6 +1,6 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { describe, expect, it, vi } from "vitest";
-import dynamicModels, { getConfigPaths } from "../index.ts";
+import dynamicModels, { getConfigPaths } from "../src/index.ts";
 
 describe("pi-dynamic-models extension", () => {
   it("eager path, hooks session_start, registers /dynamic-models", () => {

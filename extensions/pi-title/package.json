@@ -14,11 +14,11 @@
     "cache"
   ],
   "exports": {
-    ".": "./index.ts"
+    ".": "./src/index.ts"
   },
   "pi": {
     "extensions": [
-      "./index.ts"
+      "./src/index.ts"
     ]
   },
   "scripts": {
