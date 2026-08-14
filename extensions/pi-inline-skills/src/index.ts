@@ -351,9 +351,11 @@ export function mergeAutocompleteItems(options: {
       item.value.startsWith("/") || item.label.startsWith("skill:")
         ? item.label
         : `${item.label}\u0000${item.value}`
-    // 行首时 pi 原生的 skill 项先到；让位给插件项（value 带斜杠），
-    // 否则 applyCompletion 收到插件的 prefix 会走错分支（不补空格、多一个斜杠）。
-    if (skillLabels.has(key) && !item.value.startsWith("/")) return false
+    // 同一 skill 只保留一个：行首选 pi 原生项（插入 /skill:name，是 pi 官方命令格式），
+    // mid-line 选插件项（pi 不出 skill 补全，只能靠插件 inline 展开）。
+    if (skillLabels.has(key) && item.value.startsWith("/") === options.preferCommands) {
+      return false
+    }
     if (seen.has(key)) return false
     seen.add(key)
     return true
@@ -446,16 +448,19 @@ function createSlashSkillAutocompleteProvider(
         return item
       })
 
+      const preferCommands = isPromptStartSlashToken(
+        lines,
+        cursorLine,
+        textBeforeCursor,
+        query,
+      )
       return mergeAutocompleteItems({
         current: currentSuggestions,
         skillItems,
-        preferCommands: isPromptStartSlashToken(
-          lines,
-          cursorLine,
-          textBeforeCursor,
-          query,
-        ),
-        prefix: query,
+        preferCommands,
+        // 行首保留 pi 原生项，需带斜杠的完整前缀走 pi 的 slash 补全分支；
+        // mid-line 保留插件项，前缀只取 query（不含斜杠）供插件 applyCompletion 计算。
+        prefix: preferCommands ? textBeforeCursor : query,
       })
     },
 
