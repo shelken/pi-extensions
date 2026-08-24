@@ -1,6 +1,6 @@
 # pi-guard
 
-硬禁止 agent 危险 bash 与机密路径（read/write/edit）。
+硬禁止 agent 危险 bash 与机密路径（read/write/edit）
 
 ## 目录结构
 
@@ -13,14 +13,9 @@
 `tests/`: 测试
 `package.json` / `README.md` / `LICENSE`: 包元数据
 
-## 匹配边界
-
-- 命令：argv 前缀；不递归 `bash -c` / `eval`
-- 路径 needle：`textMatchesPattern`（与命令模型分离）
-
 ## 基本约束
 
 - 测试禁止执行真实危险命令；匹配逻辑用纯函数 + 隔离 fixture（假 HOME / 临时 cwd）
 - 不得在测试中读写开发者真实 home 机密路径（如真实 `~/.ssh`）
 - 配置路径：`{pi-agent-dir}/permissions.yaml` 与 `.pi/permissions.yaml`
-- factory 不读盘；加载在 session_start 或首次 tool_call
+- 内置的规则的引入必须通用且合理, 重点关注哪些命令和文件本身不应该被执行和读取
