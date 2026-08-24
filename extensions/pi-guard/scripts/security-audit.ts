@@ -125,15 +125,13 @@ function run(): void {
         id: "split-path",
         tool: "bash",
         command: 'cat "$HOME"/.ne"trc"',
-        finding: "bypass",
-        expected: { blocked: false, extracted: ["netrc"] },
+        expected: { blocked: true, extracted: [] },
       },
       {
         id: "bash-symlink-path",
         tool: "bash",
         command: `cat ${alias}`,
-        finding: "bypass",
-        expected: { blocked: false, extracted: ["netrc"] },
+        expected: { blocked: true, extracted: [] },
       },
       {
         id: "read-symlink-path",
@@ -145,7 +143,7 @@ function run(): void {
         id: "path-as-text",
         tool: "bash",
         command: `printf '%s\\n' ${netrc}`,
-        finding: "false-positive",
+        finding: "false-positive-tradeoff",
         expected: { blocked: true, extracted: [] },
       },
       {

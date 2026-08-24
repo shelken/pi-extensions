@@ -1,8 +1,12 @@
-import { commandMatchesPattern } from "./command-match.ts";
+import {
+  commandMatchesPattern,
+  simpleCommandArgvs,
+  tokenizeShell,
+} from "./command-match.ts";
 import {
   expandHomeInText,
+  normPath,
   pathRuleMatchesFull,
-  pathRuleMatchesInCommand,
   resolveBlockReason,
 } from "./match.ts";
 
@@ -46,7 +50,7 @@ export function evaluateGuard(input: GuardInput, policy: Policy): GuardResult {
     }
     for (const rule of policy.paths) {
       if (
-        pathRuleMatchesInCommand(
+        pathMatchesCommandArgv(
           command,
           rule.value,
           input.cwd,
@@ -76,4 +80,28 @@ export function evaluateGuard(input: GuardInput, policy: Policy): GuardResult {
     }
   }
   return { block: false };
+}
+
+/**
+ * Bash path guard: tokenize the command into argv tokens, then check each
+ * non-flag token as a concrete path against the rule.
+ * Shell quote-splitting (e.g. "$HOME"/.ne"trc") collapses into one token,
+ * and commit-message strings are not treated as file paths.
+ */
+function pathMatchesCommandArgv(
+  command: string,
+  ruleValue: string,
+  cwd: string,
+  home: string,
+): boolean {
+  const argvs = simpleCommandArgvs(tokenizeShell(command));
+  for (const argv of argvs) {
+    for (const token of argv) {
+      if (token.startsWith("-")) continue;
+      if (token.includes("/")) {
+        if (pathRuleMatchesFull(token, ruleValue, cwd, home)) return true;
+      }
+    }
+  }
+  return false;
 }

@@ -44,9 +44,7 @@ export {
   expandRuleValues,
   normPath,
   pathRuleMatchesFull,
-  pathRuleMatchesInCommand,
   resolveBlockReason,
-  textMatchesPattern,
 } from "./match.ts";
 
 export {

@@ -19,35 +19,6 @@ export function globToRegExpSource(pattern: string): string {
   return out;
 }
 
-/** Shell / phrase edge: EOF or separator — not path/token continuation. */
-function isPhraseBoundary(ch: string | undefined): boolean {
-  if (ch === undefined) return true;
-  // `*`：命令里的 glob 字符，使 `rm -rf /` 能挡住 `rm -rf /*`，又不会像 includes 那样吃掉 `/tmp`
-  return /[\s|;&<>(){}[\]`'"*\n\r]/.test(ch);
-}
-
-/**
- * Free-text / path-needle match（deny_commands 见 commandMatchesPattern）.
- * - with `*`: 子串 glob（`*` → 任意字符含 `/`）
- * - no `*`: 短语匹配——两侧须为边界（串首/尾或 shell 分隔符）
- */
-export function textMatchesPattern(text: string, pattern: string): boolean {
-  if (pattern.includes("*")) {
-    return new RegExp(globToRegExpSource(pattern)).test(text);
-  }
-  let from = 0;
-  for (;;) {
-    const idx = text.indexOf(pattern, from);
-    if (idx === -1) return false;
-    const before = idx === 0 ? undefined : text[idx - 1];
-    const after = text[idx + pattern.length];
-    if (isPhraseBoundary(before) && isPhraseBoundary(after)) {
-      return true;
-    }
-    from = idx + 1;
-  }
-}
-
 /**
  * Expand only `~` and `~/...`. `~user` left unchanged.
  * HOME empty → leave `~` forms as-is.
@@ -154,21 +125,6 @@ export function pathRuleMatchesFull(
   }
   return new RegExp(`^${globToRegExpSource(R)}$`).test(C);
 }
-
-/** Bash command scan: original needle + absolute needle. */
-export function pathRuleMatchesInCommand(
-  command: string,
-  ruleValue: string,
-  cwd: string,
-  home: string,
-): boolean {
-  const original = ruleValue.trim();
-  const absolute = absoluteForm(ruleValue, cwd, home);
-  if (textMatchesPattern(command, original)) return true;
-  if (absolute !== original && textMatchesPattern(command, absolute)) return true;
-  return false;
-}
-
 function oneLineBody(text: string): string {
   return text.split(/\r\n|\r|\n/).join(" ").trim();
 }
