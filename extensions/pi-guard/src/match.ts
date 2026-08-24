@@ -52,33 +52,30 @@ export function expandHomeInText(text: string, home: string): string {
 }
 
 /**
- * Normalize a concrete path: home forms, relative→cwd, normalize, then resolve symlinks.
- * realpath failure (file not yet created) falls back to the non-realpath form.
+ * Normalize a concrete path: home forms, relative→cwd, normalize.
+ * Does not realpath; match callers resolve symlinks explicitly.
  */
 export function normPath(p: string, cwd: string, home: string): string {
   const t = expandHomeInText(p.trim(), home);
-  const resolved = path.normalize(path.resolve(cwd, t));
+  return path.normalize(path.resolve(cwd, t));
+}
+
+/** realpath of a normalized path, falling back to the non-realpath form. */
+function resolveReal(p: string): string {
   try {
-    return realpathSync(resolved);
+    return realpathSync(p);
   } catch {
-    return resolved;
+    return p;
   }
 }
 
 /**
  * Absolute form of a rule path, preserving `*`.
- * realpath applied when no glob present, falling back to the non-realpath form
- * so candidate (normPath) and rule share the same symlink-resolved base.
+ * No realpath — symlink-resolved candidates are matched separately.
  */
 export function absoluteForm(rule: string, cwd: string, home: string): string {
   const t = expandHomeInText(rule.trim(), home);
-  const resolved = path.normalize(path.resolve(cwd, t));
-  if (resolved.includes("*")) return resolved;
-  try {
-    return realpathSync(resolved);
-  } catch {
-    return resolved;
-  }
+  return path.normalize(path.resolve(cwd, t));
 }
 
 function stillHasHomeToken(s: string): boolean {
@@ -111,7 +108,10 @@ export function expandRuleValues(
   return [...out];
 }
 
-/** Full-path match for read/write/edit candidates. */
+/**
+ * Full-path match: checks both the literal candidate path and its realpath
+ * (so a symlink under a protected dir still matches even after resolution).
+ */
 export function pathRuleMatchesFull(
   candidate: string,
   ruleValue: string,
@@ -120,10 +120,22 @@ export function pathRuleMatchesFull(
 ): boolean {
   const C = normPath(candidate, cwd, home);
   const R = absoluteForm(ruleValue, cwd, home);
-  if (!R.includes("*")) {
-    return C === R;
+  const re = R.includes("*")
+    ? new RegExp(`^${globToRegExpSource(R)}$`)
+    : undefined;
+  if (matchCandidate(C, R, re)) return true;
+  // Match against symlink-resolved forms on both sides (macOS /var → /private, nix store links, …).
+  const realC = resolveReal(C);
+  if (realC !== C && matchCandidate(realC, R, re)) return true;
+  if (!re) {
+    const realR = resolveReal(R);
+    if (realR !== R && (C === realR || realC === realR)) return true;
   }
-  return new RegExp(`^${globToRegExpSource(R)}$`).test(C);
+  return false;
+}
+
+function matchCandidate(c: string, r: string, re: RegExp | undefined): boolean {
+  return re ? re.test(c) : c === r;
 }
 function oneLineBody(text: string): string {
   return text.split(/\r\n|\r|\n/).join(" ").trim();
