@@ -111,6 +111,7 @@ rm -rf /
 rm -rf ~
 find /
 find ~
+env
 curl *| bash
 curl *|bash
 wget *| sh
@@ -123,7 +124,17 @@ wget *|sh
 ~/.ssh/*
 ~/.aws/*
 ~/.gnupg/*
-~/.specific.zsh
+~/.netrc
+~/.pypirc
+~/.config/gh/hosts.yml
+~/.config/hub
+~/.config/gcloud/application_default_credentials.json
+~/.config/doctl/config.yaml
+~/.kube/config
+~/.docker/config.json
+~/.azure/accessTokens.json
+~/.bash_history
+~/.zsh_history
 ```
 
 无 per-rule 内置 reason。用户 `-value` 可移除。

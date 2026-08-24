@@ -16,6 +16,7 @@
     "access": "public"
   },
   "scripts": {
+    "audit:security": "bun scripts/security-audit.ts",
     "test": "vitest run"
   },
   "keywords": [

@@ -62,6 +62,36 @@ describe("pi-guard extension wiring", () => {
     expect(notify).not.toHaveBeenCalled();
   });
 
+  it("blocks credential collection through tool_call", async () => {
+    const handlers = install();
+    const toolCall = handlers.get("tool_call")!;
+    const sessionStart = handlers.get("session_start")!;
+    const ctx = {
+      cwd: "/tmp/pi-guard-empty-proj",
+      hasUI: false,
+      ui: { notify: vi.fn() },
+    };
+
+    sessionStart({}, ctx);
+
+    for (const event of [
+      {
+        type: "tool_call",
+        toolCallId: "env",
+        toolName: "bash",
+        input: { command: "env" },
+      },
+      {
+        type: "tool_call",
+        toolCallId: "credentials",
+        toolName: "read",
+        input: { path: "~/.netrc" },
+      },
+    ]) {
+      expect((await toolCall(event, ctx))?.block, event.toolCallId).toBe(true);
+    }
+  });
+
   it("does not handle non target tools", async () => {
     const handlers = install();
     const toolCall = handlers.get("tool_call")!;

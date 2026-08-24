@@ -49,9 +49,9 @@ deny_paths:
 
 ### 内置清单（摘要）
 
-**命令：** `rm -rf /` · `rm -rf ~` · `find /` · `find ~` · curl/wget pipe-to-shell（有/无空格）  
+**命令：** `rm -rf /` · `rm -rf ~` · `find /` · `find ~` · `env` · curl/wget pipe-to-shell（有/无空格）
 
-**路径：** `~/.ssh/*` · `~/.aws/*` · `~/.gnupg/*` · `~/.specific.zsh`
+**路径：** SSH、AWS、GPG、常见 CLI 凭据文件与 shell 历史。完整清单见 `src/policy.ts`
 
 ## 行为
 
@@ -67,6 +67,7 @@ deny_paths:
 
 ```bash
 bun --filter @shelken/pi-guard test
+cd extensions/pi-guard && bun run audit:security
 ```
 
-测试只用纯函数与临时 fixture；禁止执行真实危险命令。
+安全审计只使用临时 HOME、合成环境变量和假凭据。输出中的 canary 值会先脱敏

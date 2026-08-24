@@ -28,6 +28,7 @@ export const BUILTIN_COMMANDS: Rule[] = [
   { value: "rm -rf ~", source: "builtin" },
   { value: "find /", source: "builtin" },
   { value: "find ~", source: "builtin" },
+  { value: "env", source: "builtin" },
   { value: "curl *| bash", source: "builtin" },
   { value: "curl *|bash", source: "builtin" },
   { value: "wget *| sh", source: "builtin" },
@@ -39,7 +40,20 @@ export const BUILTIN_PATHS: Rule[] = [
   { value: "~/.ssh/*", source: "builtin" },
   { value: "~/.aws/*", source: "builtin" },
   { value: "~/.gnupg/*", source: "builtin" },
-  { value: "~/.specific.zsh", source: "builtin" },
+  { value: "~/.netrc", source: "builtin" },
+  { value: "~/.pypirc", source: "builtin" },
+  { value: "~/.config/gh/hosts.yml", source: "builtin" },
+  { value: "~/.config/hub", source: "builtin" },
+  {
+    value: "~/.config/gcloud/application_default_credentials.json",
+    source: "builtin",
+  },
+  { value: "~/.config/doctl/config.yaml", source: "builtin" },
+  { value: "~/.kube/config", source: "builtin" },
+  { value: "~/.docker/config.json", source: "builtin" },
+  { value: "~/.azure/accessTokens.json", source: "builtin" },
+  { value: "~/.bash_history", source: "builtin" },
+  { value: "~/.zsh_history", source: "builtin" },
 ];
 
 function isRemoveString(raw: string): string | null {
