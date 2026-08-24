@@ -270,7 +270,7 @@ function patternWordsOf(pattern: string): string[] | null {
   return words.length > 0 ? words : null;
 }
 
-function basenames(word: string): string {
+export function basenames(word: string): string {
   if (word === "/" || word === "." || word === "..") return word;
   const slash = word.lastIndexOf("/");
   return slash === -1 ? word : word.slice(slash + 1);
