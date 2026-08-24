@@ -69,6 +69,23 @@ describe("evaluateGuard — commands", () => {
     }
   });
 
+  it("recursively checks shell wrapper and eval inner scripts", () => {
+    const policy = builtins();
+    for (const command of [
+      "sh -c env",
+      "bash -c 'env'",
+      "eval env",
+    ]) {
+      expect(
+        evaluateGuard(
+          { tool: "bash", command, cwd: CWD, home: HOME },
+          policy,
+        ).block,
+        command,
+      ).toBe(true);
+    }
+  });
+
   it("no-star command patterns use argv prefix, not path/string prefix", () => {
     const policy = builtins();
     for (const command of [

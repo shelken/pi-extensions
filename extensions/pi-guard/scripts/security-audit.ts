@@ -19,7 +19,7 @@ type Expected = {
 
 type AuditCase = {
   id: string;
-  finding?: "bypass" | "false-positive";
+  finding?: "bypass" | "false-positive" | "false-positive-tradeoff";
   expected: Expected;
 } & (
   | { tool: "bash"; command: string }
@@ -79,8 +79,7 @@ function run(): void {
         id: "shell-wrapper-env",
         tool: "bash",
         command: "sh -c env",
-        finding: "bypass",
-        expected: { blocked: false, extracted: ["env"] },
+        expected: { blocked: true, extracted: [] },
       },
       {
         id: "command-variable-env",
@@ -105,8 +104,7 @@ function run(): void {
         id: "eval-env",
         tool: "bash",
         command: "eval env",
-        finding: "bypass",
-        expected: { blocked: false, extracted: ["env"] },
+        expected: { blocked: true, extracted: [] },
       },
       {
         id: "shell-set",
