@@ -121,16 +121,18 @@ export default function piGuard(pi: ExtensionAPI): void {
       return;
     }
 
-    if (
-      isToolCallEventType("read", event) ||
-      isToolCallEventType("write", event) ||
-      isToolCallEventType("edit", event)
-    ) {
-      const tool = event.toolName as "read" | "write" | "edit";
+    // Any tool carrying a `path` field gets the same path guard as read/write/edit.
+    // Covers built-in grep/find/ls/read/write/edit and custom tools following the same convention.
+    const candidatePath = event.input.path;
+    if (typeof candidatePath === "string" && candidatePath.trim() !== "") {
+      const tool =
+        event.toolName === "write" || event.toolName === "edit"
+          ? event.toolName
+          : "read";
       const result = evaluateGuard(
         {
           tool,
-          path: event.input.path ?? "",
+          path: candidatePath,
           cwd,
           home,
         },

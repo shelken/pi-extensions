@@ -92,7 +92,32 @@ describe("pi-guard extension wiring", () => {
     }
   });
 
-  it("does not handle non target tools", async () => {
+  it("blocks grep/find/ls accessing sensitive paths via path field", async () => {
+    const handlers = install();
+    const toolCall = handlers.get("tool_call")!;
+    const sessionStart = handlers.get("session_start")!;
+    const ctx = {
+      cwd: "/tmp/pi-guard-empty-proj",
+      hasUI: false,
+      ui: { notify: vi.fn() },
+    };
+    sessionStart({}, ctx);
+
+    for (const toolName of ["grep", "find", "ls"]) {
+      const result = await toolCall(
+        {
+          type: "tool_call",
+          toolCallId: toolName,
+          toolName,
+          input: { pattern: "x", path: "~/.ssh/id_rsa" },
+        },
+        ctx,
+      );
+      expect(result?.block, toolName).toBe(true);
+    }
+  });
+
+  it("does not block tools without a path field", async () => {
     const handlers = install();
     const toolCall = handlers.get("tool_call")!;
     const result = await toolCall(
@@ -100,7 +125,7 @@ describe("pi-guard extension wiring", () => {
         type: "tool_call",
         toolCallId: "1",
         toolName: "grep",
-        input: { pattern: "x", path: "~/.ssh" },
+        input: { pattern: "~/.ssh" },
       },
       { cwd: "/tmp", hasUI: false, ui: { notify: vi.fn() } },
     );
