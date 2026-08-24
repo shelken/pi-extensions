@@ -139,8 +139,7 @@ function run(): void {
         id: "read-symlink-path",
         tool: "read",
         path: alias,
-        finding: "bypass",
-        expected: { blocked: false, extracted: ["netrc"] },
+        expected: { blocked: true, extracted: [] },
       },
       {
         id: "path-as-text",

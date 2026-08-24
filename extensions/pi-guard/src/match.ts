@@ -1,3 +1,4 @@
+import { realpathSync } from "node:fs";
 import path from "node:path";
 import type { Rule } from "./evaluate.ts";
 
@@ -80,22 +81,33 @@ export function expandHomeInText(text: string, home: string): string {
 }
 
 /**
- * Normalize a concrete path (no glob intent): home forms, relative→cwd, normalize.
- * Does not realpath.
+ * Normalize a concrete path: home forms, relative→cwd, normalize, then resolve symlinks.
+ * realpath failure (file not yet created) falls back to the non-realpath form.
  */
 export function normPath(p: string, cwd: string, home: string): string {
   const t = expandHomeInText(p.trim(), home);
-  return path.normalize(path.resolve(cwd, t));
+  const resolved = path.normalize(path.resolve(cwd, t));
+  try {
+    return realpathSync(resolved);
+  } catch {
+    return resolved;
+  }
 }
 
 /**
  * Absolute form of a rule path, preserving `*`.
- * Same home / relative / normalize rules as norm, without resolving globs away.
+ * realpath applied when no glob present, falling back to the non-realpath form
+ * so candidate (normPath) and rule share the same symlink-resolved base.
  */
 export function absoluteForm(rule: string, cwd: string, home: string): string {
   const t = expandHomeInText(rule.trim(), home);
-  // path.resolve keeps `*` segments; normalize collapses . / ..
-  return path.normalize(path.resolve(cwd, t));
+  const resolved = path.normalize(path.resolve(cwd, t));
+  if (resolved.includes("*")) return resolved;
+  try {
+    return realpathSync(resolved);
+  } catch {
+    return resolved;
+  }
 }
 
 function stillHasHomeToken(s: string): boolean {
