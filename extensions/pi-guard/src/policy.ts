@@ -29,6 +29,8 @@ export const BUILTIN_COMMANDS: Rule[] = [
   { value: "find /", source: "builtin" },
   { value: "find ~", source: "builtin" },
   { value: "env", source: "builtin" },
+  { value: "printenv", source: "builtin" },
+  { value: "export -p", source: "builtin" },
   { value: "curl *| bash", source: "builtin" },
   { value: "curl *|bash", source: "builtin" },
   { value: "wget *| sh", source: "builtin" },

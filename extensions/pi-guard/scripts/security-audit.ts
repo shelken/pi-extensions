@@ -93,8 +93,13 @@ function run(): void {
         id: "printenv",
         tool: "bash",
         command: "printenv PI_GUARD_CANARY",
-        finding: "bypass",
-        expected: { blocked: false, extracted: ["env"] },
+        expected: { blocked: true, extracted: [] },
+      },
+      {
+        id: "export-vars",
+        tool: "bash",
+        command: "export FOO=bar; printf safe",
+        expected: { blocked: false, extracted: [] },
       },
       {
         id: "eval-env",
@@ -114,8 +119,7 @@ function run(): void {
         id: "exported-env",
         tool: "bash",
         command: "export -p",
-        finding: "bypass",
-        expected: { blocked: false, extracted: ["env"] },
+        expected: { blocked: true, extracted: [] },
       },
       {
         id: "split-path",
