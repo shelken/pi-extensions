@@ -86,13 +86,13 @@ const DEFAULT_CONFIG: TitleConfig = {
 	debug: false,
 };
 
-const globals = globalThis as typeof globalThis & Record<PropertyKey, unknown>;
-const runtime = (globals[RUNTIME_KEY] ??= {
+// SAFETY: 在 globalThis 上共享跨 reload 的运行时状态；symbol 键避免与宿主属性冲突，reload 后复用同一对象
+const runtime = ((globalThis as typeof globalThis & { [key: symbol]: RuntimeState })[RUNTIME_KEY] ??= {
 	liveBySession: new Map(),
 	jobsBySession: new Map(),
 	pendingFresh: new Set(),
 	gateBySession: new Map(),
-}) as RuntimeState;
+});
 
 function modelKey(model: Model<Api>): string {
 	return `${model.provider}/${model.id}`;
@@ -103,12 +103,29 @@ function hitRate(usage: Pick<Usage, "input" | "cacheRead" | "cacheWrite">): numb
 	return total > 0 ? usage.cacheRead / total : 0;
 }
 
-function readObject(path: string): Record<string, unknown> | undefined {
+type ConfigLayer = Partial<TitleConfig>;
+
+function isConfigLayer(value: any): value is ConfigLayer {
+	if (typeof value !== "object" || value === null) return false;
+	if (value.enabled !== undefined && typeof value.enabled !== "boolean") return false;
+	if (value.roundInterval !== undefined) {
+		if (typeof value.roundInterval !== "number" || !Number.isInteger(value.roundInterval) || value.roundInterval <= 0) return false;
+	}
+	if (value.customPrompt !== undefined && typeof value.customPrompt !== "string") return false;
+	if (value.overrideManual !== undefined && typeof value.overrideManual !== "boolean") return false;
+	if (value.maxTitleLength !== undefined) {
+		if (typeof value.maxTitleLength !== "number" || !Number.isInteger(value.maxTitleLength) || value.maxTitleLength <= 0) return false;
+	}
+	if (value.cacheThreshold !== undefined && typeof value.cacheThreshold !== "number") return false;
+	if (value.warnThreshold !== undefined && typeof value.warnThreshold !== "number") return false;
+	if (value.debug !== undefined && typeof value.debug !== "boolean") return false;
+	return true;
+}
+
+function readConfigLayer(path: string): ConfigLayer | undefined {
 	try {
-		const value: unknown = JSON.parse(readFileSync(path, "utf8"));
-		return value && typeof value === "object" && !Array.isArray(value)
-			? (value as Record<string, unknown>)
-			: undefined;
+		const value = JSON.parse(readFileSync(path, "utf8"));
+		return isConfigLayer(value) ? value : undefined;
 	} catch {
 		return undefined;
 	}
@@ -116,21 +133,19 @@ function readObject(path: string): Record<string, unknown> | undefined {
 
 function loadConfig(globalPath: string, projectPath?: string): TitleConfig {
 	const config = { ...DEFAULT_CONFIG };
-	for (const layer of [readObject(globalPath), projectPath ? readObject(projectPath) : undefined]) {
+	for (const layer of [readConfigLayer(globalPath), projectPath ? readConfigLayer(projectPath) : undefined]) {
 		if (!layer) continue;
-		if (typeof layer.enabled === "boolean") config.enabled = layer.enabled;
-		if (Number.isInteger(layer.roundInterval) && Number(layer.roundInterval) > 0)
-			config.roundInterval = Number(layer.roundInterval);
-		if (typeof layer.customPrompt === "string" && layer.customPrompt.trim())
+		if (layer.enabled !== undefined) config.enabled = layer.enabled;
+		if (layer.roundInterval !== undefined) config.roundInterval = layer.roundInterval;
+		if (layer.customPrompt !== undefined && layer.customPrompt.trim())
 			config.customPrompt = layer.customPrompt;
-		if (typeof layer.overrideManual === "boolean") config.overrideManual = layer.overrideManual;
-		if (Number.isInteger(layer.maxTitleLength) && Number(layer.maxTitleLength) > 0)
-			config.maxTitleLength = Number(layer.maxTitleLength);
-		if (typeof layer.cacheThreshold === "number")
+		if (layer.overrideManual !== undefined) config.overrideManual = layer.overrideManual;
+		if (layer.maxTitleLength !== undefined) config.maxTitleLength = layer.maxTitleLength;
+		if (layer.cacheThreshold !== undefined)
 			config.cacheThreshold = Math.min(1, Math.max(0, layer.cacheThreshold));
-		if (typeof layer.warnThreshold === "number")
+		if (layer.warnThreshold !== undefined)
 			config.warnThreshold = Math.min(1, Math.max(0, layer.warnThreshold));
-		if (typeof layer.debug === "boolean") config.debug = layer.debug;
+		if (layer.debug !== undefined) config.debug = layer.debug;
 	}
 	return config;
 }
@@ -145,14 +160,20 @@ function appendHistory(path: string, entry: HistoryEntry): void {
 	appendFileSync(path, `${JSON.stringify(entry)}\n`);
 }
 
+// history.jsonl 由本扩展 appendHistory 写入；守卫校验消费字段（sessionId/title），其余字段信任自写文件
+function isHistoryEntry(value: any): value is HistoryEntry {
+	if (typeof value !== "object" || value === null) return false;
+	return typeof value.sessionId === "string" && typeof value.title === "string";
+}
+
 function readHistory(path: string, sessionId: string): HistoryEntry[] {
 	try {
 		return readFileSync(path, "utf8")
 			.split("\n")
 			.flatMap((line) => {
 				try {
-					const entry = JSON.parse(line) as HistoryEntry;
-					return entry.sessionId === sessionId && typeof entry.title === "string" ? [entry] : [];
+					const entry = JSON.parse(line);
+					return isHistoryEntry(entry) && entry.sessionId === sessionId ? [entry] : [];
 				} catch {
 					return [];
 				}
@@ -176,8 +197,9 @@ function writeLog(line: string): void {
 function writeDump(
 	sessionId: string,
 	meta: Omit<HistoryEntry, "sessionId" | "rawTitle" | "cached">,
-	livePayload: unknown,
-	titlePayload: unknown,
+	// live/title payload 形状由 provider 决定，此处仅透传序列化到磁盘、不消费内容
+	livePayload: any,
+	titlePayload: any,
 	usage: Usage,
 ): void {
 	const dir = join(getAgentDir(), "logs", "pi-title-miss");
@@ -190,12 +212,12 @@ function writeDump(
 	while (files.length > MAX_DUMPS) rmSync(join(dir, files.shift()!));
 }
 
-function findMessages(payload: unknown): unknown[] | undefined {
-	if (!payload || typeof payload !== "object") return;
-	const record = payload as Record<string, unknown>;
+function findMessages(payload: any): unknown[] | undefined {
+	if (payload === null || !(payload instanceof Object) || Array.isArray(payload)) return undefined;
 	for (const field of ["messages", "contents", "input"]) {
-		if (Array.isArray(record[field])) return record[field] as unknown[];
+		if (Array.isArray(payload[field])) return payload[field];
 	}
+	return undefined;
 }
 
 function normalizeTitle(raw: string): string {
@@ -205,6 +227,19 @@ function normalizeTitle(raw: string): string {
 function formatTime(iso: string): string {
 	const date = new Date(iso);
 	return Number.isNaN(date.getTime()) ? iso : date.toLocaleString();
+}
+
+// branch 来自 pi 内部事件消息流；守卫只校验消费字段，其余字段信任 SDK 消息结构
+type GateEntry = { timestamp?: string; type?: string; message?: { role?: string } };
+
+function isGateEntry(value: any): value is GateEntry {
+	if (typeof value !== "object" || value === null) return false;
+	return (
+		(value.timestamp === undefined || typeof value.timestamp === "string") &&
+		(value.type === undefined || typeof value.type === "string") &&
+		(value.message === undefined ||
+			(typeof value.message === "object" && value.message !== null))
+	);
 }
 
 function restoreGate(
@@ -240,15 +275,15 @@ function restoreGate(
 	};
 
 	for (const value of branch) {
-		if (!value || typeof value !== "object") continue;
-		const entry = value as { timestamp?: string; type?: string; message?: { role?: string } };
-		if (entry.type !== "message" || (entry.timestamp && Date.parse(entry.timestamp) <= since)) continue;
-		if (entry.message?.role === "user") {
+		if (!isGateEntry(value)) continue;
+		if (value.type !== "message" || (value.timestamp && Date.parse(value.timestamp) <= since)) continue;
+		if (value.message?.role === "user") {
 			if (sawUser) finishRound();
 			sawUser = true;
 			lastAssistant = undefined;
-		} else if (sawUser && entry.message?.role === "assistant") {
-			lastAssistant = entry.message as AssistantMessage;
+		} else if (sawUser && value.message?.role === "assistant") {
+			// SAFETY: role==="assistant" 的消息必有 provider/model/usage（pi 消息契约）
+			lastAssistant = value.message as AssistantMessage;
 		}
 	}
 	if (sawUser) finishRound();
@@ -270,8 +305,8 @@ export default function piTitle(pi: ExtensionAPI): void {
 	let historyPath = "";
 	let globalConfigPath = "";
 
-	const reportError = (ctx: ExtensionContext, triggeredBy: HistoryEntry["triggeredBy"], err: unknown) => {
-		const message = err instanceof Error ? err.message : String(err);
+	const reportError = (ctx: ExtensionContext, triggeredBy: HistoryEntry["triggeredBy"], cause: unknown) => {
+		const message = cause instanceof Error ? cause.message : String(cause);
 		writeLog(`[title-error] ${message}`);
 		if (triggeredBy === "fresh") ctx.ui.notify(`pi-title: 标题生成失败：${message}`, "error");
 	};
@@ -321,7 +356,8 @@ export default function piTitle(pi: ExtensionAPI): void {
 					sessionId: sid,
 					cacheRetention: "short",
 					signal: controller.signal,
-					onPayload: (builtPayload: unknown) => {
+					onPayload: (builtPayload: any) => {
+						// pi SDK 回调契约；payload 形状由 provider 决定，仅在其中查找消息列表
 						const titleMessages = findMessages(builtPayload);
 						if (!titleMessages?.length) {
 							throw new Error("provider payload 不含消息列表");
@@ -353,6 +389,7 @@ export default function piTitle(pi: ExtensionAPI): void {
 				if (!title) throw new Error("模型未返回标题文本");
 				if (title.includes("\n")) throw new Error("模型返回了多行内容而不是标题");
 
+				// SAFETY: complete() 返回结构的 usage 即 Usage（tokens + 缓存计数），SDK 契约保证字段存在
 				const usage = result.usage as Usage;
 				const rate = hitRate(usage);
 				const time = new Date().toISOString();
@@ -578,8 +615,9 @@ export default function piTitle(pi: ExtensionAPI): void {
 		];
 		const selected = await ctx.ui.select("pi-title 配置", choices);
 		if (!selected) return;
+		// SAFETY: key 截取自上方 choices 列表（每项均为 “键: 值” 格式）
 		const key = selected.slice(0, selected.indexOf(":")) as keyof TitleConfig;
-		const values: Record<keyof TitleConfig, string[]> = {
+		const values = {
 			enabled: ["true", "false"],
 			roundInterval: ["1", "2", "3", "5", "8", "10"],
 			customPrompt: ["恢复默认提示词"],
@@ -592,9 +630,13 @@ export default function piTitle(pi: ExtensionAPI): void {
 		const value = await ctx.ui.select(key, values[key]);
 		if (!value) return;
 		if (key === "customPrompt") config.customPrompt = DEFAULT_PROMPT;
-		else if (["enabled", "overrideManual", "debug"].includes(key))
+		else if (["enabled", "overrideManual", "debug"].includes(key)) {
+			// SAFETY: 上方布尔键枚举与 choices/values 定义一致
 			(config[key] as boolean) = value === "true";
-		else (config[key] as number) = Number(value);
+		} else {
+			// SAFETY: 其余键均为数字类型配置（customPrompt 已单独处理）
+			(config[key] as number) = Number(value);
+		}
 		writeConfig(globalConfigPath, config);
 	};
 

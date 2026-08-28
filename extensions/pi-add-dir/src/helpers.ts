@@ -72,6 +72,7 @@ export function writeTempState(cwd: string, dirs: AddedDir[]): void {
 export function readTempState(cwd: string): AddedDir[] {
   try {
     const content = fs.readFileSync(getTempStatePath(cwd), "utf-8");
+    // SAFETY: temp state 由本模块 writeTempState 写入（session 内），结构损坏时 catch 返回空列表
     const data = JSON.parse(content) as { dirs?: AddedDir[] };
     return data.dirs ?? [];
   } catch {

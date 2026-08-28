@@ -39,6 +39,7 @@ function readRows(file: string): HistoryRow[] {
     for (const line of readFileSync(file, "utf-8").split("\n")) {
       if (!line.trim()) continue;
       try {
+        // SAFETY: 历史文件由本扩展写入，行结构自洽；坏行跳过
         const entry = JSON.parse(line) as { text?: string; cwd?: string };
         if (!entry.text || !entry.cwd) continue;
         rows.push({ cwd: entry.cwd, text: entry.text });

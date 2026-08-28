@@ -32,14 +32,18 @@ export function getConfigPaths(cwd: string, homeDir = homedir()): string[] {
   ];
 }
 
+function isBoolean(v: any): v is boolean {
+  return typeof v === "boolean";
+}
+
 export function loadConfig(cwd: string, homeDir = homedir()): Config {
   const cfg: Config = { ...DEFAULT_CONFIG };
 
   for (const p of getConfigPaths(cwd, homeDir)) {
     if (!existsSync(p)) continue;
     const parsed = JSON.parse(readFileSync(p, "utf-8"));
-    if (typeof parsed.enabled === "boolean") cfg.enabled = parsed.enabled;
-    if (typeof parsed.liveReload === "boolean") cfg.liveReload = parsed.liveReload;
+    if (isBoolean(parsed.enabled)) cfg.enabled = parsed.enabled;
+    if (isBoolean(parsed.liveReload)) cfg.liveReload = parsed.liveReload;
   }
 
   return cfg;

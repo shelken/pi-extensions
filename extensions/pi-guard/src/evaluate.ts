@@ -7,7 +7,6 @@ import {
 } from "./command-match.ts";
 import {
   expandHomeInText,
-  normPath,
   pathRuleMatchesFull,
   resolveBlockReason,
 } from "./match.ts";

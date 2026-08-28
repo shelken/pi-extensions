@@ -139,8 +139,13 @@ function prefixAutocompleteDescription(skill: SkillInfo): string | undefined {
     : `[${sourceTag}]`
 }
 
+function getSkillCommands(pi: ExtensionAPI): SkillCommand[] {
+  // SAFETY: pi.getCommands() 返回完整命令表；扩展只消费 SkillCommand 的 source/name/sourceInfo 字段（SDK 契约）
+  return pi.getCommands() as SkillCommand[]
+}
+
 function getSkills(pi: ExtensionAPI): SkillInfo[] {
-  return (pi.getCommands() as SkillCommand[])
+  return getSkillCommands(pi)
     .filter(
       (command) =>
         command.source === "skill" && command.name.startsWith("skill:"),
@@ -160,7 +165,7 @@ function hasStartingCommandConflict(pi: ExtensionAPI, text: string): boolean {
   if (!match?.[1]) return false
 
   const name = match[1].toLowerCase()
-  return (pi.getCommands() as SkillCommand[]).some(
+  return getSkillCommands(pi).some(
     (command) =>
       command.source !== "skill" && command.name.toLowerCase() === name,
   )
@@ -182,7 +187,7 @@ function getCurrentSkillPathMap(
 ): Map<string, string> {
   const skills = new Map<string, string>()
 
-  for (const command of pi.getCommands() as SkillCommand[]) {
+  for (const command of getSkillCommands(pi)) {
     if (command.source !== "skill") continue
     if (!command.name?.startsWith("skill:")) continue
     if (!command.sourceInfo?.path) continue
@@ -196,20 +201,21 @@ function getCurrentSkillPathMap(
   return skills
 }
 
+function isNonEmptyName(v: any): v is string {
+  return typeof v === "string" && v.trim() !== ""
+}
+
 function restoreLoadedSkills(ctx: ExtensionContext): Set<string> {
   const loadedSkills = new Set<string>()
 
+  // SAFETY: getBranch() 返回 SDK 分支条目数组；restore 只消费 custom/custom_message 两类子集
   for (const entry of ctx.sessionManager.getBranch() as InlineSkillSessionEntry[]) {
     if (
       entry.type === "custom" &&
       entry.customType === LOADED_SKILL_ENTRY_TYPE
     ) {
       const data = entry.data
-      if (
-        data?.source === "tool-result" &&
-        typeof data.name === "string" &&
-        data.name.trim()
-      ) {
+      if (data?.source === "tool-result" && isNonEmptyName(data.name)) {
         loadedSkills.add(data.name)
       }
       continue
@@ -246,10 +252,17 @@ function escapeXmlAttribute(value: string): string {
     .replace(/>/g, "&gt;")
 }
 
+type SkillBlockResult = { text: string; skillBlock: ParsedSkillBlock }
+
+type InlineSkillContentResult = {
+  content: string
+  skillBlocks: ParsedSkillBlock[]
+}
+
 function buildSkillBlock(
   skill: SkillInfo,
   cwd: string,
-): { text: string; skillBlock: ParsedSkillBlock } {
+): SkillBlockResult {
   const skillPath = skill.sourceInfo?.path
   if (!skillPath) {
     throw new Error(`missing path for skill ${skill.name}`)
@@ -273,7 +286,7 @@ function buildSkillBlock(
 function buildInlineSkillContent(
   skills: SkillInfo[],
   cwd: string,
-): { content: string; skillBlocks: ParsedSkillBlock[] } {
+): InlineSkillContentResult {
   const skillBlocks = skills.map((skill) => buildSkillBlock(skill, cwd))
   const blocks = skillBlocks.map((skill) => skill.text).join("\n\n")
   return {
@@ -367,29 +380,43 @@ export function mergeAutocompleteItems(options: {
   }
 }
 
+type CustomEditorProto = {
+  handleInput(data: string): void
+  inlineSkillsSlashTriggerInstalled?: boolean
+}
+
+type PatchedEditor = {
+  isShowingAutocomplete?: () => boolean
+  state?: { cursorLine: number; cursorCol: number; lines: string[] }
+  tryTriggerAutocomplete?: () => void
+}
+
+function isCallable(v: any): v is () => void {
+  return typeof v === "function"
+}
+
+function isString(v: any): v is string {
+  return typeof v === "string"
+}
+
 function installSlashAutocompleteTrigger(): void {
-  const proto = CustomEditor.prototype as unknown as {
-    handleInput(data: string): void
-    inlineSkillsSlashTriggerInstalled?: boolean
-  }
+  // SAFETY: patch pi 内部 CustomEditor 原型（SDK 契约）；只读需用的两个字段
+  const proto = CustomEditor.prototype as CustomEditorProto
   if (proto.inlineSkillsSlashTriggerInstalled) return
 
   const originalHandleInput = proto.handleInput
   proto.handleInput = function patchedHandleInput(
-    this: unknown,
+    this: any,
     data: string,
   ): void {
-    const editor = this as {
-      isShowingAutocomplete?: () => boolean
-      state?: { cursorLine: number; cursorCol: number; lines: string[] }
-      tryTriggerAutocomplete?: () => void
-    }
+    // SAFETY: this 由宿主在真实 editor 实例上调用，按需用字段收窄访问
+    const editor = this as PatchedEditor
 
     originalHandleInput.call(this, data)
     if (
       editor.isShowingAutocomplete?.() ||
       !editor.state ||
-      typeof editor.tryTriggerAutocomplete !== "function"
+      !isCallable(editor.tryTriggerAutocomplete)
     )
       return
     if (!/^[a-zA-Z0-9\-_/]$/.test(data)) return
@@ -516,13 +543,13 @@ export default function (pi: ExtensionAPI): void {
   pi.registerMessageRenderer(
     INLINE_SKILL_MESSAGE_TYPE,
     (message, { expanded }, theme) => {
+      // SAFETY: details 由扩展自身 appendEntry 写入（INLINE_SKILL_MESSAGE_TYPE），结构自洽
       const details = message.details as InlineSkillMessageDetails | undefined
       const names = details?.names?.length ? details.names.join(", ") : "skill"
       const label = theme.fg(
         "customMessageLabel",
         `\x1b[1m[${INLINE_SKILL_MESSAGE_TYPE}]\x1b[22m`,
       )
-
       if (details?.skills?.length) {
         const container = new Container()
         for (const skill of details.skills) {
@@ -574,8 +601,9 @@ export default function (pi: ExtensionAPI): void {
   pi.on("tool_result", async (event, ctx) => {
     if (event.toolName !== "read" || event.isError) return
 
+    // SAFETY: tool_result.input 为宽松 schema；read 路径字段收窄为 string 访问
     const input = event.input as { path?: unknown }
-    if (typeof input.path !== "string") return
+    if (!isString(input.path)) return
 
     const readPath = normalizePath(input.path, ctx.cwd)
     const skillName = getCurrentSkillPathMap(pi, ctx.cwd).get(readPath)
@@ -633,7 +661,7 @@ export default function (pi: ExtensionAPI): void {
     return {
       action: "transform",
       text: event.text,
-      ...(event.images ? { images: event.images } : {}),
+      ...(event.images && { images: event.images }),
     }
   })
 

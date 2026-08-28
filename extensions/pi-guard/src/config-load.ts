@@ -38,6 +38,7 @@ export function readConfigFile(filePath: string): ReadConfigResult {
   try {
     return { status: "ok", text: readFileSync(filePath, "utf8") };
   } catch (e) {
+    // SAFETY: readFileSync 仅抛 NodeJS 文件系统错误
     const err = e as NodeJS.ErrnoException;
     if (err?.code === "ENOENT") {
       return { status: "missing" };

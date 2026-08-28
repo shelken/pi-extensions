@@ -10,6 +10,10 @@ import { Text, truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
 import { Type } from "typebox";
 import * as childProcess from "node:child_process";
 import * as path from "node:path";
+
+/** 目录操作结果（addDir / removeDir 共用形状的子集，命名以承载 lint 契约） */
+type DirOpResult = { ok: boolean; message: string; hasNewSkills: boolean };
+type RemoveDirResult = { ok: boolean; message: string; hadSkills: boolean };
 import {
   type AddedDir,
   buildContextInjection,
@@ -42,6 +46,7 @@ export default function addDirExtension(pi: ExtensionAPI): void {
     for (const entry of ctx.sessionManager.getBranch()) {
       if (entry.type !== "custom") continue;
       if (entry.customType === "add-dir:state") {
+        // SAFETY: add-dir:state 条目由本扩展 persistState 写入，dirs 字段自洽
         addedDirs = (entry.data as { dirs: AddedDir[] })?.dirs ?? [];
       }
     }
@@ -101,7 +106,7 @@ export default function addDirExtension(pi: ExtensionAPI): void {
     dirPath: string,
     cwd: string,
     ctx: ExtensionContext,
-  ): { ok: boolean; message: string; hasNewSkills: boolean } {
+  ): DirOpResult {
     const absolutePath = resolveDir(dirPath, cwd);
 
     if (!dirExists(absolutePath)) {
@@ -142,7 +147,7 @@ export default function addDirExtension(pi: ExtensionAPI): void {
   function removeDir(
     absolutePath: string,
     ctx: ExtensionContext,
-  ): { ok: boolean; message: string; hadSkills: boolean } {
+  ): RemoveDirResult {
     const idx = addedDirs.findIndex((d) => d.absolutePath === absolutePath);
     if (idx === -1) {
       return { ok: false, message: `Not found: ${absolutePath}`, hadSkills: false };
@@ -320,6 +325,7 @@ export default function addDirExtension(pi: ExtensionAPI): void {
     },
 
     renderResult(result, { expanded }, theme, _context) {
+      // SAFETY: 工具 details 由本扩展自身写入，字段自洽
       const details = result.details as
         | {
             directory?: string;
@@ -461,6 +467,7 @@ export default function addDirExtension(pi: ExtensionAPI): void {
     },
 
     renderResult(result, { expanded }, theme, _context) {
+      // SAFETY: 工具 details 由本扩展自身写入，字段自洽
       const details = result.details as
         | { totalFound?: number; pattern?: string; dirCount?: number }
         | undefined;

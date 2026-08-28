@@ -1,24 +1,35 @@
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
-import { describe, expect, it, vi } from "vitest";
-
-vi.mock("@earendil-works/pi-coding-agent", async (importOriginal) => {
-  const mod =
-    await importOriginal<typeof import("@earendil-works/pi-coding-agent")>();
-  return {
-    ...mod,
-    // isolate from developer real ~/.pi/agent/permissions.yaml
-    getAgentDir: () => "/tmp/pi-guard-tests-no-agent-dir",
-  };
-});
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 
 import piGuard from "../src/index.ts";
+
+// 隔离开发者真实 agent 目录（getAgentDir 读 PI_CODING_AGENT_DIR），不读写真实 permissions.yaml
+const originalAgentDir = process.env.PI_CODING_AGENT_DIR;
+let agentDir: string;
+beforeAll(() => {
+  agentDir = mkdtempSync(join(tmpdir(), "pi-guard-"));
+  process.env.PI_CODING_AGENT_DIR = agentDir;
+});
+afterAll(() => {
+  rmSync(agentDir, { recursive: true, force: true });
+  if (originalAgentDir === undefined) delete process.env.PI_CODING_AGENT_DIR;
+  else process.env.PI_CODING_AGENT_DIR = originalAgentDir;
+});
+
+function asApi(stub: any): ExtensionAPI {
+  // SAFETY: 测试桩只实现被测路径调用的方法，经单次断言收敛到 ExtensionAPI
+  return stub as ExtensionAPI;
+}
 
 function install() {
   const handlers = new Map<string, Function>();
   const on = vi.fn((event: string, handler: Function) => {
     handlers.set(event, handler);
   });
-  piGuard({ on } as unknown as ExtensionAPI);
+  piGuard(asApi({ on }));
   return handlers;
 }
 

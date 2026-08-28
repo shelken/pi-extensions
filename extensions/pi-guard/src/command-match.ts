@@ -293,7 +293,7 @@ function argvStartsWith(argv: string[], patternWords: string[]): boolean {
     }
     if (a === p) continue;
     // `rm -rf /` still catches `rm -rf /*`, not `rm -rf /tmp`
-    if (a.startsWith(p) && /^[*?\[\]]*$/.test(a.slice(p.length))) {
+    if (a.startsWith(p) && /^[*?[\]]*$/.test(a.slice(p.length))) {
       continue;
     }
     return false;

@@ -58,7 +58,8 @@ describe("folder history", () => {
     const cwd = "/tmp/x";
     appendHistory(cwd, "hello", tmpDir);
     const raw = fs.readFileSync(historyPath(cwd), "utf-8");
-    const row = JSON.parse(raw.trim()) as Record<string, unknown>;
+    // SAFETY: 测试自写历史文件，结构已知
+    const row = JSON.parse(raw.trim()) as { cwd: string; text: string };
     expect(row).toEqual({ cwd, text: "hello" });
   });
 
@@ -99,6 +100,7 @@ describe("folder history", () => {
     expect(loaded.at(-1)).toBe(`old-${MAX_HISTORY + 49}`);
     expect(loadHistory(flat, tmpDir)).toHaveLength(10);
 
+    // SAFETY: 历史文件由 appendHistory 写入，行结构自洽
     const diskRows = fs
       .readFileSync(historyPath(nested), "utf-8")
       .trim()

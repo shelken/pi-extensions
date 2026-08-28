@@ -66,14 +66,17 @@ function isRemoveString(raw: string): string | null {
   return null;
 }
 
-function nonEmptyString(v: unknown): string | undefined {
-  return typeof v === "string" && v.trim() !== "" ? v : undefined;
+function isNonEmptyString(v: any): v is string {
+  return typeof v === "string" && v.trim() !== "";
 }
 
+type ListOpsResult = { ops: LayerOp[]; skipped: number };
+
+// list 来自 YAML 文档（边界输入），参数从宽，逐项经 isNonEmptyString / isRemoveString 解析
 function parseListOps(
-  list: unknown,
+  list: any,
   valueKey: "pattern" | "path",
-): { ops: LayerOp[]; skipped: number } {
+): ListOpsResult {
   if (list == null) return { ops: [], skipped: 0 };
   if (!Array.isArray(list)) return { ops: [], skipped: 1 };
 
@@ -81,33 +84,23 @@ function parseListOps(
   let skipped = 0;
 
   for (const item of list) {
-    if (typeof item === "string") {
+    if (isNonEmptyString(item)) {
       const remove = isRemoveString(item);
       if (remove !== null) {
-        if (remove === "") {
-          skipped++;
-          continue;
-        }
         ops.push({ type: "remove", value: remove });
         continue;
       }
-      const value = item.trim();
-      if (value === "") {
-        skipped++;
-        continue;
-      }
-      ops.push({ type: "add", value });
+      ops.push({ type: "add", value: item.trim() });
       continue;
     }
 
-    if (item && typeof item === "object" && !Array.isArray(item)) {
-      const rec = item as Record<string, unknown>;
-      const value = nonEmptyString(rec[valueKey]);
+    if (item && !Array.isArray(item)) {
+      const value = isNonEmptyString(item[valueKey]) ? item[valueKey] : undefined;
       if (value === undefined) {
         skipped++;
         continue;
       }
-      const reason = nonEmptyString(rec.reason);
+      const reason = isNonEmptyString(item.reason) ? item.reason : undefined;
       ops.push(
         reason === undefined
           ? { type: "add", value }
@@ -139,11 +132,12 @@ export function parseLayerYaml(source: string): ParseLayerResult {
     };
   }
 
-  if (typeof doc !== "object" || Array.isArray(doc)) {
+  if (!(doc instanceof Object) || Array.isArray(doc)) {
     return { ok: false, error: "root must be a mapping" };
   }
 
-  const root = doc as Record<string, unknown>;
+  // SAFETY: doc 已确认是 YAML 映射（排除 null/数组）；字段访问各自走 isNonEmptyString / parseListOps 解析
+  const root = doc as any;
   const commands = parseListOps(root.deny_commands, "pattern");
   const paths = parseListOps(root.deny_paths, "path");
 
@@ -154,7 +148,7 @@ export function parseLayerYaml(source: string): ParseLayerResult {
   };
 
   const dr = root.default_reason;
-  if (typeof dr === "string" && dr.trim() !== "") {
+  if (isNonEmptyString(dr)) {
     layer.default_reason = dr;
   }
 

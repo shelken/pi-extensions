@@ -2,6 +2,25 @@ import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { describe, expect, it, vi } from "vitest";
 import copyCut, { isCutInput } from "../src/index.ts";
 
+function asApi(stub: any): ExtensionAPI {
+  // SAFETY: 测试桩只实现被测路径调用的方法，经单次断言收敛到 ExtensionAPI
+  return stub as ExtensionAPI;
+}
+
+// vitest 4 移除了 vi.waitFor：轮询断言直到通过或超时
+async function waitFor(check: () => void | Promise<void>, timeout = 1000): Promise<void> {
+  const start = Date.now();
+  for (;;) {
+    try {
+      await check();
+      return;
+    } catch (err) {
+      if (Date.now() - start > timeout) throw err;
+      await new Promise((done) => setTimeout(done, 20));
+    }
+  }
+}
+
 describe("isCutInput", () => {
   it("matches encodings that actually reach the process", () => {
     expect(isCutInput("\x1b[120;4u")).toBe(true);
@@ -24,10 +43,10 @@ describe("copy-cut extension", () => {
   it("registers shortcut and session_start listener", () => {
     const shortcuts: string[] = [];
     const events: string[] = [];
-    const pi = {
+    const pi = asApi({
       registerShortcut: vi.fn((shortcut: string) => shortcuts.push(shortcut)),
       on: vi.fn((event: string) => events.push(event)),
-    } as unknown as ExtensionAPI;
+    });
 
     copyCut(pi);
 
@@ -36,13 +55,16 @@ describe("copy-cut extension", () => {
   });
 
   it("consumes cut input and clears editor", async () => {
-    let sessionHandler: ((event: unknown, ctx: unknown) => Promise<void>) | undefined;
-    const pi = {
+    // 事件/上下文参数在测试中仅透传，从宽声明
+    let sessionHandler:
+      | ((event: any, ctx: any) => Promise<void>)
+      | undefined;
+    const pi = asApi({
       registerShortcut: vi.fn(),
-      on: vi.fn((event: string, handler: (event: unknown, ctx: unknown) => Promise<void>) => {
+      on: vi.fn((event: string, handler: (event: any, ctx: any) => Promise<void>) => {
         if (event === "session_start") sessionHandler = handler;
       }),
-    } as unknown as ExtensionAPI;
+    });
 
     copyCut(pi);
 
@@ -67,7 +89,7 @@ describe("copy-cut extension", () => {
 
     expect(inputHandler!("x")).toBeUndefined();
     expect(inputHandler!("\x1bX")).toEqual({ consume: true });
-    await vi.waitFor(() => {
+    await waitFor(() => {
       expect(editor).toBe("");
     });
     expect(notify).toHaveBeenCalledWith("Cut editor text", "info");

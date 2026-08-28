@@ -58,6 +58,11 @@ export {
   type ReadConfigResult,
 } from "./config-load.ts";
 
+// 工具 input.path 类型为宽松 schema（string | null | {}）；守卫收窄为具体路径
+function isNonEmptyPath(v: any): v is string {
+  return typeof v === "string" && v.trim() !== "";
+}
+
 type NotifyCtx = Pick<ExtensionContext, "cwd" | "hasUI" | "ui">;
 
 export default function piGuard(pi: ExtensionAPI): void {
@@ -122,7 +127,7 @@ export default function piGuard(pi: ExtensionAPI): void {
     // Any tool carrying a `path` field gets the same path guard as read/write/edit.
     // Covers built-in grep/find/ls/read/write/edit and custom tools following the same convention.
     const candidatePath = event.input.path;
-    if (typeof candidatePath === "string" && candidatePath.trim() !== "") {
+    if (isNonEmptyPath(candidatePath)) {
       const tool =
         event.toolName === "write" || event.toolName === "edit"
           ? event.toolName

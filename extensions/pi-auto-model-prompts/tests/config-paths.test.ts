@@ -5,6 +5,11 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import autoModelPrompts, { loadConfig, getConfigPaths, findPrompt, getPromptDirs } from "../src/index.ts";
 
+function asApi(stub: any): ExtensionAPI {
+  // SAFETY: 测试桩只实现被测路径调用的方法，经单次断言收敛到 ExtensionAPI
+  return stub as ExtensionAPI;
+}
+
 function withTempHome<T>(fn: (home: string, cwd: string) => T): T {
   const home = mkdtempSync(join(tmpdir(), "pi-amp-home-"));
   const cwd = mkdtempSync(join(tmpdir(), "pi-amp-cwd-"));
@@ -19,9 +24,9 @@ function withTempHome<T>(fn: (home: string, cwd: string) => T): T {
 describe("pi-auto-model-prompts extension", () => {
   it("registers the session and prompt events", () => {
     const events: string[] = [];
-    const pi = {
+    const pi = asApi({
       on: vi.fn((event: string) => events.push(event)),
-    } as unknown as ExtensionAPI;
+    });
 
     autoModelPrompts(pi);
 

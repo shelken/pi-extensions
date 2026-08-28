@@ -36,6 +36,10 @@ async function loadEntries(): Promise<Array<{ name: string; path: string }>> {
 
 const entries = await loadEntries();
 
+function isThenable(v: any): v is PromiseLike<unknown> {
+	return v !== null && typeof v === "object" && typeof v.then === "function";
+}
+
 function mockPi() {
 	const noop = () => {};
 	const ctx = {
@@ -43,7 +47,7 @@ function mockPi() {
 			notify: noop,
 			confirm: async () => true,
 			input: async () => "",
-			select: async () => undefined as unknown,
+			select: async () => undefined,
 		},
 		cwd: process.cwd(),
 	};
@@ -79,7 +83,7 @@ describe("extensions", () => {
 		describe(name, () => {
 			it("entry loads and exports default function", async () => {
 				const mod = await import(pathToFileURL(path).href);
-				expect(typeof mod.default).toBe("function");
+				expect(mod.default).toBeTypeOf("function");
 			});
 
 			it("factory runs without throwing", async () => {
@@ -87,8 +91,9 @@ describe("extensions", () => {
 				const { pi, ctx } = mockPi();
 				let err: unknown = undefined;
 				try {
+					// SAFETY: 桩对象只实现工厂可能调用的部分方法，收窄为 SDK 类型传入
 					const result = mod.default(pi as any, ctx as any);
-					if (result && typeof (result as any).then === "function") {
+					if (isThenable(result)) {
 						await result;
 					}
 				} catch (e) {

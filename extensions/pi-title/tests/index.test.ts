@@ -5,8 +5,10 @@ import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import piTitle from "../src/index.ts";
 
+// 测试桩类型从宽：只约束被测路径会用到的形状
+
 type Handler = (event: any, ctx: any) => any;
-type Complete = (model: unknown, context: unknown, options: any) => Promise<any>;
+type Complete = (model: any, context: any, options: any) => Promise<any>;
 
 // vitest 4 移除了 waitFor：轮询断言直到通过或超时
 async function waitFor(check: () => void | Promise<void>, timeout = 1000): Promise<void> {
@@ -30,6 +32,11 @@ const response = {
 	stopReason: "stop",
 };
 
+function asApi(stub: any): ExtensionAPI {
+	// SAFETY: 测试桩只实现被测路径调用的方法，经单次断言收敛到 ExtensionAPI
+	return stub as ExtensionAPI;
+}
+
 function setup(dir: string, completeImpl?: Complete) {
 	const handlers = new Map<string, Handler>();
 	const commands = new Map<string, { handler: Handler }>();
@@ -46,11 +53,11 @@ function setup(dir: string, completeImpl?: Complete) {
 	);
 	const notify = vi.fn();
 	const setSessionName = vi.fn();
-	const pi = {
+	const pi = asApi({
 		on: vi.fn((event: string, handler: Handler) => handlers.set(event, handler)),
 		registerCommand: vi.fn((name: string, command: any) => commands.set(name, command)),
 		setSessionName,
-	} as unknown as ExtensionAPI;
+	});
 	let branch: unknown[] = [];
 	const ctx = {
 		cwd: dir,
@@ -74,7 +81,7 @@ function setup(dir: string, completeImpl?: Complete) {
 		notify,
 		setSessionName,
 		getMerged: () => mergedPayload,
-		setMerged: (value: unknown) => {
+		setMerged: (value: any) => {
 			mergedPayload = value;
 		},
 		setBranch: (value: unknown[]) => {
@@ -83,7 +90,7 @@ function setup(dir: string, completeImpl?: Complete) {
 	};
 }
 
-function tempConfig(config: Record<string, unknown> = {}): string {
+function tempConfig(config: Record<string, string | number | boolean> = {}): string {
 	const dir = mkdtempSync(join(tmpdir(), "pi-title-"));
 	dirs.push(dir);
 	process.env.PI_CODING_AGENT_DIR = dir;
@@ -91,6 +98,11 @@ function tempConfig(config: Record<string, unknown> = {}): string {
 	mkdirSync(configDir, { recursive: true });
 	writeFileSync(join(configDir, "config.json"), JSON.stringify(config));
 	return dir;
+}
+
+// 测试自构造 payload；直接取 messages 免去类型断言
+function messagesOf(payload: any): Array<{ role?: string }> {
+	return payload.messages;
 }
 
 async function captureLive(app: ReturnType<typeof setup>, text = "完整 live 上下文") {
@@ -104,9 +116,8 @@ afterEach(() => {
 	for (const dir of dirs.splice(0)) rmSync(dir, { recursive: true, force: true });
 	if (originalAgentDir === undefined) delete process.env.PI_CODING_AGENT_DIR;
 	else process.env.PI_CODING_AGENT_DIR = originalAgentDir;
-	const state = (globalThis as Record<PropertyKey, any>)[
-		Symbol.for("@shelken/pi-title/runtime")
-	];
+	// SAFETY: 取回扩展挂在 globalThis 的运行时对象做清理；用 as any 避免在测试中重复声明其内部结构
+	const state = (globalThis as any)[Symbol.for("@shelken/pi-title/runtime")];
 	state?.liveBySession.clear();
 	state?.jobsBySession.clear();
 	state?.pendingFresh.clear();
@@ -159,7 +170,7 @@ describe("pi-title", () => {
 		await second.commands.get("title")?.handler("fresh", second.ctx);
 		await waitFor(() => expect(second.complete).toHaveBeenCalledOnce());
 		expect(JSON.stringify(second.getMerged())).toContain("完整 live 上下文");
-		expect((second.getMerged() as { messages: unknown[] }).messages).toHaveLength(2);
+		expect(messagesOf(second.getMerged())).toHaveLength(2);
 	});
 
 	it("fresh without live payload sends a standalone request immediately", async () => {
@@ -169,7 +180,7 @@ describe("pi-title", () => {
 		await waitFor(() => expect(app.complete).toHaveBeenCalledOnce());
 		// 无 live payload：直接用 provider 自建请求体，不附加对话历史
 		expect(JSON.stringify(app.getMerged())).toContain("标题请求");
-		expect((app.getMerged() as { messages: unknown[] }).messages).toHaveLength(1);
+		expect(messagesOf(app.getMerged())).toHaveLength(1);
 		await waitFor(() => expect(app.setSessionName).toHaveBeenCalledWith("正确标题"));
 		expect(app.notify).toHaveBeenCalledWith('pi-title: 标题已更新为 "正确标题"', "info");
 	});

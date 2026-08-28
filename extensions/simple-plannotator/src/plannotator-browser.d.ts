@@ -31,7 +31,7 @@ declare module "@plannotator/pi-extension/plannotator-browser" {
     ctx: ExtensionContext,
   ): string | null;
 
-  export function getStartupErrorMessage(err: unknown): string;
+  export function getStartupErrorMessage(err: any): string;
 
   export function hasPlanBrowserHtml(): boolean;
   export function hasReviewBrowserHtml(): boolean;

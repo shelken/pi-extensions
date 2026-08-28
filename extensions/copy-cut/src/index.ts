@@ -8,10 +8,13 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { copyToClipboard } from "@earendil-works/pi-coding-agent";
 
+// Kitty CSI-u：x=120；mod 编码 1+bits（shift=1 alt=2）→ alt+shift=4
+// String.raw + new RegExp 承载控制字符，规避 no-control-regex
+const KITTY_CUT = new RegExp(String.raw`^\x1b\[120(?::\d*)*(?::\d*)?;4(?::\d+)?u$`);
+
 /** 原始终端字节是否触发 cut */
 export function isCutInput(data: string): boolean {
-  // Kitty CSI-u：x=120；mod 编码 1+bits（shift=1 alt=2）→ alt+shift=4
-  if (/^\x1b\[120(?::\d*)*(?::\d*)?;4(?::\d+)?u$/.test(data)) return true;
+  if (KITTY_CUT.test(data)) return true;
   // xterm modifyOtherKeys
   if (data === "\x1b[27;4;120~") return true;
   // legacy meta：ESC + 大写 X
