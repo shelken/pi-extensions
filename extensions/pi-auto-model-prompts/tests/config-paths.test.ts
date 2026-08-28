@@ -102,6 +102,19 @@ describe("findPrompt", () => {
       expect(findPrompt("claude-sonnet", dirs)).toBe("wildcard content");
     }));
 
+  it("matches only the part after the last slash", () =>
+    withTempHome((home, cwd) => {
+      const dir = join(cwd, ".pi", "auto-model-prompts");
+      mkdirSync(dir, { recursive: true });
+      writeFileSync(join(dir, "fixture-alpha.md"), "exact content");
+      writeFileSync(join(dir, "namespace*.md"), "namespaced content");
+      writeFileSync(join(dir, "*.md"), "wildcard content");
+
+      const dirs = getPromptDirs(cwd, home);
+      expect(findPrompt("outer/namespace/fixture-alpha", dirs)).toBe("exact content");
+      expect(findPrompt("namespace/fixture-beta", dirs)).toBe("wildcard content");
+    }));
+
   it("ignores empty files", () =>
     withTempHome((home, cwd) => {
       const dir = join(cwd, ".pi", "auto-model-prompts");

@@ -84,7 +84,7 @@ function scanPrompts(dir: string): Prompt[] {
 }
 
 function isMatch(modelId: string, prompt: Prompt): boolean {
-  const mid = modelId.toLowerCase();
+  const mid = modelId.slice(modelId.lastIndexOf("/") + 1).toLowerCase();
   if (prompt.kind === "exact") return mid === prompt.modelId.toLowerCase();
   if (prompt.kind === "prefix") return mid.startsWith(prompt.prefix.toLowerCase());
   return true;
