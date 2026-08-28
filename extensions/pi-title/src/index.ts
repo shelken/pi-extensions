@@ -105,27 +105,31 @@ function hitRate(usage: Pick<Usage, "input" | "cacheRead" | "cacheWrite">): numb
 
 type ConfigLayer = Partial<TitleConfig>;
 
-function isConfigLayer(value: any): value is ConfigLayer {
-	if (typeof value !== "object" || value === null) return false;
-	if (value.enabled !== undefined && typeof value.enabled !== "boolean") return false;
-	if (value.roundInterval !== undefined) {
-		if (typeof value.roundInterval !== "number" || !Number.isInteger(value.roundInterval) || value.roundInterval <= 0) return false;
-	}
-	if (value.customPrompt !== undefined && typeof value.customPrompt !== "string") return false;
-	if (value.overrideManual !== undefined && typeof value.overrideManual !== "boolean") return false;
-	if (value.maxTitleLength !== undefined) {
-		if (typeof value.maxTitleLength !== "number" || !Number.isInteger(value.maxTitleLength) || value.maxTitleLength <= 0) return false;
-	}
-	if (value.cacheThreshold !== undefined && typeof value.cacheThreshold !== "number") return false;
-	if (value.warnThreshold !== undefined && typeof value.warnThreshold !== "number") return false;
-	if (value.debug !== undefined && typeof value.debug !== "boolean") return false;
-	return true;
+function isBoolean(v: any): v is boolean {
+  return typeof v === "boolean";
 }
 
+function isPositiveInteger(v: any): v is number {
+  return typeof v === "number" && Number.isInteger(v) && v > 0;
+}
+
+function isNumber(v: any): v is number {
+  return typeof v === "number";
+}
+
+function isNonEmptyString(v: any): v is string {
+  return typeof v === "string" && v.trim() !== "";
+}
+
+function isObjectLike(v: any): v is object {
+  return v !== null && typeof v === "object";
+}
+
+// 配置字段逐项宽容校验：非法字段忽略、其余字段生效（与既有行为一致）；typeof 集中在守卫内
 function readConfigLayer(path: string): ConfigLayer | undefined {
 	try {
 		const value = JSON.parse(readFileSync(path, "utf8"));
-		return isConfigLayer(value) ? value : undefined;
+		return isObjectLike(value) ? value : undefined;
 	} catch {
 		return undefined;
 	}
@@ -135,17 +139,16 @@ function loadConfig(globalPath: string, projectPath?: string): TitleConfig {
 	const config = { ...DEFAULT_CONFIG };
 	for (const layer of [readConfigLayer(globalPath), projectPath ? readConfigLayer(projectPath) : undefined]) {
 		if (!layer) continue;
-		if (layer.enabled !== undefined) config.enabled = layer.enabled;
-		if (layer.roundInterval !== undefined) config.roundInterval = layer.roundInterval;
-		if (layer.customPrompt !== undefined && layer.customPrompt.trim())
-			config.customPrompt = layer.customPrompt;
-		if (layer.overrideManual !== undefined) config.overrideManual = layer.overrideManual;
-		if (layer.maxTitleLength !== undefined) config.maxTitleLength = layer.maxTitleLength;
-		if (layer.cacheThreshold !== undefined)
+		if (isBoolean(layer.enabled)) config.enabled = layer.enabled;
+		if (isPositiveInteger(layer.roundInterval)) config.roundInterval = layer.roundInterval;
+		if (isNonEmptyString(layer.customPrompt)) config.customPrompt = layer.customPrompt;
+		if (isBoolean(layer.overrideManual)) config.overrideManual = layer.overrideManual;
+		if (isPositiveInteger(layer.maxTitleLength)) config.maxTitleLength = layer.maxTitleLength;
+		if (isNumber(layer.cacheThreshold))
 			config.cacheThreshold = Math.min(1, Math.max(0, layer.cacheThreshold));
-		if (layer.warnThreshold !== undefined)
+		if (isNumber(layer.warnThreshold))
 			config.warnThreshold = Math.min(1, Math.max(0, layer.warnThreshold));
-		if (layer.debug !== undefined) config.debug = layer.debug;
+		if (isBoolean(layer.debug)) config.debug = layer.debug;
 	}
 	return config;
 }
@@ -213,9 +216,11 @@ function writeDump(
 }
 
 function findMessages(payload: any): unknown[] | undefined {
-	if (payload === null || !(payload instanceof Object) || Array.isArray(payload)) return undefined;
+	if (!isObjectLike(payload) || Array.isArray(payload)) return undefined;
+	// SAFETY: isObjectLike 已排除 null/标量；字段名固定为 messages/contents/input，缺失即 undefined
+	const rec = payload as any;
 	for (const field of ["messages", "contents", "input"]) {
-		if (Array.isArray(payload[field])) return payload[field];
+		if (Array.isArray(rec[field])) return rec[field];
 	}
 	return undefined;
 }
