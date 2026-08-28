@@ -1,5 +1,42 @@
 import { describe, expect, it } from "vitest";
-import { collectExistingIds, mergeProviderModelList } from "../src/merge.ts";
+import {
+  collectExistingIds,
+  mergeProviderModelList,
+  normalizeModelsJsonModel,
+} from "../src/merge.ts";
+
+describe("normalizeModelsJsonModel", () => {
+  it("fills pi modelFromJson defaults for omitted fields", () => {
+    expect(normalizeModelsJsonModel({ id: "minimal" })).toEqual({
+      id: "minimal",
+      name: "minimal",
+      reasoning: false,
+      input: ["text"],
+      cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+      contextWindow: 128_000,
+      maxTokens: 16_384,
+    });
+  });
+
+  it("keeps explicit fields and pass-through extra fields", () => {
+    const model = normalizeModelsJsonModel({
+      id: "rich",
+      name: "Rich",
+      reasoning: true,
+      contextWindow: 256_000,
+      // 透传字段不在 ModelLike 类型内（models.json 允许任意自定义字段），运行时 spread 保留
+      extra: { anything: true },
+    });
+    expect(model).toMatchObject({
+      id: "rich",
+      name: "Rich",
+      reasoning: true,
+      contextWindow: 256_000,
+      maxTokens: 16_384,
+    });
+    expect(Object.keys(model)).toContain("extra");
+  });
+});
 
 describe("collectExistingIds", () => {
   it("unions models.json and built-in ids", () => {

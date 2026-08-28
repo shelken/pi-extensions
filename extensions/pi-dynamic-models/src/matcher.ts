@@ -251,13 +251,15 @@ export function toPiThinkingLevelMap(
   if (!effort?.values?.length) return fallback;
 
   const values = new Map(effort.values.map((value) => [value.toLowerCase(), value]));
-  const levels = ["minimal", "low", "medium", "high", "xhigh", "max"] as const;
   const map = {
     off: values.get("none") ?? null,
-    ...Object.fromEntries(
-      levels.map((level) => [level, values.get(level) ?? null]),
-    ),
-  } as PiThinkingLevelMap;
+    minimal: values.get("minimal") ?? null,
+    low: values.get("low") ?? null,
+    medium: values.get("medium") ?? null,
+    high: values.get("high") ?? null,
+    xhigh: values.get("xhigh") ?? null,
+    max: values.get("max") ?? null,
+  } satisfies PiThinkingLevelMap;
   return map;
 }
 

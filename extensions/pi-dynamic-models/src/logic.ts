@@ -82,16 +82,16 @@ export function resolveEnableProviders(
   if (raw === undefined || raw === "*") {
     return [...providersWithBaseUrl];
   }
-  if (typeof raw === "string") {
-    return [raw];
+  if (Array.isArray(raw)) {
+    if (raw.length === 0) {
+      return [];
+    }
+    if (raw.includes("*")) {
+      return [...providersWithBaseUrl];
+    }
+    return [...raw];
   }
-  if (raw.length === 0) {
-    return [];
-  }
-  if (raw.includes("*")) {
-    return [...providersWithBaseUrl];
-  }
-  return [...raw];
+  return [raw];
 }
 
 /** glob（* / ?）→ 是否匹配 id；大小写不敏感。 */
@@ -103,10 +103,15 @@ export function matchesExcludePattern(id: string, pattern: string): boolean {
   return new RegExp(`^${escaped}$`, "i").test(id);
 }
 
+export type ExcludeFilterResult = {
+  kept: string[];
+  excluded: string[];
+};
+
 export function filterByExcludePatterns(
   ids: string[],
   patterns: string[] | undefined,
-): { kept: string[]; excluded: string[] } {
+): ExcludeFilterResult {
   if (!patterns?.length) {
     return { kept: [...ids], excluded: [] };
   }

@@ -2,13 +2,18 @@ import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { describe, expect, it, vi } from "vitest";
 import dynamicModels, { getConfigPaths } from "../src/index.ts";
 
+function asApi(stub: any): ExtensionAPI {
+  // SAFETY: 测试桩只实现被测路径调用的方法（on/registerProvider/registerCommand）
+  return stub as ExtensionAPI;
+}
+
 describe("pi-dynamic-models extension", () => {
   it("eager path, hooks session_start, registers /dynamic-models", () => {
     const on = vi.fn();
     const registerProvider = vi.fn();
     const registerCommand = vi.fn();
 
-    dynamicModels({ on, registerProvider, registerCommand } as unknown as ExtensionAPI);
+    dynamicModels(asApi({ on, registerProvider, registerCommand }));
 
     expect(on).toHaveBeenCalledOnce();
     expect(on).toHaveBeenCalledWith("session_start", expect.any(Function));
@@ -20,7 +25,7 @@ describe("pi-dynamic-models extension", () => {
       }),
     );
     for (const [name, config] of registerProvider.mock.calls) {
-      expect(typeof name).toBe("string");
+      expect(name).toBeTypeOf("string");
       // eager 注册依赖真实磁盘缓存（环境条件式）；无缓存时跳过断言
       if (!config?.models) continue;
       expect(config).toMatchObject({

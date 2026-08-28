@@ -48,7 +48,12 @@ import {
   shouldSkipByHash,
   type ProviderRunSummary,
 } from "./logic.ts";
-import { collectExistingIds, mergeProviderModelList } from "./merge.ts";
+import {
+  collectExistingIds,
+  mergeProviderModelList,
+  normalizeModelsJsonModel,
+  type ModelLike,
+} from "./merge.ts";
 
 interface PluginConfig {
   enable: boolean;
@@ -71,6 +76,18 @@ interface ProviderConfig {
   apiKey?: string;
   api?: string;
   existingModels: Set<string>;
+}
+
+/** ~/.pi/agent/models.json 的 provider 结构（扩展消费的子集；未校验字段原样透传给 pi，由 pi 侧校验归一化） */
+interface ModelsJsonProvider {
+  baseUrl?: string;
+  apiKey?: string;
+  api?: string;
+  models?: ModelLike[];
+}
+
+interface ModelsJson {
+  providers: Record<string, ModelsJsonProvider>;
 }
 
 interface ProviderModelCache {
@@ -161,6 +178,7 @@ function debugLog(msg: string): void {
 
 function readJson<T>(path: string): T | null {
   try {
+    // SAFETY: JSON.parse 返回 unknown；结果由各调用方做边界校验（见 readModelsJson / isModelsJsonProvider）
     return JSON.parse(readFileSync(path, "utf-8")) as T;
   } catch (e: any) {
     if (e?.code !== "ENOENT") log(`Read ${path} failed: ${e}`);
@@ -180,6 +198,7 @@ function loadConfig(cwd: string): PluginConfig | null {
   for (const path of getConfigPaths(cwd)) {
     const parsed = readJson<Partial<PluginConfig>>(path);
     if (!parsed) continue;
+    // SAFETY: 逐层浅合并用户 config.json；enable 缺省时 resolveEnabledConfig 的 !config.enable 判空兑底
     config = { ...config, ...parsed } as PluginConfig;
   }
   return config;
@@ -191,6 +210,7 @@ function ensureParentDir(path: string): void {
 
 function readRegistryCache(): CacheEntry | null {
   try {
+    // SAFETY: 缓存为本扩展自写；JSON 解析失败 catch 返回 null，结构损坏（合法 JSON 但 shape 错误）与既有行为一致——下游对缺字段已有可选链容错
     return JSON.parse(readFileSync(REGISTRY_CACHE_FILE, "utf-8")) as CacheEntry;
   } catch {
     return null;
@@ -224,8 +244,8 @@ async function fetchRegistryFromNetwork(cached: CacheEntry | null): Promise<{
   etag: string;
   fromCache: boolean;
 }> {
-  const headers: Record<string, string> = { Accept: "application/json" };
-  if (cached?.etag) headers["If-None-Match"] = cached.etag;
+  const headers = new Headers({ Accept: "application/json" });
+  if (cached?.etag) headers.set("If-None-Match", cached.etag);
 
   const res = await fetch(REGISTRY_URL, {
     headers,
@@ -245,6 +265,7 @@ async function fetchRegistryFromNetwork(cached: CacheEntry | null): Promise<{
 
   const etag =
     res.headers.get("etag") ?? createHash("md5").update(`${Date.now()}`).digest("hex");
+  // SAFETY: models.dev 官方 registry 端点，视为可信源；HTTP 非 2xx 已在上方抛错
   const data = (await res.json()) as RegistryData;
   writeRegistryCache(etag, data);
 
@@ -302,6 +323,7 @@ async function acquireNetworkLock(): Promise<() => void> {
       };
     } catch (err) {
       // 锁被占：stale 则抢占，否则重试
+      // SAFETY: openSync("wx") 失败只会抛 NodeJS 文件系统错误
       if ((err as NodeJS.ErrnoException).code === "EEXIST") {
         let stale = false;
         try {
@@ -417,6 +439,7 @@ function providerCachePath(providerName: string): string {
 
 function readProviderCache(providerName: string): ProviderModelCache | null {
   try {
+    // SAFETY: 缓存为本扩展自写；JSON 解析失败 catch 返回 null，结构损坏（合法 JSON 但 shape 错误）与既有行为一致——下游对缺字段已有可选链容错
     return JSON.parse(readFileSync(providerCachePath(providerName), "utf-8")) as ProviderModelCache;
   } catch {
     return null;
@@ -465,17 +488,48 @@ function resolvePiValue(value: string | undefined): string | undefined {
   return value;
 }
 
-function readModelsJson(): Record<string, any> | null {
-  return readJson<Record<string, any>>(MODELS_JSON_PATH);
+// 边界守卫：参数收 any（no-unknown-parameters 禁显式 unknown 参数）；函数即 I/O 边界解析器，返回类型即契约
+function isModelsJsonEntry(value: any): value is ModelLike {
+  if (typeof value !== "object" || value === null) return false;
+  // 只校验扩展消费的 id（去重保护）；其余字段不深校验，错误类型可能透传（与清理前 as-any 行为一致）
+  return typeof value.id === "string";
 }
 
-function listProvidersWithBaseUrl(modelsJson: Record<string, any>): string[] {
-  const providers = modelsJson.providers ?? {};
-  return Object.keys(providers).filter((name) => typeof providers[name]?.baseUrl === "string");
+function isModelsJsonProvider(value: any): value is ModelsJsonProvider {
+  if (typeof value !== "object" || value === null) return false;
+  if (value.baseUrl !== undefined && typeof value.baseUrl !== "string") return false;
+  if (value.apiKey !== undefined && typeof value.apiKey !== "string") return false;
+  if (value.api !== undefined && typeof value.api !== "string") return false;
+  if (
+    value.models !== undefined &&
+    (!Array.isArray(value.models) || !value.models.every(isModelsJsonEntry))
+  ) {
+    return false;
+  }
+  return true;
+}
+
+function readModelsJson(): ModelsJson | null {
+  const raw = readJson<unknown>(MODELS_JSON_PATH);
+  if (!(raw instanceof Object) || Array.isArray(raw)) return null;
+  // SAFETY: instanceof 收敛 JSON 根对象；providers 每项过 isModelsJsonProvider 守卫，坏项仅丢弃不影响其余 provider
+  const providers = (raw as { providers?: unknown }).providers;
+  if (!(providers instanceof Object) || Array.isArray(providers)) return null;
+  const valid: Record<string, ModelsJsonProvider> = {};
+  for (const [name, entry] of Object.entries(providers)) {
+    if (isModelsJsonProvider(entry)) valid[name] = entry;
+  }
+  return { providers: valid };
+}
+
+function listProvidersWithBaseUrl(modelsJson: ModelsJson): string[] {
+  return Object.keys(modelsJson.providers).filter(
+    (name) => modelsJson.providers[name].baseUrl !== undefined,
+  );
 }
 
 function extractProviderConfig(
-  modelsJson: Record<string, any>,
+  modelsJson: ModelsJson,
   providerName: string,
 ): ProviderConfig | null {
   const provider = modelsJson.providers?.[providerName];
@@ -512,6 +566,20 @@ function extractProviderConfig(
   };
 }
 
+function isModelIdEntry(value: any): value is { id: string } {
+  if (typeof value !== "object" || value === null) return false;
+  return typeof value.id === "string";
+}
+
+/** OpenAI 兼容 /models 端点响应：{ data?: [{ id }] } */
+function isModelsResponse(value: any): value is { data?: Array<{ id: string }> } {
+  if (typeof value !== "object" || value === null) return false;
+  return (
+    value.data === undefined ||
+    (Array.isArray(value.data) && value.data.every(isModelIdEntry))
+  );
+}
+
 async function fetchRemoteModels(cfg: ProviderConfig): Promise<string[]> {
   const candidates: string[] = [];
   if (/\/v1\/?$/.test(cfg.baseUrl)) {
@@ -520,8 +588,8 @@ async function fetchRemoteModels(cfg: ProviderConfig): Promise<string[]> {
     candidates.push(`${cfg.baseUrl}/v1/models`);
     candidates.push(`${cfg.baseUrl}/models`);
   }
-  const headers: Record<string, string> = { Accept: "application/json" };
-  if (cfg.apiKey) headers.Authorization = `Bearer ${cfg.apiKey}`;
+  const headers = new Headers({ Accept: "application/json" });
+  if (cfg.apiKey) headers.set("Authorization", `Bearer ${cfg.apiKey}`);
 
   // 候选 URL 并发；整段 3s 总预算，任一成功即返回并 abort 其余
   const controller = new AbortController();
@@ -532,7 +600,8 @@ async function fetchRemoteModels(cfg: ProviderConfig): Promise<string[]> {
       candidates.map(async (url) => {
         const res = await fetch(url, { headers, signal: controller.signal });
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        const body = (await res.json()) as { data?: Array<{ id: string }> };
+        const body = await res.json();
+        if (!isModelsResponse(body)) throw new Error("unexpected /models response shape");
         const list = (body.data ?? []).map((model) => model.id);
         log(`  → ${url} ${list.length} models`);
         return list;
@@ -591,13 +660,13 @@ function registerProviderModels(
   pi: ExtensionAPI,
   providerName: string,
   providerCfg: ProviderConfig,
-  existingRaw: any[],
+  existingRaw: ModelLike[],
   discoveredModels: AutoModel[],
 ): void {
   // registerProvider(models) 整表替换：必须带上内置 + models.json，再只追加新 AUTO
   const models = mergeProviderModelList({
     builtIn: getBuiltInModelDefs(providerName),
-    fromModelsJson: existingRaw,
+    fromModelsJson: existingRaw.map(normalizeModelsJsonModel),
     autoNew: discoveredModels,
   });
 
@@ -606,13 +675,14 @@ function registerProviderModels(
     apiKey: providerCfg.apiKey ?? "none",
     authHeader: !!providerCfg.apiKey,
     api: providerCfg.api ?? "openai-completions",
+    // SAFETY: ModelLike 未建模透传字段（samplingParams/compat 等）；缺省字段已由 normalizeModelsJsonModel 补齐，与 pi modelFromJson 默认值一致
     models: models as any[],
   });
 }
 
 type Resolved = {
   config: PluginConfig;
-  modelsJson: Record<string, any>;
+  modelsJson: ModelsJson;
   providerNames: string[];
 };
 
@@ -646,18 +716,20 @@ function resolveEnabledConfig(): Resolved | null {
   return { config, modelsJson, providerNames };
 }
 
-function buildAndFilterModels(
-  newIds: string[],
-  registry: FlatRegistry,
-  excludePatterns: string[] | undefined,
-  providerName: string,
-): {
+type BuiltModelsResult = {
   models: AutoModel[];
   matched: number;
   defaults: number;
   filtered: number;
   autoHash: string;
-} {
+};
+
+function buildAndFilterModels(
+  newIds: string[],
+  registry: FlatRegistry,
+  excludePatterns: string[] | undefined,
+  providerName: string,
+): BuiltModelsResult {
   const { kept: afterExclude, excluded } = filterByExcludePatterns(newIds, excludePatterns);
   let matched = 0;
   let defaults = 0;
@@ -698,7 +770,7 @@ function tryRegisterProvider(
   pi: ExtensionAPI,
   providerName: string,
   providerCfg: ProviderConfig,
-  modelsJson: Record<string, any>,
+  modelsJson: ModelsJson,
   built: ReturnType<typeof buildAndFilterModels>,
   force: boolean,
 ): ProviderRunSummary {
@@ -731,7 +803,7 @@ function tryRegisterProvider(
     return summary;
   }
 
-  const existingRaw: any[] = modelsJson.providers[providerName]?.models ?? [];
+  const existingRaw = modelsJson.providers[providerName]?.models ?? [];
   registerProviderModels(pi, providerName, providerCfg, existingRaw, built.models);
   registeredAutoHashes.set(providerName, built.autoHash);
   const summary = { ...base, registered: true };

@@ -21,8 +21,23 @@ export type ModelLike = {
   contextWindow?: number;
   maxTokens?: number;
   baseUrl?: string;
-  [key: string]: unknown;
 };
+
+/**
+ * 补齐 models.json 手写模型的缺省字段，与 pi 自身 modelFromJson 的默认值语义对齐。
+ * 原因：扩展注册路径（applyExtension）不补这些字段，缺省会原样透传进运行时。
+ */
+export function normalizeModelsJsonModel(model: ModelLike): ModelLike {
+  return {
+    ...model,
+    name: model.name ?? model.id,
+    reasoning: model.reasoning ?? false,
+    input: model.input ?? ["text"],
+    cost: model.cost ?? { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+    contextWindow: model.contextWindow ?? 128_000,
+    maxTokens: model.maxTokens ?? 16_384,
+  };
+}
 
 /** models.json 手写 id ∪ 内置 id → 已存在，AUTO 不得覆盖其参数。 */
 export function collectExistingIds(
