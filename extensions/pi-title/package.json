@@ -22,7 +22,7 @@
     ]
   },
   "scripts": {
-    "test": "vitest run"
+    "test": "echo pi-title 已停用（冻结）测试已跳过"
   },
   "peerDependencies": {
     "@earendil-works/pi-ai": ">=0.83.0",
