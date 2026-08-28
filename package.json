@@ -13,6 +13,7 @@
   ],
   "scripts": {
     "check": "tsc --noEmit",
+    "lint": "oxlint",
     "test": "node --test scripts/*.node-test.mjs && bun --filter '*' test && vitest run",
     "verify": "bun run check && bun run test",
     "deps:update": "bun update --latest --recursive && bun run verify",
@@ -37,7 +38,9 @@
     "@changesets/cli": "2.31.0",
     "@earendil-works/pi-coding-agent": "^0.84.1",
     "@earendil-works/pi-tui": "^0.83.0",
+    "@oxlint/plugins": "1.80.0",
     "@types/node": "25.9.1",
+    "oxlint": "1.80.0",
     "typescript": "6.0.3",
     "vitest": "4.1.7"
   }
