@@ -115,6 +115,18 @@ describe("findPrompt", () => {
       expect(findPrompt("namespace/fixture-beta", dirs)).toBe("wildcard content");
     }));
 
+  it("matches text surrounded by wildcards", () =>
+    withTempHome((home, cwd) => {
+      const dir = join(cwd, ".pi", "auto-model-prompts");
+      mkdirSync(dir, { recursive: true });
+      writeFileSync(join(dir, "*fixture-alpha*.md"), "contains content");
+      writeFileSync(join(dir, "*.md"), "wildcard content");
+
+      const dirs = getPromptDirs(cwd, home);
+      expect(findPrompt("namespace/my-fixture-alpha-preview", dirs)).toBe("contains content");
+      expect(findPrompt("namespace/fixture-beta", dirs)).toBe("wildcard content");
+    }));
+
   it("ignores empty files", () =>
     withTempHome((home, cwd) => {
       const dir = join(cwd, ".pi", "auto-model-prompts");

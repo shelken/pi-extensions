@@ -21,6 +21,7 @@ const EXTENSION_NAME = "pi-auto-model-prompts";
 type Prompt =
   | { path: string; priority: number; kind: "exact"; modelId: string }
   | { path: string; priority: number; kind: "prefix"; prefix: string }
+  | { path: string; priority: number; kind: "contains"; text: string }
   | { path: string; priority: number; kind: "wildcard" };
 
 // --- 配置加载 ---
@@ -64,6 +65,7 @@ export function getPromptDirs(cwd: string, homeDir = homedir()): string[] {
  * 优先级：
  * - 精确匹配（无 *）：最高
  * - 前缀匹配（以 * 结尾）：前缀越长越具体
+ * - 包含匹配（以 * 开头和结尾）
  * - 通配 *.md：最低
  */
 function scanPrompts(dir: string): Prompt[] {
@@ -74,6 +76,10 @@ function scanPrompts(dir: string): Prompt[] {
     .map((f) => {
       const name = f.slice(0, -3);
       if (name === "*") return { path: join(dir, f), priority: 0, kind: "wildcard" as const };
+      if (name.startsWith("*") && name.endsWith("*")) {
+        const text = name.slice(1, -1);
+        return { path: join(dir, f), priority: 5_000 + text.length, kind: "contains" as const, text };
+      }
       if (name.endsWith("*")) {
         const prefix = name.slice(0, -1);
         return { path: join(dir, f), priority: 10_000 + prefix.length, kind: "prefix" as const, prefix };
@@ -87,6 +93,7 @@ function isMatch(modelId: string, prompt: Prompt): boolean {
   const mid = modelId.slice(modelId.lastIndexOf("/") + 1).toLowerCase();
   if (prompt.kind === "exact") return mid === prompt.modelId.toLowerCase();
   if (prompt.kind === "prefix") return mid.startsWith(prompt.prefix.toLowerCase());
+  if (prompt.kind === "contains") return mid.includes(prompt.text.toLowerCase());
   return true;
 }
 
