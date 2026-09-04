@@ -1,5 +1,11 @@
 # pi-co-authored-by
 
+## 0.2.13
+
+### Patch Changes
+
+- [`14b6021`](https://github.com/shelken/pi-extensions/commit/14b60219e4cf05aa7754c4adb71054551585a2eb) Thanks [@shelken](https://github.com/shelken)! - 动态识别 omp/pi 宿主名称并探测真实宿主版本生成 Generated-By，支持环境变量与配置文件自定义共同作者邮箱
+
 ## 0.2.12
 
 ### Patch Changes
