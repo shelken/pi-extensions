@@ -1,4 +1,3 @@
-import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
@@ -30,25 +29,5 @@ export function resolveCoAuthorEmail(
 		return match?.[1]?.trim() || DEFAULT_CO_AUTHOR_EMAIL;
 	} catch {
 		return DEFAULT_CO_AUTHOR_EMAIL;
-	}
-}
-
-export function resolveHostVersion(
-	generatorName: "omp" | "pi",
-	fallbackVersion: string,
-	execFn?: (cmd: string) => string,
-): string {
-	try {
-		const raw = execFn
-			? execFn(generatorName)
-			: execFileSync(generatorName, ["--version"], {
-					encoding: "utf8",
-					timeout: 1500,
-					stdio: ["ignore", "pipe", "ignore"],
-				});
-		const match = raw.match(/([0-9]+\.[0-9]+(?:\.[0-9]+[^\s]*)?)/);
-		return match?.[1] || fallbackVersion;
-	} catch {
-		return fallbackVersion;
 	}
 }

@@ -6,7 +6,6 @@ import {
 	DEFAULT_CO_AUTHOR_EMAIL,
 	resolveCoAuthorEmail,
 	resolveGeneratorName,
-	resolveHostVersion,
 } from "../src/config.ts";
 
 let tempAgentDir: string;
@@ -64,21 +63,5 @@ describe("resolveCoAuthorEmail", () => {
 		expect(resolveCoAuthorEmail("unknown-host", tempAgentDir)).toBe(DEFAULT_CO_AUTHOR_EMAIL);
 		expect(resolveCoAuthorEmail(".omp", tempAgentDir)).toBe(DEFAULT_CO_AUTHOR_EMAIL);
 		expect(resolveCoAuthorEmail(".pi", tempAgentDir)).toBe(DEFAULT_CO_AUTHOR_EMAIL);
-	});
-});
-
-describe("resolveHostVersion", () => {
-	it("extracts clean semver from command output", () => {
-		expect(resolveHostVersion("omp", "0.0.0", () => "omp/18.1.3\n")).toBe("18.1.3");
-		expect(resolveHostVersion("pi", "0.0.0", () => "0.84.4\n")).toBe("0.84.4");
-	});
-
-	it("falls back safely to fallbackVersion on error or unmatched output without throwing", () => {
-		expect(
-			resolveHostVersion("omp", "1.0.0", () => {
-				throw new Error("command not found");
-			}),
-		).toBe("1.0.0");
-		expect(resolveHostVersion("pi", "1.0.0", () => "unmatched text")).toBe("1.0.0");
 	});
 });
