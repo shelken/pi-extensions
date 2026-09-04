@@ -1,5 +1,11 @@
 # pi-co-authored-by
 
+## 0.2.12
+
+### Patch Changes
+
+- [`b1b9586`](https://github.com/shelken/pi-extensions/commit/b1b9586ec7894de2606caa2e64a34ebe36edd644) Thanks [@shelken](https://github.com/shelken)! - 修复发布包漏打包子模块导致安装后找不到 `./lib/git-commit.ts` 的问题，统一分发 `src/` 源码入口，并增加 `omp.extensions` 声明
+
 ## 0.2.11
 
 ### Patch Changes
