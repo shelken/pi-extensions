@@ -1,5 +1,13 @@
 # @shelken/pi-auto-model-prompts
 
+## 0.2.4
+
+### Patch Changes
+
+- [`711ff91`](https://github.com/shelken/pi-extensions/commit/711ff91b762386b69447371e98cc9497022a4076) Thanks [@shelken](https://github.com/shelken)! - 支持使用 `*文本*.md` 按包含关系匹配模型 ID
+
+- [`02e2381`](https://github.com/shelken/pi-extensions/commit/02e2381a7954b475e506d448c0e0e0b1b001aa68) Thanks [@shelken](https://github.com/shelken)! - 模型 ID 含 `/` 时只匹配最后一段，让带命名空间的模型复用普通模型名 prompt
+
 ## 0.2.3
 
 ### Patch Changes

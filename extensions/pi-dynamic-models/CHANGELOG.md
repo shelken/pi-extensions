@@ -1,5 +1,11 @@
 # @shelken/pi-dynamic-models
 
+## 0.2.4
+
+### Patch Changes
+
+- [`7e049de`](https://github.com/shelken/pi-extensions/commit/7e049de59f4a1ed09605a4d709b49a2bf9aeea13) Thanks [@shelken](https://github.com/shelken)! - 注册前补齐 models.json 手写模型缺省字段（name/cost/reasoning 等），与 pi 自身 modelFromJson 默认值对齐，避免不完整模型透传进运行时
+
 ## 0.2.3
 
 ### Patch Changes

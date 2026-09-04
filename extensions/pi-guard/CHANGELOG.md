@@ -1,5 +1,11 @@
 # @shelken/pi-guard
 
+## 0.7.0
+
+### Minor Changes
+
+- [`d6d89e3`](https://github.com/shelken/pi-extensions/commit/d6d89e3e1baff4a914adb5dc70d0dae8649882e9) Thanks [@shelken](https://github.com/shelken)! - 扩充内置环境枚举与凭据路径规则，并加入可复用的隔离安全审计脚本
+
 ## 0.6.0
 
 ### Minor Changes
