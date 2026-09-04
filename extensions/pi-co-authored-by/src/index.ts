@@ -1,14 +1,16 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
-import { isToolCallEventType, VERSION } from "@earendil-works/pi-coding-agent";
+import { CONFIG_DIR_NAME, getAgentDir, isToolCallEventType, VERSION } from "@earendil-works/pi-coding-agent";
 import {
 	createCommitHookDirectory,
 	removeCommitHookDirectory,
 	wrapBashWithCommitHook,
 } from "./commit.ts";
+import { resolveCoAuthorEmail, resolveGeneratorName, resolveHostVersion } from "./config.ts";
 import { isGitCommitCommand } from "./git-commit.ts";
 
 export default function (pi: ExtensionAPI) {
 	let hooksDir: string | undefined;
+	let cachedHostVersion: string | undefined;
 
 	function ensureHooksDir(): string {
 		hooksDir ??= createCommitHookDirectory();
@@ -21,6 +23,7 @@ export default function (pi: ExtensionAPI) {
 
 	pi.on("session_shutdown", async () => {
 		removeCommitHookDirectory(hooksDir);
+		cachedHostVersion = undefined;
 		hooksDir = undefined;
 	});
 
@@ -32,11 +35,19 @@ export default function (pi: ExtensionAPI) {
 		const model = ctx.model;
 		const modelName = model ? (model.name || `${model.provider}/${model.id}`) : "unknown";
 
+		const generatorName = resolveGeneratorName(CONFIG_DIR_NAME);
+		const coAuthorEmail = resolveCoAuthorEmail(CONFIG_DIR_NAME, getAgentDir());
+		cachedHostVersion ??= resolveHostVersion(generatorName, VERSION);
+
 		event.input.command = wrapBashWithCommitHook(
 			event.input.command,
 			ensureHooksDir(),
 			modelName,
-			VERSION,
+			cachedHostVersion,
+			{
+				generatorName,
+				coAuthorEmail,
+			},
 		);
 	});
 }

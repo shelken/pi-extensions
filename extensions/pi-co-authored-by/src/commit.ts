@@ -30,9 +30,15 @@ export function wrapBashWithCommitHook(
 	hooksDir: string,
 	modelName: string,
 	piVersion: string,
+	options?: {
+		generatorName?: string;
+		coAuthorEmail?: string;
+	},
 ): string {
-	const coAuthor = `${CO_AUTHOR_NAME}: ${modelName} <noreply@pi.dev>`;
-	const generatedBy = `${GENERATED_BY_NAME}: pi ${piVersion}`;
+	const generatorName = options?.generatorName || "pi";
+	const email = options?.coAuthorEmail || "noreply@pi.dev";
+	const coAuthor = `${CO_AUTHOR_NAME}: ${modelName} <${email}>`;
+	const generatedBy = `${GENERATED_BY_NAME}: ${generatorName} ${piVersion}`;
 	const runPath = join(hooksDir, "run");
 
 	return [

@@ -19,7 +19,11 @@ const GENERATED_BY = `Generated-By: pi ${PI_VERSION}`;
 type GitRepo = {
 	cwd: string;
 	hooksDir: string;
-	run: (script: string, modelName?: string) => string;
+	run: (
+		script: string,
+		modelName?: string,
+		options?: { generatorName?: string; coAuthorEmail?: string },
+	) => string;
 	cleanup: () => void;
 };
 
@@ -56,10 +60,17 @@ git config user.email tester@example.com
 	return {
 		cwd,
 		hooksDir,
-		run(script: string, modelName = MODEL_NAME): string {
+		run(
+			script: string,
+			modelName = MODEL_NAME,
+			options?: { generatorName?: string; coAuthorEmail?: string },
+		): string {
 			return execFileSync(
 				"bash",
-				["-lc", `set -euo pipefail\n${wrapBashWithCommitHook(script, hooksDir, modelName, PI_VERSION)}`],
+				[
+					"-lc",
+					`set -euo pipefail\n${wrapBashWithCommitHook(script, hooksDir, modelName, PI_VERSION, options)}`,
+				],
 				{
 					cwd,
 					env: createIsolatedGitEnvironment(),
@@ -274,7 +285,7 @@ git log -1 --format=%B
 			expect(relativeOutput).toContain("User-Hook: relative");
 			expect(relativeOutput).toContain(CO_AUTHOR);
 		});
-	});
+	}, 15000);
 
 	it("skips chaining a Co-Authored-By injector hook (dsh residue) to avoid duplicate trailers", () => {
 		withGitRepo((repo) => {
@@ -438,6 +449,28 @@ git status >/dev/null
 			expect(existsSync(userBackup)).toBe(false);
 			expect(existsSync(userHook)).toBe(true);
 			expect(readFileSync(userHook, "utf8")).not.toContain("PI_CO_AUTHORED_BY_HOOK_MARKER");
+		});
+	});
+
+	it("supports dynamic generator name (e.g. omp) and custom co-author email", () => {
+		withGitRepo((repo) => {
+			const output = repo.run(
+				`
+echo test > custom.txt
+git add custom.txt
+git commit -q -m 'custom trailer test'
+git log -1 --format=%B
+`,
+				"Gemini Flash",
+				{
+					generatorName: "omp",
+					coAuthorEmail: "hakase@ooooo.space",
+				},
+			);
+
+			expect(output).toContain("custom trailer test");
+			expect(output).toContain("Co-Authored-By: Gemini Flash <hakase@ooooo.space>");
+			expect(output).toContain(`Generated-By: omp ${PI_VERSION}`);
 		});
 	});
 });
