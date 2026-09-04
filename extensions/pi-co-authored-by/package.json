@@ -23,6 +23,11 @@
     "git",
     "co-authored-by"
   ],
+  "omp": {
+    "extensions": [
+      "./src/index.ts"
+    ]
+  },
   "pi": {
     "extensions": [
       "./src/index.ts"
