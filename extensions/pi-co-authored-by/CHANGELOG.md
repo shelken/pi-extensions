@@ -1,5 +1,11 @@
 # pi-co-authored-by
 
+## 0.2.14
+
+### Patch Changes
+
+- [`24eeb14`](https://github.com/shelken/pi-extensions/commit/24eeb1492913d0f57a168668ef011d68f71834da) Thanks [@shelken](https://github.com/shelken)! - 移除宿主版本子进程探测，直接采用宿主注入的 VERSION；agent 目录统一经宿主 getAgentDir() 获取
+
 ## 0.2.13
 
 ### Patch Changes
