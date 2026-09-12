@@ -76,12 +76,13 @@ function scanPrompts(dir: string): Prompt[] {
 
   return readdirSync(dir)
     .flatMap((f): Prompt[] => {
-      if (!f.startsWith(FILE_PREFIX) || !f.endsWith(".md")) return [];
+      // 前缀比对与 matcher 一样忽略大小写, 否则 macOS 上手打 agents.x.md 会静默失效
+      if (f.slice(0, FILE_PREFIX.length).toUpperCase() !== FILE_PREFIX || !f.endsWith(".md")) return [];
       const name = f.slice(FILE_PREFIX.length, -3);
       // matcher 为空即裸 AGENTS.md, 它是宿主规则文件, 不参与 prompt 匹配
       if (!name) return [];
       const path = join(dir, f);
-      // 扫描域含用户可控的项目根: 同名目录或断链软链会让后续读取抛出, 整次注入就没了
+      // 同名目录与断链软链会让后续读取抛出, 这类条目直接跳过
       try {
         if (!statSync(path).isFile()) return [];
       } catch {

@@ -167,6 +167,13 @@ describe("findPrompt", () => {
       expect(findPrompt("gpt-5.5", getPromptDirs(cwd, home))).toBe("global content");
     }));
 
+  it("accepts a lowercase AGENTS prefix", () =>
+    withTempHome((_home, cwd) => {
+      writeFileSync(join(cwd, ".agents", "agents.gpt-5.5.md"), "lowercase prefix content");
+
+      expect(findPrompt("gpt-5.5", [join(cwd, ".agents")])).toBe("lowercase prefix content");
+    }));
+
   it("ignores a bare AGENTS.md and files that break the naming contract", () =>
     withTempHome((_home, cwd) => {
       const dirs = [join(cwd, ".agents")];
