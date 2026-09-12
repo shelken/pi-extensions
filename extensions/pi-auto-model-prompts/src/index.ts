@@ -74,7 +74,15 @@ export function getPromptDirs(cwd: string, homeDir = homedir()): string[] {
 function scanPrompts(dir: string): Prompt[] {
   if (!existsSync(dir)) return [];
 
-  return readdirSync(dir)
+  let entries: string[];
+  // .agents 本身是普通文件时 readdirSync 抛 ENOTDIR, 一处坏路径不该让整轮注入消失
+  try {
+    entries = readdirSync(dir);
+  } catch {
+    return [];
+  }
+
+  return entries
     .flatMap((f): Prompt[] => {
       // 前缀比对与 matcher 一样忽略大小写, 否则 macOS 上手打 agents.x.md 会静默失效
       if (f.slice(0, FILE_PREFIX.length).toUpperCase() !== FILE_PREFIX || !f.endsWith(".md")) return [];
@@ -114,7 +122,13 @@ function matchPrompt(modelId: string, prompts: Prompt[]): string | undefined {
   for (const prompt of prompts) {
     if (!isMatch(modelId, prompt)) continue;
 
-    const content = readFileSync(prompt.path, "utf-8").trim();
+    let content: string;
+    // 读不到（权限等）就换下一个候选, 而不是把异常抛给宿主丢掉这一轮的注入
+    try {
+      content = readFileSync(prompt.path, "utf-8").trim();
+    } catch {
+      continue;
+    }
     if (content) return content;
   }
   return undefined;
