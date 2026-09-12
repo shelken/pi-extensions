@@ -1,7 +1,10 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
-import { existsSync, readFileSync, readdirSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
+
+/** prompt 与配置所在目录名, 项目级与全局同名, 与宿主配置目录 (.pi/.omp) 无关 */
+const AGENTS_DIR = ".agents";
 
 // --- 类型 ---
 
@@ -17,6 +20,7 @@ interface Config {
 const DEFAULT_CONFIG: Config = { enabled: true, liveReload: false };
 
 const EXTENSION_NAME = "pi-auto-model-prompts";
+const FILE_PREFIX = "AGENTS.";
 
 type Prompt =
   | { path: string; priority: number; kind: "exact"; modelId: string }
@@ -27,9 +31,10 @@ type Prompt =
 // --- 配置加载 ---
 
 export function getConfigPaths(cwd: string, homeDir = homedir()): string[] {
+  // 顺序即优先级: loadConfig 后读的覆盖先读的, 故全局在前
   return [
-    join(homeDir, ".pi", "agent", "extensions", EXTENSION_NAME, "config.json"),
-    join(cwd, ".pi", "extensions", EXTENSION_NAME, "config.json"),
+    join(homeDir, AGENTS_DIR, EXTENSION_NAME, "config.json"),
+    join(cwd, AGENTS_DIR, EXTENSION_NAME, "config.json"),
   ];
 }
 
@@ -50,41 +55,49 @@ export function loadConfig(cwd: string, homeDir = homedir()): Config {
   return cfg;
 }
 
+/** prompt 目录, 顺序即优先级: 项目 `.agents` > 全局 `~/.agents` (findPrompt 取首个命中) */
 export function getPromptDirs(cwd: string, homeDir = homedir()): string[] {
-  return [
-    join(cwd, ".pi", "auto-model-prompts"),
-    join(homeDir, ".pi", "agent", "auto-model-prompts"),
-  ];
+  return [join(cwd, AGENTS_DIR), join(homeDir, AGENTS_DIR)];
 }
 
 // --- Prompt 扫描与匹配 ---
 
 /**
- * 扫描目录下 .md 文件，按优先级降序排列。
+ * 扫描目录下 `AGENTS.<matcher>.md` 文件，按优先级降序排列。
  *
  * 优先级：
  * - 精确匹配（无 *）：最高
  * - 前缀匹配（以 * 结尾）：前缀越长越具体
  * - 包含匹配（以 * 开头和结尾）
- * - 通配 *.md：最低
+ * - 通配 *：最低
  */
 function scanPrompts(dir: string): Prompt[] {
   if (!existsSync(dir)) return [];
 
   return readdirSync(dir)
-    .filter((f) => f.endsWith(".md"))
-    .map((f) => {
-      const name = f.slice(0, -3);
-      if (name === "*") return { path: join(dir, f), priority: 0, kind: "wildcard" as const };
+    .flatMap((f): Prompt[] => {
+      // 前缀比对与 matcher 一样忽略大小写, 否则 macOS 上手打 agents.x.md 会静默失效
+      if (f.slice(0, FILE_PREFIX.length).toUpperCase() !== FILE_PREFIX || !f.endsWith(".md")) return [];
+      const name = f.slice(FILE_PREFIX.length, -3);
+      // matcher 为空即裸 AGENTS.md, 它是宿主规则文件, 不参与 prompt 匹配
+      if (!name) return [];
+      const path = join(dir, f);
+      // 同名目录与断链软链会让后续读取抛出, 这类条目直接跳过
+      try {
+        if (!statSync(path).isFile()) return [];
+      } catch {
+        return [];
+      }
+      if (name === "*") return [{ path, priority: 0, kind: "wildcard" as const }];
       if (name.startsWith("*") && name.endsWith("*")) {
         const text = name.slice(1, -1);
-        return { path: join(dir, f), priority: 5_000 + text.length, kind: "contains" as const, text };
+        return [{ path, priority: 5_000 + text.length, kind: "contains" as const, text }];
       }
       if (name.endsWith("*")) {
         const prefix = name.slice(0, -1);
-        return { path: join(dir, f), priority: 10_000 + prefix.length, kind: "prefix" as const, prefix };
+        return [{ path, priority: 10_000 + prefix.length, kind: "prefix" as const, prefix }];
       }
-      return { path: join(dir, f), priority: 20_000 + name.length, kind: "exact" as const, modelId: name };
+      return [{ path, priority: 20_000 + name.length, kind: "exact" as const, modelId: name }];
     })
     .sort((a, b) => b.priority - a.priority);
 }
@@ -142,8 +155,17 @@ export default function (pi: ExtensionAPI) {
     }
     if (!cachedPrompt) return;
 
+    const extra = `# AUTO MODEL PROMPT(模型特别规则)\n\n${cachedPrompt}`;
+    // 上游 Pi 的 event/result.systemPrompt 是 string, OMP 是 string[]。
+    // 本扩展按 Pi 类型编译, 运行时按实际类型追加: 数组必须整体入列, 否则被模板字符串
+    // 按逗号拼成一整段, 破坏 Markdown 段落。故此处对 OMP 分支做一次显式类型放宽。
+    if (Array.isArray(event.systemPrompt)) {
+      return {
+        systemPrompt: [...event.systemPrompt, extra],
+      } as unknown as { systemPrompt: string };
+    }
     return {
-      systemPrompt: `${event.systemPrompt}\n\n# AUTO MODEL PROMPT(模型特别规则)\n\n${cachedPrompt}`,
+      systemPrompt: `${event.systemPrompt}\n\n${extra}`,
     };
   });
 }

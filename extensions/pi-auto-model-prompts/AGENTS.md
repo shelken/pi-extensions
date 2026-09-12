@@ -10,7 +10,7 @@
 
 ## 开发注意事项
 
-- 配置目录与 prompt 文件目录不是同一路径：配置在 `extensions/pi-auto-model-prompts/`，prompt 在 `auto-model-prompts/`
+- 运行期不读宿主配置目录：配置在 `{cwd}/.agents/pi-auto-model-prompts/config.json`（项目覆盖全局）与 `~/.agents/pi-auto-model-prompts/config.json`；prompt 在 `.agents` 根下，即 `{cwd}/.agents/AGENTS.<matcher>.md` 与 `~/.agents/AGENTS.<matcher>.md`，不在配置目录内。此路径与本仓 `{pi-agent-dir}/extensions/` 惯例不同，改动前先确认
 
 ## 基本约束
 
