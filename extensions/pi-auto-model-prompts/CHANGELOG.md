@@ -1,5 +1,11 @@
 # @shelken/pi-auto-model-prompts
 
+## 0.3.1
+
+### Patch Changes
+
+- [#48](https://github.com/shelken/pi-extensions/pull/48) [`ad44d44`](https://github.com/shelken/pi-extensions/commit/ad44d44317a89ce129e0099d168393fae3c02a24) Thanks [@shelken](https://github.com/shelken)! - prompt 读取不再因单个坏路径丢掉整轮注入：`.agents` 是普通文件时按空目录处理，prompt 文件读不到（权限等）时继续尝试下一个候选，而不是把异常抛给宿主。
+
 ## 0.3.0
 
 ### Minor Changes
