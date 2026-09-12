@@ -4,10 +4,11 @@
 
 ## 功能
 
-- 项目根优先，宿主 agent 目录其次，另一宿主 agent 目录兜底；每个目录内只取一个非空命中
+- 项目 `.agents` 优先，全局 `~/.agents` 兜底；每个目录内只取一个非空命中
 - 匹配前只取模型 ID 最后一个 `/` 后的部分
 - 匹配：精确 ID、`前缀*`、`*包含*`、兜底 `*`
 - 空文件忽略；内容会 `trim`
+- 与宿主配置目录（`.pi` / `.omp`）无关，两种宿主共用同一份规则
 
 ## 安装
 
@@ -23,8 +24,8 @@ omp plugin install npm:@shelken/pi-auto-model-prompts  # Oh My Pi
 路径（项目覆盖全局）：
 
 ```text
-.pi/extensions/pi-auto-model-prompts/config.json
-{pi-agent-dir}/extensions/pi-auto-model-prompts/config.json
+{cwd}/.agents/pi-auto-model-prompts/config.json   # 项目，覆盖全局
+~/.agents/pi-auto-model-prompts/config.json       # 全局
 ```
 
 ```json
@@ -42,9 +43,8 @@ omp plugin install npm:@shelken/pi-auto-model-prompts  # Oh My Pi
 ## Prompt 文件
 
 ```text
-{cwd}/AGENTS.<matcher>.md               # 项目根，优先
-{pi-agent-dir}/AGENTS.<matcher>.md      # 宿主 agent 目录
-{另一宿主 agent 目录}/AGENTS.<matcher>.md  # 兜底
+{cwd}/.agents/AGENTS.<matcher>.md   # 项目，优先
+~/.agents/AGENTS.<matcher>.md       # 全局，兜底
 ```
 
 | 文件名 | 匹配 |

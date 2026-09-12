@@ -1,13 +1,10 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
-import { CONFIG_DIR_NAME, getAgentDir } from "@earendil-works/pi-coding-agent";
 import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 
-/** 当前宿主配置目录名 (上游 Pi 为 .pi, OMP 为 .omp) */
-const HOST_DIR = CONFIG_DIR_NAME || ".pi";
-/** 另一宿主目录名: 仅作宿主无配置时的兼容回退 */
-const LEGACY_DIR = HOST_DIR === ".pi" ? ".omp" : ".pi";
+/** prompt 与配置所在目录名, 项目级与全局同名, 与宿主配置目录 (.pi/.omp) 无关 */
+const AGENTS_DIR = ".agents";
 
 // --- 类型 ---
 
@@ -34,17 +31,10 @@ type Prompt =
 // --- 配置加载 ---
 
 export function getConfigPaths(cwd: string, homeDir = homedir()): string[] {
-  // 宿主配置优先: 只要当前宿主存在任一配置文件就只用宿主的, 避免另一宿主的
-  // enabled=false 覆盖本宿主显式开启的配置; 宿主全无配置时才回退另一宿主。
-  const hostPaths = [
-    join(homeDir, HOST_DIR, "agent", "extensions", EXTENSION_NAME, "config.json"),
-    join(cwd, HOST_DIR, "extensions", EXTENSION_NAME, "config.json"),
-  ];
-  if (hostPaths.some(existsSync)) return hostPaths;
-
+  // 顺序即优先级: loadConfig 后读的覆盖先读的, 故全局在前
   return [
-    join(homeDir, LEGACY_DIR, "agent", "extensions", EXTENSION_NAME, "config.json"),
-    join(cwd, LEGACY_DIR, "extensions", EXTENSION_NAME, "config.json"),
+    join(homeDir, AGENTS_DIR, EXTENSION_NAME, "config.json"),
+    join(cwd, AGENTS_DIR, EXTENSION_NAME, "config.json"),
   ];
 }
 
@@ -65,9 +55,9 @@ export function loadConfig(cwd: string, homeDir = homedir()): Config {
   return cfg;
 }
 
-/** prompt 目录, 顺序即优先级: 项目根 > 宿主 agent 目录 > 另一宿主 agent 目录 (findPrompt 取首个命中) */
+/** prompt 目录, 顺序即优先级: 项目 `.agents` > 全局 `~/.agents` (findPrompt 取首个命中) */
 export function getPromptDirs(cwd: string, homeDir = homedir()): string[] {
-  return [cwd, getAgentDir(), join(homeDir, LEGACY_DIR, "agent")];
+  return [join(cwd, AGENTS_DIR), join(homeDir, AGENTS_DIR)];
 }
 
 // --- Prompt 扫描与匹配 ---
