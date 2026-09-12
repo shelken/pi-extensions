@@ -4,15 +4,16 @@
 
 ## 功能
 
-- 项目 prompt 优先，全局其次；同一目录只取一个非空匹配
+- 项目根优先，宿主 agent 目录其次，另一宿主 agent 目录兜底；每个目录内只取一个非空命中
 - 匹配前只取模型 ID 最后一个 `/` 后的部分
-- 匹配：精确 ID、`前缀*`、`*包含*`、兜底 `*.md`
+- 匹配：精确 ID、`前缀*`、`*包含*`、兜底 `*`
 - 空文件忽略；内容会 `trim`
 
 ## 安装
 
 ```bash
-pi install npm:@shelken/pi-auto-model-prompts
+pi install npm:@shelken/pi-auto-model-prompts          # 上游 Pi
+omp plugin install npm:@shelken/pi-auto-model-prompts  # Oh My Pi
 ```
 
 装好后 `/reload`。
@@ -41,16 +42,19 @@ pi install npm:@shelken/pi-auto-model-prompts
 ## Prompt 文件
 
 ```text
-.pi/auto-model-prompts/              # 项目
-{pi-agent-dir}/auto-model-prompts/  # 全局
+{cwd}/AGENTS.<matcher>.md               # 项目根，优先
+{pi-agent-dir}/AGENTS.<matcher>.md      # 宿主 agent 目录
+{另一宿主 agent 目录}/AGENTS.<matcher>.md  # 兜底
 ```
 
 | 文件名 | 匹配 |
 |---|---|
-| `gpt-5.5.md` | 模型 ID 完全一致（忽略大小写） |
-| `kimi*.md` | 前缀匹配 |
-| `*fixture-alpha*.md` | 包含匹配 |
-| `*.md` | 任意模型，优先级最低 |
+| `AGENTS.gpt-5.5.md` | 模型 ID 完全一致（忽略大小写） |
+| `AGENTS.kimi*.md` | 前缀匹配 |
+| `AGENTS.*fixture-alpha*.md` | 包含匹配 |
+| `AGENTS.*.md` | 任意模型，优先级最低 |
+
+`AGENTS.md` 本体是宿主规则文件，扩展不读它
 
 ## 验证
 

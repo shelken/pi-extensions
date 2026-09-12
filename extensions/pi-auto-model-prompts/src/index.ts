@@ -1,6 +1,6 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
-import { CONFIG_DIR_NAME } from "@earendil-works/pi-coding-agent";
-import { existsSync, readFileSync, readdirSync } from "node:fs";
+import { CONFIG_DIR_NAME, getAgentDir } from "@earendil-works/pi-coding-agent";
+import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 
@@ -23,6 +23,7 @@ interface Config {
 const DEFAULT_CONFIG: Config = { enabled: true, liveReload: false };
 
 const EXTENSION_NAME = "pi-auto-model-prompts";
+const FILE_PREFIX = "AGENTS.";
 
 type Prompt =
   | { path: string; priority: number; kind: "exact"; modelId: string }
@@ -64,44 +65,48 @@ export function loadConfig(cwd: string, homeDir = homedir()): Config {
   return cfg;
 }
 
+/** prompt 目录, 顺序即优先级: 项目根 > 宿主 agent 目录 > 另一宿主 agent 目录 (findPrompt 取首个命中) */
 export function getPromptDirs(cwd: string, homeDir = homedir()): string[] {
-  // findPrompt 取首个命中, 故宿主目录必须排在另一宿主之前
-  return [
-    join(cwd, HOST_DIR, "auto-model-prompts"),
-    join(homeDir, HOST_DIR, "agent", "auto-model-prompts"),
-    join(cwd, LEGACY_DIR, "auto-model-prompts"),
-    join(homeDir, LEGACY_DIR, "agent", "auto-model-prompts"),
-  ];
+  return [cwd, getAgentDir(), join(homeDir, LEGACY_DIR, "agent")];
 }
 
 // --- Prompt 扫描与匹配 ---
 
 /**
- * 扫描目录下 .md 文件，按优先级降序排列。
+ * 扫描目录下 `AGENTS.<matcher>.md` 文件，按优先级降序排列。
  *
  * 优先级：
  * - 精确匹配（无 *）：最高
  * - 前缀匹配（以 * 结尾）：前缀越长越具体
  * - 包含匹配（以 * 开头和结尾）
- * - 通配 *.md：最低
+ * - 通配 *：最低
  */
 function scanPrompts(dir: string): Prompt[] {
   if (!existsSync(dir)) return [];
 
   return readdirSync(dir)
-    .filter((f) => f.endsWith(".md"))
-    .map((f) => {
-      const name = f.slice(0, -3);
-      if (name === "*") return { path: join(dir, f), priority: 0, kind: "wildcard" as const };
+    .flatMap((f): Prompt[] => {
+      if (!f.startsWith(FILE_PREFIX) || !f.endsWith(".md")) return [];
+      const name = f.slice(FILE_PREFIX.length, -3);
+      // matcher 为空即裸 AGENTS.md, 它是宿主规则文件, 不参与 prompt 匹配
+      if (!name) return [];
+      const path = join(dir, f);
+      // 扫描域含用户可控的项目根: 同名目录或断链软链会让后续读取抛出, 整次注入就没了
+      try {
+        if (!statSync(path).isFile()) return [];
+      } catch {
+        return [];
+      }
+      if (name === "*") return [{ path, priority: 0, kind: "wildcard" as const }];
       if (name.startsWith("*") && name.endsWith("*")) {
         const text = name.slice(1, -1);
-        return { path: join(dir, f), priority: 5_000 + text.length, kind: "contains" as const, text };
+        return [{ path, priority: 5_000 + text.length, kind: "contains" as const, text }];
       }
       if (name.endsWith("*")) {
         const prefix = name.slice(0, -1);
-        return { path: join(dir, f), priority: 10_000 + prefix.length, kind: "prefix" as const, prefix };
+        return [{ path, priority: 10_000 + prefix.length, kind: "prefix" as const, prefix }];
       }
-      return { path: join(dir, f), priority: 20_000 + name.length, kind: "exact" as const, modelId: name };
+      return [{ path, priority: 20_000 + name.length, kind: "exact" as const, modelId: name }];
     })
     .sort((a, b) => b.priority - a.priority);
 }

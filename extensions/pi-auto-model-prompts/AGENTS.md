@@ -10,7 +10,7 @@
 
 ## 开发注意事项
 
-- 配置目录与 prompt 文件目录不是同一路径：配置在 `extensions/pi-auto-model-prompts/`，prompt 在 `auto-model-prompts/`
+- 配置目录与 prompt 文件目录不是同一路径：配置在 `extensions/pi-auto-model-prompts/`，prompt 是项目根与 agent 目录下的 `AGENTS.<matcher>.md`
 
 ## 基本约束
 
