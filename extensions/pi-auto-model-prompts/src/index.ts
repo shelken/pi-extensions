@@ -1,7 +1,13 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import { CONFIG_DIR_NAME } from "@earendil-works/pi-coding-agent";
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
+
+/** 当前宿主配置目录名 (上游 Pi 为 .pi, OMP 为 .omp) */
+const HOST_DIR = CONFIG_DIR_NAME || ".pi";
+/** 另一宿主目录名: 仅作宿主无配置时的兼容回退 */
+const LEGACY_DIR = HOST_DIR === ".pi" ? ".omp" : ".pi";
 
 // --- 类型 ---
 
@@ -27,9 +33,17 @@ type Prompt =
 // --- 配置加载 ---
 
 export function getConfigPaths(cwd: string, homeDir = homedir()): string[] {
+  // 宿主配置优先: 只要当前宿主存在任一配置文件就只用宿主的, 避免另一宿主的
+  // enabled=false 覆盖本宿主显式开启的配置; 宿主全无配置时才回退另一宿主。
+  const hostPaths = [
+    join(homeDir, HOST_DIR, "agent", "extensions", EXTENSION_NAME, "config.json"),
+    join(cwd, HOST_DIR, "extensions", EXTENSION_NAME, "config.json"),
+  ];
+  if (hostPaths.some(existsSync)) return hostPaths;
+
   return [
-    join(homeDir, ".pi", "agent", "extensions", EXTENSION_NAME, "config.json"),
-    join(cwd, ".pi", "extensions", EXTENSION_NAME, "config.json"),
+    join(homeDir, LEGACY_DIR, "agent", "extensions", EXTENSION_NAME, "config.json"),
+    join(cwd, LEGACY_DIR, "extensions", EXTENSION_NAME, "config.json"),
   ];
 }
 
@@ -51,9 +65,12 @@ export function loadConfig(cwd: string, homeDir = homedir()): Config {
 }
 
 export function getPromptDirs(cwd: string, homeDir = homedir()): string[] {
+  // findPrompt 取首个命中, 故宿主目录必须排在另一宿主之前
   return [
-    join(cwd, ".pi", "auto-model-prompts"),
-    join(homeDir, ".pi", "agent", "auto-model-prompts"),
+    join(cwd, HOST_DIR, "auto-model-prompts"),
+    join(homeDir, HOST_DIR, "agent", "auto-model-prompts"),
+    join(cwd, LEGACY_DIR, "auto-model-prompts"),
+    join(homeDir, LEGACY_DIR, "agent", "auto-model-prompts"),
   ];
 }
 
@@ -142,8 +159,17 @@ export default function (pi: ExtensionAPI) {
     }
     if (!cachedPrompt) return;
 
+    const extra = `# AUTO MODEL PROMPT(模型特别规则)\n\n${cachedPrompt}`;
+    // 上游 Pi 的 event/result.systemPrompt 是 string, OMP 是 string[]。
+    // 本扩展按 Pi 类型编译, 运行时按实际类型追加: 数组必须整体入列, 否则被模板字符串
+    // 按逗号拼成一整段, 破坏 Markdown 段落。故此处对 OMP 分支做一次显式类型放宽。
+    if (Array.isArray(event.systemPrompt)) {
+      return {
+        systemPrompt: [...event.systemPrompt, extra],
+      } as unknown as { systemPrompt: string };
+    }
     return {
-      systemPrompt: `${event.systemPrompt}\n\n# AUTO MODEL PROMPT(模型特别规则)\n\n${cachedPrompt}`,
+      systemPrompt: `${event.systemPrompt}\n\n${extra}`,
     };
   });
 }
