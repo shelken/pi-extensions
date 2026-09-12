@@ -1,6 +1,6 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
-import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import autoModelPrompts, { loadConfig, getConfigPaths, findPrompt, getPromptDirs } from "../src/index.ts";
@@ -194,6 +194,28 @@ describe("findPrompt", () => {
 
       expect(findPrompt("gpt-5.5", dirs)).toBe("exact content");
       expect(findPrompt("unmatched-model", dirs)).toBeUndefined();
+    }));
+
+  it("falls through to the next candidate when a prompt file is unreadable", () =>
+    withTempHome((_home, cwd) => {
+      const exact = join(cwd, ".agents", "AGENTS.gpt-5.5.md");
+      writeFileSync(exact, "exact content");
+      writeFileSync(join(cwd, ".agents", "AGENTS.*.md"), "wildcard content");
+      chmodSync(exact, 0o000);
+
+      try {
+        expect(findPrompt("gpt-5.5", [join(cwd, ".agents")])).toBe("wildcard content");
+      } finally {
+        chmodSync(exact, 0o644);
+      }
+    }));
+
+  it("treats a prompt path that is a file as an empty directory", () =>
+    withTempHome((_home, cwd) => {
+      const notADir = join(cwd, "AGENTS.gpt-5.5.md");
+      writeFileSync(notADir, "exact content");
+
+      expect(findPrompt("gpt-5.5", [notADir])).toBeUndefined();
     }));
 });
 
