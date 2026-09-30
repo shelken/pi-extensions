@@ -1,5 +1,11 @@
 # pi-co-authored-by
 
+## 0.2.15
+
+### Patch Changes
+
+- [#51](https://github.com/shelken/pi-extensions/pull/51) [`44039fc`](https://github.com/shelken/pi-extensions/commit/44039fc552eb9d92ff2d6fa6b4067da9f10f908d) Thanks [@shelken](https://github.com/shelken)! - runner 改用 PATH 中的 Bash，避免 macOS 系统 Bash 3.2 解析 quoted heredoc 提交消息时因反引号或引号中断提交；保留消息字面量与 Co-Authored-By / Generated-By trailer
+
 ## 0.2.14
 
 ### Patch Changes
