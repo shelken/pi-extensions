@@ -26,6 +26,8 @@ pi install npm:@shelken/pi-co-authored-by
 
 装好后 `/reload`。之后 agent 提交即可，无需额外命令。
 
+runner 使用 `PATH` 中的 `bash`。macOS 上请将现代 Bash（例如 Bash 5.x）放在系统 `/bin/bash` 前，避免 Bash 3.2 解析 `$(cat <<'EOF' … EOF)` 中的反引号或引号时导致提交失败
+
 ## 配置
 
 无配置文件。

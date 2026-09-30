@@ -46,7 +46,7 @@ function createGitRepo(): GitRepo {
 	execFileSync(
 		"bash",
 		[
-			"-lc",
+			"-c",
 			`
 set -euo pipefail
 git init -q
@@ -68,7 +68,7 @@ git config user.email tester@example.com
 			return execFileSync(
 				"bash",
 				[
-					"-lc",
+					"-c",
 					`set -euo pipefail\n${wrapBashWithCommitHook(script, hooksDir, modelName, PI_VERSION, options)}`,
 				],
 				{
@@ -120,6 +120,31 @@ git log -1 --format=%B
 					encoding: "utf8",
 				}),
 			).toBe("");
+			expect(existsSync(join(repo.cwd, ".git/hooks/prepare-commit-msg"))).toBe(false);
+		});
+	});
+
+	it("preserves literal special characters in quoted heredoc commit messages", () => {
+		withGitRepo((repo) => {
+			const message = [
+				"fix: preserve quoted heredoc",
+				"",
+				"paired `touch backtick-probe` and unmatched `",
+				"$(touch substitution-probe) $HOME",
+				"single ' and double \" quotes",
+				"multiline body",
+			].join("\n");
+			const output = repo.run(`
+git commit --allow-empty -q -m "$(cat <<'EOF'
+${message}
+EOF
+)"
+git log -1 --format=%B
+`);
+
+			expect(output).toBe(`${message}\n\n${CO_AUTHOR}\n${GENERATED_BY}\n\n`);
+			expect(existsSync(join(repo.cwd, "backtick-probe"))).toBe(false);
+			expect(existsSync(join(repo.cwd, "substitution-probe"))).toBe(false);
 			expect(existsSync(join(repo.cwd, ".git/hooks/prepare-commit-msg"))).toBe(false);
 		});
 	});

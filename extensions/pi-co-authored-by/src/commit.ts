@@ -50,7 +50,7 @@ export function wrapBashWithCommitHook(
 }
 
 function buildRunnerScript(): string {
-	return `#!/bin/bash
+	return `#!/usr/bin/env bash
 # PI_CO_AUTHORED_BY_RUNNER
 export PI_CO_AUTHORED_BY_HOOK_SRC="$(dirname "$0")/prepare-commit-msg"
 
