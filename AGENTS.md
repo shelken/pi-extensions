@@ -4,14 +4,11 @@
 
 ## 目录结构
 
-`extensions/`: 各插件子包（一目录一 package）
-`.changeset/`: 版本与 changelog 声明
+`extensions/`: 一目录一 package
 `.github/workflows/`: CI / 发布
-`docs/`: 版本与协作文档
-`justfile`: 统一开发与验证命令
-`package.json`: workspace 与 `pi.extensions` 入口
-`AGENTS.md` / `README.md`: 协作约定与索引
-`.pi/`: 本仓项目级 pi 包声明与本地 npm 安装（入库仅限约定文件）
+`.pi/`: 项目级 pi 包声明与本地 npm 安装（入库仅限约定文件）
+
+版本、协作、发布文档见 `README.md` 与 `docs/`；命令查 `justfile`，workspace 入口查根 `package.json` 的 `pi.extensions`
 
 ## 开发注意事项
 
@@ -22,32 +19,27 @@
 
 ## 基本约束
 
-- AGENTS / 开发说明禁止复述源码已表达的逻辑；只记代码看不出来的约定(实现即文档), 只记流程、边界决策、禁止事项
+- 文档只记代码看不出来的约定与流程、边界决策、禁止事项；源码已表达的逻辑不重复
 - 子包默认 `private: true`；公开发布用 `@shelken/` + `publishConfig.access: public`；`keywords` 必须含 `pi-package`（pi.dev/packages 官方索引靠这个，不是 git tag）
 - 子包级命令放子包 justfile；通用命令放根 `justfile`
 - 插件配置路径无特殊理由时：`{pi-agent-dir}/extensions/<package>/config.json` 与 `.pi/extensions/<package>/config.json`，项目覆盖全局
 - 扩展 factory 禁网络与同步重 IO；耗时放 `session_start`（或等价延迟路径）
-- 文档不写本机绝对路径，用 `{pi-agent-dir}` 等
-- 提交前至少 `just verify`；单包可加 `bun --filter <package> test`
-- 改动仅涉及单个插件时，在子包目录内跑 `just verify` 即可，避免全局 `just verify` 浪费时间
-- 如果想要测试pi插件, 先检查模型(使用mini/nano/flash/free等便宜经济的模型),`pi --list-models | grep -Ei '\-flash|\-mini|\-nano|free'`,优先使用free, 然后测试模型`pi --model opencode/deepseek-v4-flash-free --thinking high --no-session --no-context-files --no-approve --no-extensions --no-skills -p "say hi"`; 
-- 新建新的插件时 使用 `nix flake new extensions/{new-extension} -t github:shelken/nix-templates#pi-extension`
+- 验证：改动仅涉及单个插件时在子包目录跑 `just verify` 即可；跨包改动跑根 `just verify`
+- 需要真机测试 pi 插件行为时，见 `docs/agents/pi-testing.md`
+- 新建插件用 `nix flake new extensions/{new-extension} -t github:shelken/nix-templates#pi-extension`
 - worktree / 分支开发新插件时：本地测试只把**单个子包路径**加入 `{pi-agent-dir}/settings.json` 的 `packages`（如 `.../extensions/<package>`），不要挂 monorepo 根目录，避免 worktree 整仓入口与主干 packages 叠装
-- 提交后, 检查changeset目录, 询问用户是否发布, 用户同意后按照发布流程进行
+
+## 提交与发布
+
+- 提交后检查 `.changeset/` 目录，询问用户是否发布，同意后走发布流程
 
 ## 迁移流程（迁入 monorepo 时）
 
 1. 复制已审阅源码到 `extensions/<package>`，排除 `.git`、`node_modules`、`dist`、lockfile、临时文件
-2. 修正入口、包名、根 `pi.extensions`
-3. 从 pi settings 去掉旧独立入口，保留 mono 入口
-4. 验证通过再提交、推送；最后才归档旧仓库
+2. 修正入口、包名、根 `pi.extensions`；从 pi settings 去掉旧独立入口，保留 mono 入口
+3. 验证通过再提交、推送；最后才归档旧仓库
 
 ## Agent skills
 
-### Issue tracker
-
-Issues 与 spec 都作为 GitHub issue 管理（`gh` CLI）。Spec 本地镜像在 `docs/specs/<feature>-spec.md`。见 `docs/agents/issue-tracker.md`。
-
-### Domain docs
-
-Single-context：根 `CONTEXT.md` + `docs/adr/`。见 `docs/agents/domain.md`。
+- Issues 与 spec 都作为 GitHub issue 管理（`gh` CLI），spec 本地镜像在 `docs/specs/<feature>-spec.md`，见 `docs/agents/issue-tracker.md`
+- Domain docs 用 single-context（根 `CONTEXT.md` + `docs/adr/`），见 `docs/agents/domain.md`
