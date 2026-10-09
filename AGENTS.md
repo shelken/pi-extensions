@@ -1,53 +1,17 @@
 # Repository Guidelines
 
-个人 pi 扩展 monorepo：子包装在 `extensions/`，统一验证与 changesets 发布。
+个人 pi 扩展 monorepo：子包装在 `extensions/`（一目录一 package），根 `package.json` 的 `pi.extensions` 决定加载入口，统一验证与 changesets 发布。
 
-## 目录结构
-
-`extensions/`: 各插件子包（一目录一 package）
-`.changeset/`: 版本与 changelog 声明
-`.github/workflows/`: CI / 发布
-`docs/`: 版本与协作文档
-`justfile`: 统一开发与验证命令
-`package.json`: workspace 与 `pi.extensions` 入口
-`AGENTS.md` / `README.md`: 协作约定与索引
-`.pi/`: 本仓项目级 pi 包声明与本地 npm 安装（入库仅限约定文件）
-
-## 开发注意事项
-
+## 铁律
+- 扩展 factory 禁网络与同步重 IO；耗时逻辑放 `session_start`（或等价延迟路径）
 - 增删改名子包：同步根 `README.md` 表格与根 `package.json` 的 `pi.extensions`
-- 有发布意义的行为/入口/配置变更写 `.changeset/*.md`；只改测试/文档可空 changeset 或不写（见 `docs/versioning.md`）
-- fork 说明写在**子包** `README.md`，根 README 不写 fork 来源
-- 依赖分层：`@earendil-works/*` 只在根 `devDependencies`（给 tsc/测试）+ 子包 `peerDependencies`（宿主 pi 提供，可 optional）；真 runtime 库（如 `yaml`/`typebox`）放子包 `dependencies`，不要挂根
+- 文档只记代码看不出的东西：约定、流程、边界决策、禁止事项
 
-## 基本约束
-
-- AGENTS / 开发说明禁止复述源码已表达的逻辑；只记代码看不出来的约定(实现即文档), 只记流程、边界决策、禁止事项
-- 子包默认 `private: true`；公开发布用 `@shelken/` + `publishConfig.access: public`；`keywords` 必须含 `pi-package`（pi.dev/packages 官方索引靠这个，不是 git tag）
-- 子包级命令放子包 justfile；通用命令放根 `justfile`
-- 插件配置路径无特殊理由时：`{pi-agent-dir}/extensions/<package>/config.json` 与 `.pi/extensions/<package>/config.json`，项目覆盖全局
-- 扩展 factory 禁网络与同步重 IO；耗时放 `session_start`（或等价延迟路径）
-- 文档不写本机绝对路径，用 `{pi-agent-dir}` 等
-- 提交前至少 `just verify`；单包可加 `bun --filter <package> test`
-- 改动仅涉及单个插件时，在子包目录内跑 `just verify` 即可，避免全局 `just verify` 浪费时间
-- 如果想要测试pi插件, 先检查模型(使用mini/nano/flash/free等便宜经济的模型),`pi --list-models | grep -Ei '\-flash|\-mini|\-nano|free'`,优先使用free, 然后测试模型`pi --model opencode/deepseek-v4-flash-free --thinking high --no-session --no-context-files --no-approve --no-extensions --no-skills -p "say hi"`; 
-- 新建新的插件时 使用 `nix flake new extensions/{new-extension} -t github:shelken/nix-templates#pi-extension`
-- worktree / 分支开发新插件时：本地测试只把**单个子包路径**加入 `{pi-agent-dir}/settings.json` 的 `packages`（如 `.../extensions/<package>`），不要挂 monorepo 根目录，避免 worktree 整仓入口与主干 packages 叠装
-- 提交后, 检查changeset目录, 询问用户是否发布, 用户同意后按照发布流程进行
-
-## 迁移流程（迁入 monorepo 时）
-
-1. 复制已审阅源码到 `extensions/<package>`，排除 `.git`、`node_modules`、`dist`、lockfile、临时文件
-2. 修正入口、包名、根 `pi.extensions`
-3. 从 pi settings 去掉旧独立入口，保留 mono 入口
-4. 验证通过再提交、推送；最后才归档旧仓库
-
-## Agent skills
-
-### Issue tracker
-
-Issues 与 spec 都作为 GitHub issue 管理（`gh` CLI）。Spec 本地镜像在 `docs/specs/<feature>-spec.md`。见 `docs/agents/issue-tracker.md`。
-
-### Domain docs
-
-Single-context：根 `CONTEXT.md` + `docs/adr/`。见 `docs/agents/domain.md`。
+## 指针
+| 触发 | 文件 |
+|---|---|
+| 发布 / changeset / npm / tag | `docs/versioning.md` |
+| issue / spec | `docs/agents/issue-tracker.md` |
+| 术语 / 上下文 / ADR | `docs/agents/domain.md` |
+| 提交 / 验证 / 测试 / 新建插件 / worktree / 迁移 | `docs/agents/workflow.md` |
+| 依赖 / 包元数据 / 配置路径 / fork / 路径写法 | `CODING_STANDARDS.md` |
