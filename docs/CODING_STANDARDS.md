@@ -2,6 +2,11 @@
 
 纯工程规范，从 AGENTS.md 按需外移；做下述事情时再阅读对应小节
 
+## 同步子包清单
+
+- 增删改名子包：同步根 `README.md` 的子 package 表格与根 `package.json` 的 `pi.extensions`
+- fork 说明写在子包 `README.md`，根 README 不写 fork 来源
+
 ## 依赖分层
 
 - `@earendil-works/*` 只放根 `package.json` 的 `devDependencies`（供 tsc 与测试）
@@ -13,12 +18,12 @@
 - 子包默认 `private: true`
 - 公开发布用 `@shelken/` 前缀 + `publishConfig.access: public`
 - `keywords` 必须含 `pi-package`（pi.dev/packages 官方索引靠这个，不是 git tag）
-- fork 说明写在子包 `README.md`，根 README 不写 fork 来源
 
 ## 插件配置路径
 
 - 无特殊理由时全局路径为 `{pi-agent-dir}/extensions/<package>/config.json`
 - 项目级路径为 `.pi/extensions/<package>/config.json`，项目覆盖全局
+- 本仓 `.pi/` 不入库，只提交约定文件（项目级包声明等）
 
 ## 扩展 factory
 

@@ -1,4 +1,4 @@
-# pi-extensions 统一流程入口。详见 AGENTS.md。
+# pi-extensions 统一流程入口。详见 docs/README.md。
 
 default:
     @just --list

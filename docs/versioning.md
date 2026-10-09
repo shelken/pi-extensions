@@ -2,6 +2,8 @@
 
 **依据：** [changesets](https://github.com/changesets/changesets) independent mode；根包不发布；子包独立 semver + 各包 `CHANGELOG.md`；public 经 CI OIDC（Trusted Publisher），无 `NPM_TOKEN`。
 
+**提交后：** 检查 `.changeset/` 目录，为空时询问用户是否发布，同意后走下方流程。
+
 **清单：** public = 有 `publishConfig.access: public` 的 `@shelken/*`；private = 其余（只 version/tag，不发 npm）。
 
 ---
