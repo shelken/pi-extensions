@@ -43,19 +43,18 @@ jobs:
       - uses: changesets/action@v2.1.2
         id: changesets
         with:
-          publish: bunx changeset publish
-          version: bunx changeset version
-          commit: "chore(release): 版本发布"
-          title: "chore(release): 版本发布"
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          publish-script: bunx changeset publish
+          version-script: bunx changeset version
+          commit-message: "chore(release): 版本发布"
+          pr-title: "chore(release): 版本发布"
+          github-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: 给 release PR 加标签
-        if: steps.changesets.outputs.pullRequestNumber != ''
+        if: steps.changesets.outputs.pr-number != ''
         run: |
           for pkg in ${{ steps.packages.outputs.names }}; do
             gh label create "release:$pkg" 2>/dev/null || true
-            gh pr edit "${{ steps.changesets.outputs.pullRequestNumber }}" --add-label "release:$pkg"
+            gh pr edit "${{ steps.changesets.outputs.pr-number }}" --add-label "release:$pkg"
           done
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
