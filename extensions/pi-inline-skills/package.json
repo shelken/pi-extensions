@@ -1,9 +1,20 @@
 {
   "name": "@shelken/pi-inline-skills",
-  "version": "0.0.0",
-  "private": true,
+  "version": "0.1.0",
   "description": "Inline /skill autocomplete in the pi editor",
   "type": "module",
+  "license": "MIT",
+  "files": [
+    "src"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/shelken/pi-extensions.git",
+    "directory": "extensions/pi-inline-skills"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
   "keywords": ["pi-package", "autocomplete", "skills"],
   "scripts": {
     "test": "vitest run",

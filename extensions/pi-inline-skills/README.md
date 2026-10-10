@@ -2,6 +2,14 @@
 
 输入 `/` 时内联补全 skill（`/wayfinder` → `skill:wayfinder`），并把已加载 skill 的内容直接展开进用户消息，无需额外依赖文件引用。
 
+## 安装
+
+```bash
+pi install npm:@shelken/pi-inline-skills
+```
+
+安装后执行 `/reload`。
+
 ## Fork 来源
 
 Fork 自 [`@tifan/pi-inline-skills` v1.0.5](https://github.com/tifandotme/pi-extensions/tree/master/packages/pi-inline-skills)（MIT），移入本 monorepo 自行维护。
