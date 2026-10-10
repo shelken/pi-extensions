@@ -4,6 +4,7 @@
 
 ## 验证与提交
 - 提交前至少 `just verify`；单包改动在子包目录内跑 `just verify`，避免全局验证浪费时间
+- PR 统一经 `.github/workflows/ci.yml` 运行 `just verify` 门禁，环境依据 `.mise.toml` 还原
 - 提交后检查 `.changeset/` 目录，询问用户是否发布；同意后按 `docs/versioning.md` 发布
 
 ## 新建子包

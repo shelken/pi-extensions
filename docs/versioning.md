@@ -100,5 +100,8 @@ just package-baseline <slug> <publish-commit>
 ## 配置
 
 - `.changeset/config.json`：independent、`privatePackages` version+tag、`@changesets/changelog-github`
-- `.github/workflows/publish.yml`：OIDC，`id-token: write`，无 token
+- `.github/workflows/ci.yml`：PR 与 push 门禁，经 `jdx/mise-action` 还原 `.mise.toml` 执行 `just verify`
+- `.github/workflows/publish.yml`：OIDC 发包，经 `jdx/mise-action` 还原工具链，`changesets/action@v2` 驱动发布
+- `.github/workflows/renovate-changeset.yml`：Renovate PR 自动生成补齐依赖 changeset
+- `renovate.json`：Bun 工作区依赖自动升级调度，排除 mise
 - `scripts/public-package.mjs` / `just package-*`：首发与门禁

@@ -2,9 +2,11 @@
 
 写代码与文档时的决策规范。命令、流程、gotcha 见 `docs/agents/workflow.md`。
 
-## 依赖分层
+## 工具链与依赖分层
+- 工具链（Node、Bun、Gitleaks）由 `.mise.toml` 锁定基线，本地与 CI 统一经 mise 还原
 - `@earendil-works/*`：根 `devDependencies`（供 tsc/测试）+ 子包 `peerDependencies`（宿主 pi 提供，可 optional）
 - 真 runtime 库（如 `yaml`/`typebox`）放子包 `dependencies`，不挂根
+- 依赖自动升级由 `renovate.json` 托管，排除 `mise`，子包 runtime 依赖升级自动生成 changeset
 
 ## 包元数据与发布开关
 - 子包默认 `private: true`
