@@ -1,5 +1,11 @@
 # @shelken/copy-cut
 
+## 0.2.2
+
+### Patch Changes
+
+- [`7a2fc53`](https://github.com/shelken/pi-extensions/commit/7a2fc53caf18ed476c63ec9e3d0bede54f76ace5) Thanks [@shelken](https://github.com/shelken)! - 同步 npm 包的 `src/index.ts` 入口和当前剪切实现。
+
 ## 0.2.1
 
 ### Patch Changes

@@ -1,6 +1,6 @@
 {
   "name": "@shelken/copy-cut",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "description": "alt+shift+x 剪切输入框文本到剪贴板",
   "type": "module",
   "license": "MIT",
