@@ -12,7 +12,7 @@ concurrency:
 jobs:
   changeset:
     name: 自动补齐依赖更新 changeset
-    if: startsWith(github.head_ref, 'renovate/')
+    if: github.event.pull_request.head.repo.full_name == github.repository && startsWith(github.head_ref, 'renovate/')
     runs-on: ubuntu-latest
     permissions:
       contents: write

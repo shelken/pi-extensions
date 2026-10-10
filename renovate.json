@@ -33,5 +33,9 @@
   "schedule": ["before 6am on monday"],
   "timezone": "Asia/Shanghai",
   "prHourlyLimit": 5,
-  "rangeStrategy": "bump"
+  "rangeStrategy": "bump",
+  "gitIgnoredAuthors": [
+    "github-actions[bot]@users.noreply.github.com",
+    "41898282+github-actions[bot]@users.noreply.github.com"
+  ]
 }
