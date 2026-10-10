@@ -25,7 +25,7 @@ jobs:
       contents: write   # 打 tag + 建 GitHub Release
       pull-requests: write  # 自动开 release PR
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: jdx/mise-action@v5.1.1
       - uses: actions/setup-node@v6
         with:
