@@ -1,0 +1,27 @@
+name: Renovate Changeset
+
+on:
+  pull_request_target:
+    types: [opened, synchronize]
+    branches: [main]
+
+concurrency:
+  group: renovate-changeset-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  changeset:
+    name: 自动补齐依赖更新 changeset
+    if: github.event.pull_request.head.repo.full_name == github.repository && startsWith(github.head_ref, 'renovate/')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - name: 生成 Changeset
+        uses: mscharley/dependency-changesets-action@v1.2.5
+        with:
+          changeset-folder: .changeset
+          use-conventional-commits: true
+          commit-message: "chore(deps): 自动补齐 changeset"
+          token: ${{ secrets.GITHUB_TOKEN }}
