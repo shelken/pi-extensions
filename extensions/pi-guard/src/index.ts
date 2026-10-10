@@ -126,7 +126,8 @@ export default function piGuard(pi: ExtensionAPI): void {
 
     // Any tool carrying a `path` field gets the same path guard as read/write/edit.
     // Covers built-in grep/find/ls/read/write/edit and custom tools following the same convention.
-    const candidatePath = event.input.path;
+    const rawInput = event.input as Record<string, unknown>;
+    const candidatePath = typeof rawInput.path === "string" ? rawInput.path : undefined;
     if (isNonEmptyPath(candidatePath)) {
       const tool =
         event.toolName === "write" || event.toolName === "edit"
