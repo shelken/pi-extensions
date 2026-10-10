@@ -1,5 +1,11 @@
 # @shelken/simple-plannotator
 
+## 0.1.6
+
+### Patch Changes
+
+- [#63](https://github.com/shelken/pi-extensions/pull/63) [`7858497`](https://github.com/shelken/pi-extensions/commit/7858497f27bcdf60e896e5c06581950453ee9a2c) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update 插件 runtime 依赖
+
 ## 0.1.5
 
 ### Patch Changes
