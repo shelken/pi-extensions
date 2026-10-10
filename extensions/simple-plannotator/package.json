@@ -29,7 +29,7 @@
     ]
   },
   "dependencies": {
-    "@plannotator/pi-extension": "^0.23.0"
+    "@plannotator/pi-extension": "^0.28.9"
   },
   "peerDependencies": {
     "@earendil-works/pi-coding-agent": ">=0.80.0"
