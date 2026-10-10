@@ -5,6 +5,11 @@
   ],
   "packageRules": [
     {
+      "description": "排除 mise 工具链更新，由项目 .mise.toml 锁定",
+      "matchManagers": ["mise"],
+      "enabled": false
+    },
+    {
       "description": "忽略子包的 peerDependencies，由宿主环境决定",
       "matchDepTypes": ["peerDependencies"],
       "enabled": false
@@ -34,6 +39,10 @@
   "timezone": "Asia/Shanghai",
   "prHourlyLimit": 5,
   "rangeStrategy": "bump",
+  "ignorePaths": [
+    "**/.mise.toml",
+    "**/mise.toml"
+  ],
   "gitIgnoredAuthors": [
     "github-actions[bot]@users.noreply.github.com",
     "41898282+github-actions[bot]@users.noreply.github.com"
