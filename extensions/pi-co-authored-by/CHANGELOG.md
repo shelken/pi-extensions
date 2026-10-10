@@ -1,5 +1,11 @@
 # pi-co-authored-by
 
+## 0.2.16
+
+### Patch Changes
+
+- [`7a2fc53`](https://github.com/shelken/pi-extensions/commit/7a2fc53caf18ed476c63ec9e3d0bede54f76ace5) Thanks [@shelken](https://github.com/shelken)! - 更新安装文档，移除已不适用的 Bash 环境要求。
+
 ## 0.2.15
 
 ### Patch Changes
