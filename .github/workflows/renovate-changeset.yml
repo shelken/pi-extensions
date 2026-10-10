@@ -6,7 +6,7 @@ on:
     branches: [main]
 
 concurrency:
-  group: renovate-changeset-${{ github.ref }}
+  group: renovate-changeset-${{ github.event.pull_request.number }}
   cancel-in-progress: true
 
 jobs:
@@ -18,11 +18,6 @@ jobs:
       contents: write
       pull-requests: write
     steps:
-      - uses: actions/checkout@v6
-        with:
-          ref: ${{ github.head_ref }}
-          token: ${{ secrets.GITHUB_TOKEN }}
-
       - name: 生成 Changeset
         uses: mscharley/dependency-changesets-action@v1.2.5
         with:

@@ -1,8 +1,7 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
   "extends": [
-    "config:recommended",
-    ":dependencyDashboard"
+    "config:recommended"
   ],
   "packageRules": [
     {
@@ -11,17 +10,18 @@
       "enabled": false
     },
     {
+      "description": "根目录开发工具链（构建、测试与代码检查）合并为一个 PR",
+      "matchDepTypes": ["devDependencies"],
+      "matchFileNames": ["package.json"],
+      "excludePackageNames": ["@earendil-works/{/,}**"],
+      "groupName": "根构建工具链 (tsc/vitest/oxlint/changesets)",
+      "automerge": true
+    },
+    {
       "description": "pi-core 宿主依赖（需关注 breaking changes，人工验证）",
       "groupName": "pi-core 宿主依赖",
       "automerge": false,
       "matchPackageNames": ["@earendil-works/{/,}**"]
-    },
-    {
-      "description": "根目录开发工具链（构建、测试与代码检查）合并为一个 PR",
-      "matchDepTypes": ["devDependencies"],
-      "matchFileNames": ["package.json"],
-      "groupName": "根构建工具链 (tsc/vitest/oxlint/changesets)",
-      "automerge": true
     },
     {
       "description": "各 extension 的 runtime 生产依赖",
