@@ -1,0 +1,54 @@
+{
+  "name": "@shelken/pi-sounds",
+  "version": "0.1.0",
+  "description": "Agent 任务完成/事件提示音扩展，内置轻量提示音，开箱即用，支持 macOS afplay 原生播放与自定义配置",
+  "type": "module",
+  "license": "MIT",
+  "files": [
+    "src",
+    "sounds"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/shelken/pi-extensions.git",
+    "directory": "extensions/pi-sounds"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "keywords": [
+    "pi-package",
+    "sound",
+    "notification",
+    "audio",
+    "jingle"
+  ],
+  "scripts": {
+    "test": "vitest run",
+    "check": "tsc --noEmit"
+  },
+  "peerDependencies": {
+    "@earendil-works/pi-coding-agent": "*"
+  },
+  "peerDependenciesMeta": {
+    "@earendil-works/pi-coding-agent": {
+      "optional": true
+    }
+  },
+  "pi": {
+    "extensions": [
+      "./src/index.ts"
+    ]
+  },
+  "omp": {
+    "extensions": [
+      "./src/index.ts"
+    ]
+  },
+  "devDependencies": {
+    "@earendil-works/pi-coding-agent": "latest",
+    "bun-types": "latest",
+    "typescript": "latest",
+    "vitest": "latest"
+  }
+}
