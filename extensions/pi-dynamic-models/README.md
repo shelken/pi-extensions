@@ -29,7 +29,7 @@ pi install npm:@shelken/pi-dynamic-models
 | `enable` | 总开关 |
 | `enableProviders` | 要发现的 provider。**省略**、`"*"` 或 `["*"]` = `models.json` 里所有带 `baseUrl` 的 provider；`[]` = 不启用 |
 | `excludePatterns` | glob（`*` / `?`），匹配的 **AUTO** id 不注册；不碰手写模型 |
-| `debug` | 为 true 时输出详细日志 |
+| `debug` | 为 true 时逐模型写入详细文件日志，不向终端回显 |
 
 ## 行为
 
@@ -43,7 +43,7 @@ pi install npm:@shelken/pi-dynamic-models
 - provider 列表缓存 6h；缓存与端点、协议、账户标识绑定，换端点或账户会重新发现。
 - factory 同步用磁盘 cache 注册（session restore 能找到上次的 `provider/id`），**不在启动时联网**；联网发生在 `session_start` 或 `/dynamic-models refresh`。
 - 同一次 runtime 内模型内容 hash 未变则跳过重注册；**每次扩展 factory 会清空 hash**（`/new` 会换 ModelRegistry，必须重新 register）。
-- 发现结果变化时 `notify`；个别 provider 发现失败只写日志，其他 provider 继续更新，终端不弹发现错误。
+- 发现结果变化时 `notify`；发现错误只写日志，包含手动刷新异常；其他 provider 继续更新。`debug` 与 `status` 均不向终端输出错误详情。
 - 日志：`{pi-agent-dir}/logs/pi-dynamic-models.log`
 
 ## 命令

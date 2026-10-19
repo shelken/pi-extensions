@@ -80,7 +80,6 @@ function log(message: string): void {
     mkdirSync(dirname(LOG_FILE), { recursive: true });
     writeFileSync(LOG_FILE, `${line}\n`, { flag: "a" });
   } catch {}
-  if (isDebug) console.warn(line);
 }
 
 /** 磁盘 JSON 是不可信输入：解析失败按缺失处理，调用方必须再过 schema。 */
@@ -543,6 +542,9 @@ function registerDiscovered(pi: ExtensionAPI, resolved: Resolved, name: string, 
     const remoteModel = eligible.find((model) => model.id === id);
     return remoteModel ? [buildAutoModel(remoteModel, registry, name)] : [];
   });
+  if (isDebug) {
+    for (const model of models) log(`${name}/${model.id}: context=${model.contextWindow} output=${model.maxTokens} reasoning=${model.reasoning}`);
+  }
   const manual = decodeManualModels(resolved.modelsJson.providers[name]?.models, log);
   // compat 不在缓存指纹里（改 compat 不重抓模型列表），但影响注册结果，必须进哈希。
   const hash = createHash("sha256").update(JSON.stringify([config.fingerprint, config.compat, manual, models])).digest("hex");
@@ -706,7 +708,7 @@ function registerCommands(pi: ExtensionAPI): void {
           const result = await refreshDiscovery(pi, ctx);
           if (result.ok) ctx.ui.notify(`dynamic-models: ${formatStatusLine(result.summaries)}`, "info");
         } catch (error) {
-          ctx.ui.notify(`dynamic-models: refresh failed: ${error}`, "error");
+          log(`dynamic-models: refresh failed: ${error}`);
         }
         return;
       }
@@ -718,7 +720,6 @@ function registerCommands(pi: ExtensionAPI): void {
         state.status,
         ...state.summaries.map(formatProviderSummary),
         `caches: ${caches.join(", ") || "none"}`,
-        ...(state.error ? [`last error: ${state.error}`] : []),
       ];
       ctx.ui.notify(lines.join("\n"), "info");
     },

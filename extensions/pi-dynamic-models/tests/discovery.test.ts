@@ -349,13 +349,28 @@ describe("discovery registration lifecycle", () => {
         },
       },
     };
+    writeFileSync(join(agent, "extensions", "pi-dynamic-models", "config.json"), JSON.stringify({ enable: true, debug: true }));
+    writeFileSync(join(agent, "models.json"), JSON.stringify({ providers: {
+      mp: providerConfig,
+      offline: { ...providerConfig, baseUrl: "https://offline.example/v1" },
+    } }));
     vi.stubGlobal("fetch", vi.fn(async (input: string) => {
-      if (String(input).includes("models.dev")) return Response.json({}, { headers: { etag: "catalog-v1" } });
-      return new Response("internal error", { status: 500 });
+      const url = String(input);
+      if (url.includes("models.dev")) return Response.json({}, { headers: { etag: "catalog-v1" } });
+      if (url.includes("offline.example")) return new Response("internal error", { status: 500 });
+      return Response.json({ data: remote });
     }));
-    const runtime = await start();
-    // SAFETY: 测试桩仅提供 ui.notify 用于断言终端通知级别
-    await runtime.refresh(ctx as ExtensionContext);
-    expect(notifications.filter((n) => n.level === "error")).toEqual([]);
+    const terminalLog = vi.spyOn(console, "warn").mockImplementation(() => {});
+    try {
+      const runtime = await start();
+      // SAFETY: 测试桩仅提供 ui.notify 用于断言终端通知级别
+      await runtime.refresh(ctx as ExtensionContext);
+      expect(runtime.target()?.contextWindow).toBe(1000000);
+      expect(notifications).toEqual([{ level: "info", message: "dynamic-models: mp +1" }]);
+      expect(terminalLog).not.toHaveBeenCalled();
+      expect(readFileSync(join(agent, "logs", "pi-dynamic-models.log"), "utf8")).toContain("offline:");
+    } finally {
+      terminalLog.mockRestore();
+    }
   });
 });
