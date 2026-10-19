@@ -1,5 +1,15 @@
 # @shelken/pi-dynamic-models
 
+## 0.2.5
+
+### Patch Changes
+
+- [#73](https://github.com/shelken/pi-extensions/pull/73) [`91b8542`](https://github.com/shelken/pi-extensions/commit/91b85428e2ead68f27c289b473a0fc6f8d577210) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update 插件 runtime 依赖
+
+- [#80](https://github.com/shelken/pi-extensions/pull/80) [`c91e8bb`](https://github.com/shelken/pi-extensions/commit/c91e8bb04cb8dd8545ff90fa3fa43c66768723f5) Thanks [@shelken](https://github.com/shelken)! - 修复模型发现丢失网关能力字段：读取 `/models` 自报的上下文长度、输出上限、输入模态与思考档位，不再退化为 128k；未自报的思考档位显式标为 null。缓存按端点与账户绑定；只有所有候选端点都返回空才移除旧 AUTO 模型；缺 id 的行不再让整批解析失败；models.dev 不可用时仍能发现；保留 provider 级 `compat`（嵌套字段深合并）与 `$VAR` 凭据引用，发现请求不再发送未解析的变量或把凭据写入日志。
+
+- [#82](https://github.com/shelken/pi-extensions/pull/82) [`7888db0`](https://github.com/shelken/pi-extensions/commit/7888db084088ccdabc44adbd26e9f8cae8ad2564) Thanks [@shelken](https://github.com/shelken)! - 个别 provider 模型发现失败时只记录日志，继续更新成功的 provider，不再向 pi 终端弹出发现错误；缺失配置或缓存文件不再产生 ENOENT 日志噪音。
+
 ## 0.2.4
 
 ### Patch Changes
