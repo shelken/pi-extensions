@@ -1,7 +1,8 @@
 /** factory 只读缓存；网络发现推迟到 session_start 或显式刷新。 */
 import type { ExtensionAPI, ExtensionContext, ProviderModelConfig } from "@earendil-works/pi-coding-agent";
+import type { OpenAICompletionsCompat } from "@earendil-works/pi-ai";
 import type { Api, Model } from "@earendil-works/pi-ai";
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { closeSync, existsSync, mkdirSync, openSync, readFileSync, readdirSync, renameSync, statSync, unlinkSync, utimesSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
@@ -67,11 +68,13 @@ const FAILURE_COOLDOWN_MS = 10 * 60 * 1000;
 const LOCK_WAIT_TIMEOUT_MS = 2_000;
 const LOCK_STALE_MS = 30_000;
 const states = new WeakMap<ExtensionAPI, RuntimeState>();
+/** 本次进程内参与请求的凭据；日志写入前统一替换。 */
+const secrets = new Set<string>();
 let flatRegistryMemo: { key: string; map: FlatRegistry } | undefined;
 let isDebug = false;
 
 function log(message: string): void {
-  const line = `[${new Date().toISOString()}] ${message}`;
+  const line = `[${new Date().toISOString()}] ${redact(message)}`;
   try {
     mkdirSync(dirname(LOG_FILE), { recursive: true });
     writeFileSync(LOG_FILE, `${line}\n`, { flag: "a" });
@@ -91,7 +94,7 @@ function readDiskJson(path: string): string | undefined {
 
 function writeDiskJson(path: string, value: string): void {
   mkdirSync(dirname(path), { recursive: true });
-  const temporary = `${path}.${process.pid}.tmp`;
+  const temporary = `${path}.${process.pid}.${randomUUID()}.tmp`;
   try {
     writeFileSync(temporary, value, "utf8");
     renameSync(temporary, path);
@@ -163,15 +166,74 @@ function resolveEnabledConfig(): Resolved | undefined {
   return { config, modelsJson, providerNames: resolveEnableProviders(config.enableProviders, available) };
 }
 
-/** 解析 `$VAR` / `${VAR}` 引用；未设置的引用原样保留，不阻断启动。 */
-function requestValue(value: string): string {
-  return value.replace(/\$(?:\{([A-Za-z_][A-Za-z0-9_]*)\}|([A-Za-z_][A-Za-z0-9_]*))/g, (match, braced, plain) => process.env[braced ?? plain] ?? match);
+/**
+ * 与宿主 resolveConfigValue 的模板语义一致：`$$`/`$!` 是字面量转义，
+ * `${VAR}`/`$VAR` 展开环境变量。无法解析时返回 undefined，由调用方跳过该值，
+ * 避免把 `$VAR` 字面量当成凭据发出去。
+ */
+function resolveConfigValue(value: string): string | undefined {
+  if (value.startsWith("!")) return undefined;
+  let resolved = "";
+  let index = 0;
+  while (index < value.length) {
+    const dollar = value.indexOf("$", index);
+    if (dollar < 0) return resolved + value.slice(index);
+    resolved += value.slice(index, dollar);
+    const next = value[dollar + 1];
+    if (next === "$" || next === "!") {
+      resolved += next;
+      index = dollar + 2;
+      continue;
+    }
+    if (next === "{") {
+      const end = value.indexOf("}", dollar + 2);
+      if (end < 0) {
+        resolved += "$";
+        index = dollar + 1;
+        continue;
+      }
+      const name = value.slice(dollar + 2, end);
+      if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(name)) {
+        resolved += value.slice(dollar, end + 1);
+        index = end + 1;
+        continue;
+      }
+      const envValue = process.env[name];
+      if (envValue === undefined) return undefined;
+      resolved += registerSecret(envValue);
+      index = end + 1;
+      continue;
+    }
+    const match = /^[A-Za-z_][A-Za-z0-9_]*/.exec(value.slice(dollar + 1));
+    if (match) {
+      const envValue = process.env[match[0]];
+      if (envValue === undefined) return undefined;
+      resolved += registerSecret(envValue);
+      index = dollar + 1 + match[0].length;
+      continue;
+    }
+    resolved += "$";
+    index = dollar + 1;
+  }
+  return resolved;
+}
+
+/** 记录参与请求的凭据值，日志统一脱敏。 */
+function registerSecret(value: string): string {
+  if (value.length >= 4) secrets.add(value);
+  return value;
+}
+
+function redact(message: string): string {
+  let safe = message;
+  for (const secret of secrets) safe = safe.split(secret).join("<redacted>");
+  return safe;
 }
 
 function extractProviderConfig(modelsJson: ModelsJson, name: string): ProviderConfig | undefined {
   const provider = modelsJson.providers[name];
   if (!provider?.baseUrl) return undefined;
-  const baseUrl = requestValue(provider.baseUrl).replace(/\/+$/, "");
+  const baseUrl = (resolveConfigValue(provider.baseUrl) ?? provider.baseUrl).replace(/\/+$/, "");
   // 指纹基于配置引用而非密钥值：换账户仍失效，磁盘不出现秘密。
   const fingerprint = createHash("sha256").update(JSON.stringify([
     baseUrl, provider.api, provider.apiKey, provider.authHeader,
@@ -199,7 +261,7 @@ async function fetchRegistry(cached: RegistryCache | undefined): Promise<Registr
     return cached.data;
   }
   if (!response.ok) throw new Error(`Registry HTTP ${response.status}`);
-  const data = decodeRegistryPayload(await response.json());
+  const data = decodeRegistryPayload(await response.text());
   const etag = response.headers.get("etag") ?? "";
   writeDiskJson(REGISTRY_CACHE_FILE, JSON.stringify({ etag, data }));
   return data;
@@ -242,21 +304,74 @@ function getFlatRegistry(data: RegistryData): FlatRegistry {
   return map;
 }
 
+async function probeModels(url: string, headers: Headers, signal: AbortSignal): Promise<DiscoveredModel[]> {
+  const response = await fetch(url, { headers, signal });
+  if (!response.ok) throw new Error(`${url}: HTTP ${response.status}`);
+  try {
+    return decodeRemoteModels(await response.text());
+  } catch {
+    // 不记录响应体：部分网关的回显包含凭据。
+    throw new Error(`${url}: response is not a model list`);
+  }
+}
+
+/**
+ * 候选端点竞速，但空列表不能抢跑：空列表会作为权威结果删除旧 AUTO 模型，
+ * 必须等所有候选都确认没有非空结果后才能采用。
+ */
+function firstNonEmpty(endpoints: string[], load: (url: string) => Promise<DiscoveredModel[]>): Promise<DiscoveredModel[]> {
+  return new Promise((resolve, reject) => {
+    let pending = endpoints.length;
+    let sawEmpty = false;
+    const failures: string[] = [];
+    const settle = (models?: DiscoveredModel[]): void => {
+      pending -= 1;
+      if (models?.length) {
+        resolve(models);
+        return;
+      }
+      if (models) sawEmpty = true;
+      if (pending > 0) return;
+      if (sawEmpty) resolve([]);
+      else reject(new Error(failures.join("; ") || "no model endpoint available"));
+    };
+    for (const endpoint of endpoints) {
+      load(endpoint).then(
+        (models) => settle(models),
+        (error) => {
+          failures.push(redact(error instanceof Error ? error.message : String(error)));
+          settle();
+        },
+      );
+    }
+  });
+}
+
 async function fetchModels(config: ProviderConfig): Promise<DiscoveredModel[]> {
   const headers = new Headers({ Accept: "application/json" });
-  // authHeader 为 false 时凭据由 models.json headers 提供；引用未解析时不发送伪凭据。
-  const key = config.apiKey ? requestValue(config.apiKey) : undefined;
-  if (config.authHeader && key && !key.startsWith("$")) headers.set("Authorization", `Bearer ${key}`);
-  for (const [name, value] of Object.entries(config.headers ?? {})) headers.set(name, requestValue(value));
+  try {
+    // authHeader 为 false 时凭据由 models.json headers 提供。
+    const key = config.apiKey ? resolveConfigValue(config.apiKey) : undefined;
+    if (config.authHeader && key) headers.set("Authorization", `Bearer ${key}`);
+    for (const [name, value] of Object.entries(config.headers ?? {})) {
+      const resolved = resolveConfigValue(value);
+      if (resolved !== undefined) headers.set(name, resolved);
+    }
+  } catch {
+    // Headers.set 的校验错误会带上原始值，不能写进日志或错误链。
+    throw new Error("Could not build discovery request headers");
+  }
   const endpoints = config.baseUrl.endsWith("/v1")
     ? [`${config.baseUrl}/models`]
     : [`${config.baseUrl}/models`, `${config.baseUrl}/v1/models`];
-  const signal = AbortSignal.timeout(NETWORK_TIMEOUT_MS);
-  return Promise.any(endpoints.map(async (url) => {
-    const response = await fetch(url, { headers, signal });
-    if (!response.ok) throw new Error(`${url}: HTTP ${response.status}`);
-    return decodeRemoteModels(await response.text());
-  }));
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), NETWORK_TIMEOUT_MS);
+  try {
+    return await firstNonEmpty(endpoints, (url) => probeModels(url, headers, controller.signal));
+  } finally {
+    clearTimeout(timeout);
+    controller.abort();
+  }
 }
 
 function buildAutoModel(remote: DiscoveredModel, registry: FlatRegistry, provider: string): ModelLike {
@@ -277,9 +392,51 @@ function buildAutoModel(remote: DiscoveredModel, registry: FlatRegistry, provide
   };
 }
 
-/** provider 级 compat 与模型自身 compat 合并；宿主对扩展模型不会再补这一层。 */
+/**
+ * provider 级 compat 与模型自身 compat 合并；宿主对扩展模型不会再补这一层。
+ * 嵌套对象必须逐键合并，否则会整块覆盖内置模型的路由/模板参数。
+ */
+type CompletionsNested = Pick<
+  OpenAICompletionsCompat,
+  "openRouterRouting" | "vercelGatewayRouting" | "chatTemplateKwargs" | "chatTemplateArgs"
+>;
+
+/** 只有 OpenAI completions 协议声明了这四个嵌套字段；其余协议没有可合并项。 */
+function completionsNested(compat: Model<Api>["compat"]): CompletionsNested | undefined {
+  if (!compat) return undefined;
+  if ("openRouterRouting" in compat || "chatTemplateKwargs" in compat) return compat;
+  return undefined;
+}
+
+function mergeCompletionsNested(
+  base: CompletionsNested | undefined,
+  override: CompletionsNested | undefined,
+): Partial<CompletionsNested> {
+  const merged: Partial<CompletionsNested> = {};
+  if (base?.openRouterRouting || override?.openRouterRouting) {
+    merged.openRouterRouting = { ...base?.openRouterRouting, ...override?.openRouterRouting };
+  }
+  if (base?.vercelGatewayRouting || override?.vercelGatewayRouting) {
+    merged.vercelGatewayRouting = { ...base?.vercelGatewayRouting, ...override?.vercelGatewayRouting };
+  }
+  if (base?.chatTemplateKwargs || override?.chatTemplateKwargs) {
+    merged.chatTemplateKwargs = { ...base?.chatTemplateKwargs, ...override?.chatTemplateKwargs };
+  }
+  if (base?.chatTemplateArgs || override?.chatTemplateArgs) {
+    merged.chatTemplateArgs = { ...base?.chatTemplateArgs, ...override?.chatTemplateArgs };
+  }
+  return merged;
+}
+
 function mergeCompat(base: Model<Api>["compat"], override: Model<Api>["compat"]): Model<Api>["compat"] {
-  return { ...base, ...override };
+  if (!override) return base;
+  const merged = {
+    ...base,
+    ...override,
+    ...mergeCompletionsNested(completionsNested(base), completionsNested(override)),
+  };
+  // SAFETY: 两个操作数与合并项都来自同一 Compat 类型；合并只替换类型声明的四个嵌套字段。
+  return merged as Model<Api>["compat"];
 }
 
 /** 补齐宿主扩展模型定义要求必填的字段；额外协议字段原样透传。 */

@@ -4,10 +4,8 @@ import {
   formatProviderSummary,
   formatStatusLine,
   inFailureCooldown,
-  isUsableChatModel,
   matchesExcludePattern,
   resolveEnableProviders,
-  getAutoThinkingLevelMap,
 } from "../src/logic.ts";
 
 describe("failure cooldown", () => {
@@ -26,20 +24,6 @@ describe("failure cooldown", () => {
   it("failure outside cooldown window allows network", () => {
     expect(inFailureCooldown(now - cooldown, now, cooldown)).toBe(false);
     expect(inFailureCooldown(now - cooldown - 60_000, now, cooldown)).toBe(false);
-  });
-});
-
-describe("automatic thinking levels", () => {
-  it("returns a complete fallback map for reasoning models", () => {
-    expect(getAutoThinkingLevelMap(true)).toEqual({
-      minimal: "low",
-      low: "low",
-      medium: "medium",
-      high: "high",
-      xhigh: "xhigh",
-      max: "max",
-    });
-    expect(getAutoThinkingLevelMap(false)).toBeUndefined();
   });
 });
 
@@ -72,13 +56,6 @@ describe("exclude patterns", () => {
     );
     expect(kept).toEqual(["grok-4.5"]);
     expect(excluded).toEqual(["gpt-image-1", "sora-2"]);
-  });
-});
-
-describe("isUsableChatModel", () => {
-  it("rejects zero context window", () => {
-    expect(isUsableChatModel({ contextWindow: 0 })).toBe(false);
-    expect(isUsableChatModel({ contextWindow: 128_000 })).toBe(true);
   });
 });
 

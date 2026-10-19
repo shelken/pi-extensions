@@ -135,7 +135,6 @@ const remoteRowSchema = Type.Object({
 });
 type RemoteRow = Static<typeof remoteRowSchema>;
 const idOnlySchema = Type.Object({ id: Type.String({ minLength: 1 }) });
-type ListedRow = RemoteRow | Static<typeof idOnlySchema>;
 
 const thinkingMapSchema = Type.Object({
   off: Type.Optional(Type.Union([Type.String(), Type.Null()])),
@@ -171,12 +170,22 @@ function positiveInteger(...values: Array<number | undefined>): number | undefin
   return undefined;
 }
 
+const THINKING_LEVELS = ["off", "minimal", "low", "medium", "high", "xhigh", "max"] as const;
+
+/**
+ * 网关只列出自带档位，其余必须显式写 null。
+ * 宿主把「键不存在」当作支持（`minimal/low/medium/high` 只要不是 null），
+ * 稀疏映射会让选择器暴露网关不接受的档位。
+ */
 function thinkingMap(levels: string[]): ModelLike["thinkingLevelMap"] {
+  // 网关没报任何档位时不提供映射，让 registry 回退与宿主默认值生效。
+  if (levels.length === 0) return undefined;
   const map: NonNullable<ModelLike["thinkingLevelMap"]> = {};
-  for (const level of levels) {
-    if (level === "minimal" || level === "low" || level === "medium" || level === "high" || level === "xhigh" || level === "max") map[level] = level;
+  for (const level of THINKING_LEVELS) {
+    if (level === "off") continue;
+    map[level] = levels.includes(level) ? level : null;
   }
-  return Object.keys(map).length > 0 ? map : undefined;
+  return map;
 }
 
 function toDiscovered(row: RemoteRow): DiscoveredModel | undefined {
@@ -209,26 +218,38 @@ function toDiscovered(row: RemoteRow): DiscoveredModel | undefined {
  */
 export function decodeRemoteModels(raw: string): DiscoveredModel[] {
   const body: unknown = JSON.parse(raw);
-  if (!Value.Check(remoteRowListSchema, body)) throw new Error("Model list response has no data/models array");
-  const listed = rowsOf(Value.Parse(remoteRowListSchema, body));
+  if (!Value.Check(remoteRowListEnvelopeSchema, body)) throw new Error("Model list response has no data/models array");
   const models = new Map<string, DiscoveredModel>();
-  for (const row of listed) {
-    const discovered = Value.Check(remoteRowSchema, row) ? toDiscovered(Value.Parse(remoteRowSchema, row)) : { id: row.id };
-    if (discovered) models.set(row.id, discovered);
+  for (const candidate of rowsOf(Value.Parse(remoteRowListEnvelopeSchema, body))) {
+    // 逐行降级：完整行提取能力，只有 id 的行仍可注册，其余行跳过。
+    if (Value.Check(remoteRowSchema, candidate)) {
+      const decoded = Value.Parse(remoteRowSchema, candidate);
+      const discovered = toDiscovered(decoded);
+      if (discovered) models.set(decoded.id, discovered);
+    } else if (Value.Check(idOnlySchema, candidate)) {
+      const { id } = Value.Parse(idOnlySchema, candidate);
+      models.set(id, { id });
+    }
   }
   return [...models.values()];
 }
 
-/** 裸数组或 { data } / { models } 包装；空数组是合法的“无模型”权威结果。 */
-const remoteRowListSchema = Type.Union([
-  Type.Array(Type.Union([remoteRowSchema, idOnlySchema])),
-  Type.Object({ data: Type.Array(Type.Union([remoteRowSchema, idOnlySchema])) }),
-  Type.Object({ models: Type.Array(Type.Union([remoteRowSchema, idOnlySchema])) }),
+/**
+ * 裸数组或 { data } / { models } 包装，元素不预校验：单行脏数据只丢该行。
+ * 空数组是合法的“无模型”权威结果。
+ */
+const remoteRowListEnvelopeSchema = Type.Union([
+  Type.Array(Type.Unknown()),
+  Type.Object({ data: Type.Array(Type.Unknown()) }),
+  Type.Object({ models: Type.Array(Type.Unknown()) }),
 ]);
 
-function rowsOf(payload: Static<typeof remoteRowListSchema>): ListedRow[] {
+function rowsOf(payload: Static<typeof remoteRowListEnvelopeSchema>): unknown[] {
   if (Array.isArray(payload)) return payload;
-  return "data" in payload ? payload.data : payload.models;
+  // 同时带 data 与 models 时只取数组形态，避免把非数组字段当列表。
+  if ("data" in payload && Array.isArray(payload.data)) return payload.data;
+  if ("models" in payload && Array.isArray(payload.models)) return payload.models;
+  return [];
 }
 
 export function decodeProviderCache(raw: string): ProviderModelCache | undefined {

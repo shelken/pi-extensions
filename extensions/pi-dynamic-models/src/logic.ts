@@ -8,31 +8,6 @@ export function inFailureCooldown(
   return now - lastFailedUnix < cooldownMs;
 }
 
-/** models.dev 未提供 effort 时使用的硬编码映射。 */
-export function getAutoThinkingLevelMap(
-  reasoning: boolean,
-):
-  | {
-      minimal: "low";
-      low: "low";
-      medium: "medium";
-      high: "high";
-      xhigh: "xhigh";
-      max: "max";
-    }
-  | undefined {
-  return reasoning
-    ? {
-        minimal: "low",
-        low: "low",
-        medium: "medium",
-        high: "high",
-        xhigh: "xhigh",
-        max: "max",
-      }
-    : undefined;
-}
-
 /**
  * 展开 enableProviders：
  * - 省略 / "*" / ["*"] → 全部有 baseUrl 的 provider
@@ -89,11 +64,6 @@ export function filterByExcludePatterns(
     }
   }
   return { kept, excluded };
-}
-
-/** ctx:0 等不可用对话窗口的模型不进选择器。 */
-export function isUsableChatModel(model: { contextWindow: number }): boolean {
-  return model.contextWindow > 0;
 }
 
 export type ProviderRunSummary = {

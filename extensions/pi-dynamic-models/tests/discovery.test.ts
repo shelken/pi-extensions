@@ -84,7 +84,7 @@ beforeEach(() => {
   agent = join(root, ".pi", "agent");
   mkdirSync(join(agent, "extensions", "pi-dynamic-models"), { recursive: true });
   writeFileSync(join(agent, "extensions", "pi-dynamic-models", "config.json"), JSON.stringify({ enable: true }));
-  process.env.PI_CODING_AGENT_DIR = agent;
+  vi.stubEnv("PI_CODING_AGENT_DIR", agent);
   providerConfig = { baseUrl: "https://gateway.example/v1", api: "openai-responses", apiKey: "test-key" };
   writeModelsJson();
   remote = [{ id: "alias/flash", context_length: 1000000, max_output_tokens: 32000, input_modalities: ["text", "image"], reasoning: true, reasoning_levels: ["low", "high", "max"] }];
@@ -104,7 +104,6 @@ beforeEach(() => {
 afterEach(() => {
   vi.unstubAllGlobals();
   vi.unstubAllEnvs();
-  delete process.env.PI_CODING_AGENT_DIR;
   rmSync(root, { recursive: true, force: true });
 });
 
@@ -187,11 +186,33 @@ describe("discovery registration lifecycle", () => {
     expect(runtime.registrations.get("mp")).toMatchObject({ headers: { "X-Tenant": "$DISCOVERY_HEADER" }, authHeader: false });
   });
 
-  it("accepts effort objects returned by the gateway's reasoning levels", async () => {
+  it("marks gateway-unsupported reasoning levels as null instead of leaving them undefined", async () => {
     remote = [{ id: "alias/flash", supported_reasoning_levels: [{ effort: "low" }, { effort: "high" }] }];
     const runtime = await start();
     await runtime.refresh();
-    expect(runtime.target()).toMatchObject({ reasoning: true, thinkingLevelMap: { low: "low", high: "high" } });
+    expect(runtime.target()).toMatchObject({
+      reasoning: true,
+      thinkingLevelMap: { low: "low", high: "high", minimal: null, medium: null, xhigh: null, max: null },
+    });
+  });
+
+  it("skips malformed rows instead of failing the whole list", async () => {
+    remote = [
+      { id: "alias/flash", context_length: 1000000 },
+      { object: "model" },
+      { id: "alias/minimal" },
+    ];
+    const runtime = await start();
+    await runtime.refresh();
+    expect(runtime.modelIds()).toEqual(["alias/flash", "alias/minimal"]);
+    expect(runtime.target()?.contextWindow).toBe(1000000);
+  });
+
+  it("does not expose unsupported levels for a gateway that reports no levels", async () => {
+    remote = [{ id: "alias/flash", reasoning: true }];
+    const runtime = await start();
+    await runtime.refresh();
+    expect(runtime.target()?.thinkingLevelMap).toBeUndefined();
   });
 
   it("does not register non-chat models or let invalid numeric limits poison the provider", async () => {
@@ -218,5 +239,53 @@ describe("discovery registration lifecycle", () => {
     expect(runtime.target()?.contextWindow).toBe(1000000);
     const after = JSON.parse(readFileSync(cachePath, "utf8"));
     expect(after.models).toEqual(cached.models);
+  });
+
+  it("does not let an empty candidate endpoint clear models served by the other one", async () => {
+    providerConfig.baseUrl = "https://gateway.example";
+    writeModelsJson();
+    // 用可控的 gate 固定“空列表先返回、真实列表后返回”的顺序，不依赖真实延时。
+    const releaseRealList = Promise.withResolvers<void>();
+    vi.stubGlobal("fetch", vi.fn(async (input: string) => {
+      const url = String(input);
+      if (url === "https://models.dev/api.json") return Response.json({}, { headers: { etag: "catalog-v1" } });
+      if (url.endsWith("/v1/models")) {
+        await releaseRealList.promise;
+        return Response.json({ data: remote });
+      }
+      releaseRealList.resolve();
+      return Response.json({ data: [] });
+    }));
+    const runtime = await start();
+    await runtime.refresh();
+    expect(runtime.target()?.contextWindow).toBe(1000000);
+  });
+
+  it("takes capabilities from the registry when the gateway returns only ids", async () => {
+    remote = [{ id: "claude-sonnet-4-6" }];
+    vi.stubGlobal("fetch", vi.fn(async (input: string) => {
+      const url = String(input);
+      if (url === "https://models.dev/api.json") {
+        return Response.json({
+          anthropic: { models: { "claude-sonnet-4-6": { id: "claude-sonnet-4-6", name: "Claude Sonnet 4.6", reasoning: true, attachment: true, modalities: { input: ["text", "image"] }, limit: { context: 200000, output: 64000 }, cost: { input: 3, output: 15 } } } },
+        }, { headers: { etag: "catalog-v1" } });
+      }
+      return Response.json({ data: remote });
+    }));
+    const runtime = await start();
+    await runtime.refresh();
+    expect(modelAt(runtime, "claude-sonnet-4-6")).toMatchObject({ contextWindow: 200000, maxTokens: 64000, input: ["text", "image"] });
+  });
+
+  it("resolves escaped config values the same way the host does", async () => {
+    vi.stubEnv("DISCOVERY_TOKEN", "tenant-token");
+    providerConfig.headers = { "X-Literal": "$$DISCOVERY_TOKEN", "X-Real": "$DISCOVERY_TOKEN" };
+    providerConfig.authHeader = false;
+    writeModelsJson();
+    const runtime = await start();
+    await runtime.refresh();
+    const request = calls.find((call) => call.url.includes("gateway.example"));
+    expect(request?.headers.get("X-Literal")).toBe("$DISCOVERY_TOKEN");
+    expect(request?.headers.get("X-Real")).toBe("tenant-token");
   });
 });
