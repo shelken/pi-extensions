@@ -88,6 +88,8 @@ function readDiskJson(path: string): string | undefined {
   try {
     return readFileSync(path, "utf8");
   } catch (error) {
+    // ENOENT 是「尚未配置/尚无缓存」的正常态，不该刷日志。
+    if (error instanceof Error && "code" in error && error.code === "ENOENT") return undefined;
     log(`Could not read ${path}: ${error}`);
     return undefined;
   }
@@ -665,7 +667,9 @@ async function initModels(pi: ExtensionAPI, options: { force?: boolean; refreshR
       if (options.ctx?.hasUI && changed.length > 0) {
         options.ctx.ui.notify(`dynamic-models: ${formatStatusLine(changed)}`, "info");
       }
-      if (state.error && options.ctx) options.ctx.ui.notify(`dynamic-models failed: ${state.error}`, "error");
+      // 个别 provider 失败已有 stale-cache 回退兜底，会话照常可用：
+      // 只写日志与 status，不往终端弹 Error。
+      if (state.error) log(`Partial discovery failure (session continues): ${state.error}`);
       return { ok: errors.length === 0, summaries };
     } finally {
       release();

@@ -43,7 +43,7 @@ pi install npm:@shelken/pi-dynamic-models
 - provider 列表缓存 6h；缓存与端点、协议、账户标识绑定，换端点或账户会重新发现。
 - factory 同步用磁盘 cache 注册（session restore 能找到上次的 `provider/id`），**不在启动时联网**；联网发生在 `session_start` 或 `/dynamic-models refresh`。
 - 同一次 runtime 内模型内容 hash 未变则跳过重注册；**每次扩展 factory 会清空 hash**（`/new` 会换 ModelRegistry，必须重新 register）。
-- 发现结果变化时 `notify`；失败时 `notify` 错误摘要。
+- 发现结果变化时 `notify`；个别 provider 发现失败只写日志，其他 provider 继续更新，终端不弹发现错误。
 - 日志：`{pi-agent-dir}/logs/pi-dynamic-models.log`
 
 ## 命令
