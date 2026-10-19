@@ -1,4 +1,4 @@
-import type { ExtensionAPI, ProviderModelConfig } from "@earendil-works/pi-coding-agent";
+import type { ExtensionAPI, ExtensionContext, ProviderModelConfig } from "@earendil-works/pi-coding-agent";
 import type { ModelLike } from "../src/merge.ts";
 import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -66,8 +66,8 @@ async function start() {
   module.default(api);
   return {
     registrations,
-    async refresh() {
-      await module.refreshDiscovery(api);
+    async refresh(ctx?: Parameters<typeof module.refreshDiscovery>[1]) {
+      await module.refreshDiscovery(api, ctx);
     },
     target: () => registrations.get("mp")?.models?.find((model) => model.id === "alias/flash"),
     modelIds: () => registrations.get("mp")?.models?.map((model) => model.id),
@@ -337,5 +337,25 @@ describe("discovery registration lifecycle", () => {
     const request = calls.find((call) => call.url.includes("gateway.example"));
     expect(request?.headers.get("X-Literal")).toBe("$DISCOVERY_TOKEN");
     expect(request?.headers.get("X-Real")).toBe("tenant-token");
+  });
+
+  it("logs partial discovery failures without popping error notifications on the terminal", async () => {
+    const notifications: Array<{ level: string; message: string }> = [];
+    const ctx = {
+      hasUI: true,
+      ui: {
+        notify: (message: string, level = "info") => {
+          notifications.push({ level, message });
+        },
+      },
+    };
+    vi.stubGlobal("fetch", vi.fn(async (input: string) => {
+      if (String(input).includes("models.dev")) return Response.json({}, { headers: { etag: "catalog-v1" } });
+      return new Response("internal error", { status: 500 });
+    }));
+    const runtime = await start();
+    // SAFETY: 测试桩仅提供 ui.notify 用于断言终端通知级别
+    await runtime.refresh(ctx as ExtensionContext);
+    expect(notifications.filter((n) => n.level === "error")).toEqual([]);
   });
 });
