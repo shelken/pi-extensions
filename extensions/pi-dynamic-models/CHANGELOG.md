@@ -1,5 +1,11 @@
 # @shelken/pi-dynamic-models
 
+## 0.2.6
+
+### Patch Changes
+
+- [#83](https://github.com/shelken/pi-extensions/pull/83) [`bcc054a`](https://github.com/shelken/pi-extensions/commit/bcc054ad726402e40675b78a42c60891b8b1f6cd) Thanks [@shelken](https://github.com/shelken)! - 补齐发现错误只写文件日志的路径：debug 模式不再回显日志到终端，手动刷新流程异常改为写日志，status 不再展示错误详情；debug 的逐模型能力诊断保留在日志文件中。
+
 ## 0.2.5
 
 ### Patch Changes
