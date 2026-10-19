@@ -25,19 +25,18 @@ export function getBuiltInModelDefs(providerName: string): ModelLike[] {
     // SAFETY: getProviders() 返回 KnownProvider[]（闭集字面量联合）；includes 需接受任意用户输入的 provider 名，放宽元素类型
     if (!(getProviders() as string[]).includes(providerName)) return [];
     // SAFETY: KnownProvider 是闭集；上方 includes 已确认该名存在
-    return getModels(providerName as never).map((m) => ({
-      id: m.id,
-      name: m.name ?? m.id,
-      api: m.api,
-      reasoning: m.reasoning ?? false,
-      thinkingLevelMap: m.thinkingLevelMap,
-      // SAFETY: 内置目录生成数据，input 只会是 "text" | "image"
-      input: (m.input ?? ["text"]) as ("text" | "image")[],
-      cost: m.cost ?? { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
-      contextWindow: m.contextWindow ?? 128_000,
-      maxTokens: m.maxTokens ?? 16_384,
-      // 不写死官方 baseUrl：register 时用 models.json / provider 级 baseUrl
-    }));
+    return getModels(providerName as never).map((model) => {
+      // 不写死官方 baseUrl：register 时用 models.json / provider 级 baseUrl。
+      const { baseUrl: _baseUrl, ...rest } = model;
+      return {
+        ...rest,
+        id: model.id,
+        name: model.name ?? model.id,
+        reasoning: model.reasoning ?? false,
+        contextWindow: model.contextWindow ?? 128_000,
+        maxTokens: model.maxTokens ?? 16_384,
+      };
+    });
   } catch {
     return [];
   }
