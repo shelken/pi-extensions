@@ -3,7 +3,7 @@ import type { ExtensionAPI, ExtensionContext, ProviderModelConfig } from "@earen
 import type { OpenAICompletionsCompat } from "@earendil-works/pi-ai";
 import type { Api, Model } from "@earendil-works/pi-ai";
 import { createHash, randomUUID } from "node:crypto";
-import { closeSync, existsSync, mkdirSync, openSync, readFileSync, readdirSync, renameSync, statSync, unlinkSync, utimesSync, writeFileSync } from "node:fs";
+import { closeSync, mkdirSync, openSync, readFileSync, readdirSync, renameSync, statSync, unlinkSync, utimesSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
@@ -15,6 +15,7 @@ import {
   decodeRegistryPayload,
   decodeRemoteModels,
   decodeProviderCache,
+  decodeManualModels,
   pluginConfigSchema,
 } from "./discovery.ts";
 import type { DiscoveredModel, ModelsJson, PluginConfig, ProviderModelCache, RegistryCache } from "./discovery.ts";
@@ -112,6 +113,23 @@ function providerCachePath(name: string): string {
   return join(PROVIDER_CACHE_DIR, `${encodeURIComponent(name)}.json`);
 }
 
+/** status 展示用：目录不存在或文件名不是本扩展编码的结果时按原样展示。 */
+function listProviderCacheNames(): string[] {
+  const stat = statSync(PROVIDER_CACHE_DIR, { throwIfNoEntry: false });
+  if (!stat?.isDirectory()) return [];
+  const names: string[] = [];
+  for (const entry of readdirSync(PROVIDER_CACHE_DIR, { withFileTypes: true })) {
+    if (!entry.isFile() || !entry.name.endsWith(".json")) continue;
+    const stem = entry.name.slice(0, -5);
+    try {
+      names.push(decodeURIComponent(stem));
+    } catch {
+      names.push(stem);
+    }
+  }
+  return names;
+}
+
 function readProviderCache(name: string, fingerprint: string): ProviderModelCache | undefined {
   const raw = readDiskJson(providerCachePath(name));
   const cached = raw === undefined ? undefined : decodeProviderCache(raw);
@@ -141,22 +159,43 @@ export function getConfigPaths(cwd: string, home = homedir()): string[] {
   ];
 }
 
-function resolveEnabledConfig(): Resolved | undefined {
-  const path = getConfigPaths(process.cwd()).reverse().find((candidate) => existsSync(candidate));
-  if (!path) return undefined;
-  const rawConfig = readDiskJson(path);
-  if (rawConfig === undefined) return undefined;
-  const parsedConfig = JSON.parse(rawConfig);
-  if (!Value.Check(pluginConfigSchema, parsedConfig)) {
-    log(`Invalid plugin configuration: ${path}`);
-    return undefined;
+/** 逐层浅合并：项目级配置覆盖全局，允许只写覆盖项。 */
+function loadPluginConfig(): PluginConfig | undefined {
+  let config: PluginConfig | undefined;
+  for (const path of getConfigPaths(process.cwd())) {
+    const raw = readDiskJson(path);
+    if (raw === undefined) continue;
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(raw);
+    } catch (error) {
+      // 配置写坏时不能让整个扩展加载失败。
+      log(`Invalid JSON in ${path}: ${error}`);
+      continue;
+    }
+    if (!Value.Check(pluginConfigSchema, parsed)) {
+      log(`Invalid plugin configuration: ${path}`);
+      continue;
+    }
+    config = { ...config, ...Value.Parse(pluginConfigSchema, parsed) };
   }
-  const config = Value.Parse(pluginConfigSchema, parsedConfig);
+  return config;
+}
+
+function resolveEnabledConfig(): Resolved | undefined {
+  const config = loadPluginConfig();
+  if (!config) return undefined;
   isDebug = config.debug ?? false;
-  if (!config.enable) return undefined;
+  if (config.enable !== true) return undefined;
   const rawModels = readDiskJson(MODELS_JSON_PATH);
   if (rawModels === undefined) return undefined;
-  const parsedModels = JSON.parse(rawModels);
+  let parsedModels: unknown;
+  try {
+    parsedModels = JSON.parse(rawModels);
+  } catch (error) {
+    log(`Invalid JSON in ${MODELS_JSON_PATH}: ${error}`);
+    return undefined;
+  }
   if (!Value.Check(modelsJsonSchema, parsedModels)) {
     log("models.json is missing or invalid");
     return undefined;
@@ -198,7 +237,8 @@ function resolveConfigValue(value: string): string | undefined {
         index = end + 1;
         continue;
       }
-      const envValue = process.env[name];
+      // 与宿主一致：空字符串视为未解析。
+      const envValue = process.env[name] || undefined;
       if (envValue === undefined) return undefined;
       resolved += registerSecret(envValue);
       index = end + 1;
@@ -206,7 +246,8 @@ function resolveConfigValue(value: string): string | undefined {
     }
     const match = /^[A-Za-z_][A-Za-z0-9_]*/.exec(value.slice(dollar + 1));
     if (match) {
-      const envValue = process.env[match[0]];
+      // 与宿主一致：空字符串视为未解析。
+      const envValue = process.env[match[0]] || undefined;
       if (envValue === undefined) return undefined;
       resolved += registerSecret(envValue);
       index = dollar + 1 + match[0].length;
@@ -247,7 +288,7 @@ function extractProviderConfig(modelsJson: ModelsJson, name: string): ProviderCo
     authHeader: provider.authHeader ?? provider.apiKey !== undefined,
     compat: provider.compat,
     fingerprint,
-    existingModels: collectExistingIds((provider.models ?? []).map((model) => model.id), getBuiltInModelIds(name)),
+    existingModels: collectExistingIds(decodeManualModels(provider.models, log).map((model) => model.id), getBuiltInModelIds(name)),
   };
 }
 
@@ -316,13 +357,15 @@ async function probeModels(url: string, headers: Headers, signal: AbortSignal): 
 }
 
 /**
- * 候选端点竞速，但空列表不能抢跑：空列表会作为权威结果删除旧 AUTO 模型，
- * 必须等所有候选都确认没有非空结果后才能采用。
+ * 候选端点竞速。空列表会作为权威结果删除旧 AUTO 模型，因此：
+ * - 任一候选返回非空 → 立即采用；
+ * - 全部候选成功且都为空 → 才算权威空结果；
+ * - 存在失败时不得用空列表覆盖缓存，抛错交给 stale-cache 回退。
  */
 function firstNonEmpty(endpoints: string[], load: (url: string) => Promise<DiscoveredModel[]>): Promise<DiscoveredModel[]> {
   return new Promise((resolve, reject) => {
     let pending = endpoints.length;
-    let sawEmpty = false;
+    let empties = 0;
     const failures: string[] = [];
     const settle = (models?: DiscoveredModel[]): void => {
       pending -= 1;
@@ -330,10 +373,14 @@ function firstNonEmpty(endpoints: string[], load: (url: string) => Promise<Disco
         resolve(models);
         return;
       }
-      if (models) sawEmpty = true;
+      if (models) empties += 1;
       if (pending > 0) return;
-      if (sawEmpty) resolve([]);
-      else reject(new Error(failures.join("; ") || "no model endpoint available"));
+      if (failures.length > 0) {
+        reject(new Error(failures.join("; ")));
+        return;
+      }
+      if (empties > 0) resolve([]);
+      else reject(new Error("no model endpoint available"));
     };
     for (const endpoint of endpoints) {
       load(endpoint).then(
@@ -404,8 +451,11 @@ type CompletionsNested = Pick<
 /** 只有 OpenAI completions 协议声明了这四个嵌套字段；其余协议没有可合并项。 */
 function completionsNested(compat: Model<Api>["compat"]): CompletionsNested | undefined {
   if (!compat) return undefined;
-  if ("openRouterRouting" in compat || "chatTemplateKwargs" in compat) return compat;
-  return undefined;
+  const hasNested = "openRouterRouting" in compat
+    || "vercelGatewayRouting" in compat
+    || "chatTemplateKwargs" in compat
+    || "chatTemplateArgs" in compat;
+  return hasNested ? compat : undefined;
 }
 
 function mergeCompletionsNested(
@@ -480,7 +530,7 @@ function registerDiscovered(pi: ExtensionAPI, resolved: Resolved, name: string, 
     const remoteModel = eligible.find((model) => model.id === id);
     return remoteModel ? [buildAutoModel(remoteModel, registry, name)] : [];
   });
-  const manual = resolved.modelsJson.providers[name]?.models ?? [];
+  const manual = decodeManualModels(resolved.modelsJson.providers[name]?.models, log);
   const hash = createHash("sha256").update(JSON.stringify([config.fingerprint, manual, models])).digest("hex");
   const previous = state.hashes.get(name);
   const matched = eligible.filter((model) => lookupModel(model.id, registry, name)).length;
@@ -502,13 +552,19 @@ function eagerRegisterFromCache(pi: ExtensionAPI): void {
   if (!resolved) return;
   const state = states.get(pi)!;
   state.enabled = resolved.providerNames;
+  const cachedProviders = resolved.providerNames.flatMap((name) => {
+    const config = extractProviderConfig(resolved.modelsJson, name);
+    const cached = config ? readProviderCache(name, config.fingerprint) : undefined;
+    return config && cached ? [{ name, config, cached }] : [];
+  });
+  // factory 禁止同步重 IO：没有可用 provider 缓存时不解析 registry。
+  if (cachedProviders.length === 0) {
+    state.status = `dynamic-models (cached): ${formatStatusLine(state.summaries)}`;
+    return;
+  }
   const registry = getFlatRegistry(readRegistryCache()?.data ?? {});
-  for (const name of resolved.providerNames) {
+  for (const { name, config, cached } of cachedProviders) {
     try {
-      const config = extractProviderConfig(resolved.modelsJson, name);
-      if (!config) continue;
-      const cached = readProviderCache(name, config.fingerprint);
-      if (!cached) continue;
       state.summaries.push(registerDiscovered(pi, resolved, name, config, cached.models, registry));
     } catch (error) {
       log(`${name}: eager registration failed: ${error}`);
@@ -639,9 +695,7 @@ function registerCommands(pi: ExtensionAPI): void {
         return;
       }
       const state = states.get(pi)!;
-      const caches = readdirSync(PROVIDER_CACHE_DIR, { withFileTypes: true })
-        .filter((entry) => entry.isFile() && entry.name.endsWith(".json"))
-        .map((entry) => decodeURIComponent(entry.name.slice(0, -5)));
+      const caches = listProviderCacheNames();
       const lines = [
         "dynamic-models status",
         `enabled: ${state.enabled.join(", ") || "(none)"}`,

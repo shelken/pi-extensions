@@ -1,4 +1,4 @@
-import type { Api, Model } from "@earendil-works/pi-ai";
+import type { Api, Model, SamplingParams } from "@earendil-works/pi-ai";
 import { Type } from "typebox";
 import type { Static } from "typebox";
 import * as Value from "typebox/value";
@@ -7,7 +7,8 @@ import type { RegistryData, RegistryProvider } from "./matcher.ts";
 
 const stringMap = Type.Record(Type.String(), Type.String());
 export const pluginConfigSchema = Type.Object({
-  enable: Type.Boolean(),
+  // 分层配置：项目级可只写覆盖项，enable 缺省视为未启用。
+  enable: Type.Optional(Type.Boolean()),
   enableProviders: Type.Optional(Type.Union([Type.String(), Type.Array(Type.String())])),
   excludePatterns: Type.Optional(Type.Array(Type.String())),
   debug: Type.Optional(Type.Boolean()),
@@ -23,11 +24,46 @@ export const modelsJsonSchema = Type.Object({
     headers: Type.Optional(stringMap),
     authHeader: Type.Optional(Type.Boolean()),
     compat: Type.Optional(compatSchema),
-    models: Type.Optional(Type.Array(Type.Object({ id: Type.String({ minLength: 1 }) }, { additionalProperties: true }))),
+    // 坏模型条目只丢弃该条，不拖垮整份 models.json。
+    models: Type.Optional(Type.Array(Type.Unknown())),
   }, { additionalProperties: true })),
 });
 export type PluginConfig = Static<typeof pluginConfigSchema>;
 export type ModelsJson = Static<typeof modelsJsonSchema>;
+
+// models.json 手写模型：与 ModelLike 对齐的宽松 schema，坏条目逐条丢弃。
+const manualModelSchema = Type.Object({
+  id: Type.String({ minLength: 1 }),
+  name: Type.Optional(Type.String()),
+  api: Type.Optional(apiSchema),
+  reasoning: Type.Optional(Type.Boolean()),
+  thinkingLevelMap: Type.Optional(Type.Unsafe<Model<Api>["thinkingLevelMap"]>({ type: "object", additionalProperties: true })),
+  input: Type.Optional(Type.Array(Type.Union([Type.Literal("text"), Type.Literal("image")]))),
+  inputLimits: Type.Optional(Type.Unsafe<Model<Api>["inputLimits"]>({ type: "object", additionalProperties: true })),
+  cost: Type.Optional(Type.Unsafe<Model<Api>["cost"]>({ type: "object", additionalProperties: true })),
+  contextWindow: Type.Optional(Type.Number()),
+  maxTokens: Type.Optional(Type.Number()),
+  baseUrl: Type.Optional(Type.String()),
+  promptCache: Type.Optional(Type.Unsafe<Model<Api>["promptCache"]>({ type: "object", additionalProperties: true })),
+  samplingParams: Type.Optional(Type.Unsafe<SamplingParams>({ type: "object", additionalProperties: true })),
+  samplingParamsByThinkingLevel: Type.Optional(Type.Unsafe<Model<Api>["samplingParamsByThinkingLevel"]>({ type: "object", additionalProperties: true })),
+  compat: Type.Optional(compatSchema),
+}, { additionalProperties: true });
+
+/** 逐条解码 models.json 的手写模型；缺 id 或字段类型异常的条目丢弃并记录。 */
+export function decodeManualModels(models: unknown[] | undefined, log: (message: string) => void): ModelLike[] {
+  if (!models) return [];
+  const decoded: ModelLike[] = [];
+  for (const [index, entry] of models.entries()) {
+    if (Value.Check(manualModelSchema, entry)) {
+      decoded.push(entry);
+      continue;
+    }
+    const reasons = [...Value.Errors(manualModelSchema, entry)].map((error) => error.message).join(", ");
+    log(`models.json: dropping invalid model entry #${index}${reasons ? `: ${reasons}` : ""}`);
+  }
+  return decoded;
+}
 
 const registryModelSchema = Type.Object({
   id: Type.Optional(Type.String()),
