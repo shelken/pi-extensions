@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.4.4
+
+### Patch Changes
+
+- [#73](https://github.com/shelken/pi-extensions/pull/73) [`91b8542`](https://github.com/shelken/pi-extensions/commit/91b85428e2ead68f27c289b473a0fc6f8d577210) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update 插件 runtime 依赖
+
 ## 1.4.3
 
 ### Patch Changes
