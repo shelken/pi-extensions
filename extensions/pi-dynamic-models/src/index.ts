@@ -1,1081 +1,462 @@
-/**
- * Pi Dynamic Models
- *
- * 约束（启动性能）：
- * - factory / 启动路径：只读磁盘 cache，禁止任何网络
- * - 网络只允许在 session_start 之后异步跑（setTimeout 0，不挡进 session）
- * - session_start 只在 provider 缓存超过 TTL 或 force 时异步请求 API
- */
-
-import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
-import {
-  appendFileSync,
-  closeSync,
-  existsSync,
-  mkdirSync,
-  openSync,
-  readdirSync,
-  readFileSync,
-  statSync,
-  unlinkSync,
-  utimesSync,
-  writeFileSync,
-} from "node:fs";
+/** factory 只读缓存；网络发现推迟到 session_start 或显式刷新。 */
+import type { ExtensionAPI, ExtensionContext, ProviderModelConfig } from "@earendil-works/pi-coding-agent";
+import type { Api, Model } from "@earendil-works/pi-ai";
 import { createHash } from "node:crypto";
-import { dirname, join } from "node:path";
+import { closeSync, existsSync, mkdirSync, openSync, readFileSync, readdirSync, renameSync, statSync, unlinkSync, utimesSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
-import {
-  flattenRegistry,
-  lookupModel,
-  toPiCost,
-  toPiInput,
-  toPiThinkingLevelMap,
-  type RegistryData,
-} from "./matcher.ts";
+import { dirname, join, resolve } from "node:path";
+import { setTimeout as sleep } from "node:timers/promises";
+import * as Value from "typebox/value";
 import { getBuiltInModelDefs, getBuiltInModelIds } from "./builtin.ts";
 import {
-  filterByExcludePatterns,
-  filterNewModelIds,
-  formatProviderSummary,
-  formatStatusLine,
-  getAutoThinkingLevelMap,
-  hashModelIds,
-  inFailureCooldown as inFailureCooldownLogic,
-  isUsableChatModel,
-  providerFetchFailureFallback,
-  resolveEnableProviders,
-  shouldRefreshProviderCache,
-  shouldSkipByHash,
-  type ProviderRunSummary,
-} from "./logic.ts";
-import {
-  collectExistingIds,
-  mergeProviderModelList,
-  normalizeModelsJsonModel,
-  type ModelLike,
-} from "./merge.ts";
+  modelsJsonSchema,
+  decodeRegistryCache,
+  decodeRegistryPayload,
+  decodeRemoteModels,
+  decodeProviderCache,
+  pluginConfigSchema,
+} from "./discovery.ts";
+import type { DiscoveredModel, ModelsJson, PluginConfig, ProviderModelCache, RegistryCache } from "./discovery.ts";
+import { filterByExcludePatterns, formatProviderSummary, formatStatusLine, inFailureCooldown, resolveEnableProviders } from "./logic.ts";
+import type { ProviderRunSummary } from "./logic.ts";
+import { flattenRegistry, lookupModel, toPiCost, toPiInput, toPiThinkingLevelMap } from "./matcher.ts";
+import type { RegistryData, RegistryEntry } from "./matcher.ts";
+import { collectExistingIds, mergeProviderModelList, normalizeModelsJsonModel } from "./merge.ts";
+import type { ModelLike } from "./merge.ts";
 
-interface PluginConfig {
-  enable: boolean;
-  /** 省略 / "*" / ["*"] = models.json 里所有带 baseUrl 的 provider */
-  enableProviders?: string[] | string;
-  /** glob，匹配则不注册为 AUTO（不改 models.json 手写项） */
-  excludePatterns?: string[];
-  debug?: boolean;
-}
-
-interface CacheEntry {
-  etag: string;
-  data: RegistryData;
-  /** 最近一次网络失败时间(ms);成功写缓存时清除,失败时写入用于冷却 */
-  lastFailedUnix?: number;
-}
-
-interface ProviderConfig {
+type FlatRegistry = Map<string, RegistryEntry[]>;
+type ProviderConfig = {
   baseUrl: string;
+  /** 保留 models.json 原始 `$VAR` 引用，由宿主解析凭据。 */
   apiKey?: string;
-  api?: string;
+  api?: Api;
+  headers?: Record<string, string>;
+  authHeader: boolean;
+  compat?: Model<Api>["compat"];
+  fingerprint: string;
   existingModels: Set<string>;
-}
+};
+type Resolved = { config: PluginConfig; modelsJson: ModelsJson; providerNames: string[] };
+type InitResult = { ok: boolean; summaries: ProviderRunSummary[] };
+type RuntimeState = {
+  hashes: Map<string, string>;
+  summaries: ProviderRunSummary[];
+  enabled: string[];
+  status: string;
+  error: string | null;
+  inFlight?: Promise<InitResult>;
+  registryRefresh?: Promise<void>;
+};
+type CacheFile = RegistryCache | ProviderModelCache;
 
-/** ~/.pi/agent/models.json 的 provider 结构（扩展消费的子集；未校验字段原样透传给 pi，由 pi 侧校验归一化） */
-interface ModelsJsonProvider {
-  baseUrl?: string;
-  apiKey?: string;
-  api?: string;
-  models?: ModelLike[];
-}
-
-interface ModelsJson {
-  providers: Record<string, ModelsJsonProvider>;
-}
-
-interface ProviderModelCache {
-  hash: string;
-  modelIds: string[];
-  /** 最近一次网络失败时间(ms);成功写缓存时清除,失败时写入用于冷却 */
-  lastFailedUnix?: number;
-}
-
-const AGENT_DIR = join(homedir(), ".pi", "agent");
+const EXTENSION_NAME = "pi-dynamic-models";
+const agentOverride = process.env.PI_CODING_AGENT_DIR;
+const AGENT_DIR = agentOverride
+  ? resolve(agentOverride.startsWith("~/") ? join(homedir(), agentOverride.slice(2)) : agentOverride)
+  : join(homedir(), ".pi", "agent");
 const MODELS_JSON_PATH = join(AGENT_DIR, "models.json");
 const CACHE_DIR = join(AGENT_DIR, "cache");
 const REGISTRY_CACHE_FILE = join(CACHE_DIR, "models-registry.json");
 const PROVIDER_CACHE_DIR = join(CACHE_DIR, "provider-models");
-const EXTENSION_NAME = "pi-dynamic-models";
-const LOG_DIR = join(AGENT_DIR, "logs");
-const LOG_FILE = join(LOG_DIR, "pi-dynamic-models.log");
-/** 跨进程锁：wx 原子创建 + mtime 探测；放 cache 目录，与配置隔离 */
 const NETWORK_LOCK_FILE = join(CACHE_DIR, "dynamic-models.lock");
+const LOG_FILE = join(AGENT_DIR, "logs", "pi-dynamic-models.log");
 const REGISTRY_URL = "https://models.dev/api.json";
-const REGISTRY_CACHE_MAX_AGE_MS = 6 * 60 * 60 * 1000;
-/** provider 模型列表缓存 TTL；过期后 session_start 重新请求 */
-const PROVIDER_CACHE_MAX_AGE_MS = 6 * 60 * 60 * 1000;
-/** 所有网络请求统一超时；超时后走磁盘缓存 */
+const CACHE_MAX_AGE_MS = 6 * 60 * 60 * 1000;
 const NETWORK_TIMEOUT_MS = 3_000;
-/** 网络失败冷却：冷却期内直接走磁盘缓存，不重试网络 */
 const FAILURE_COOLDOWN_MS = 10 * 60 * 1000;
-/** 跨进程锁获取超时：超时则降级为无锁继续（不阻塞会话启动） */
 const LOCK_WAIT_TIMEOUT_MS = 2_000;
-/** 跨进程锁文件超过该年龄视为 stale（持有者崩溃），可强制抢占 */
 const LOCK_STALE_MS = 30_000;
+const states = new WeakMap<ExtensionAPI, RuntimeState>();
+let flatRegistryMemo: { key: string; map: FlatRegistry } | undefined;
 let isDebug = false;
 
-/** 进程内：provider → 已注册 AUTO id 列表 hash */
-const registeredAutoHashes = new Map<string, string>();
-
-/** 进程内 flatten memo */
-let flatRegistryMemo: { key: string; map: FlatRegistry } | null = null;
-
-/** 最近一次运行摘要（供 /dynamic-models status） */
-let lastSummaries: ProviderRunSummary[] = [];
-let lastStatusText = "dynamic-models: idle";
-let lastEnabledProviders: string[] = [];
-let lastInitError: string | null = null;
-
-/** 后台 registry 刷新单飞 */
-let registryRefreshInFlight: Promise<void> | null = null;
-
-/**
- * 进程内 initModels in-flight 合并：非 force 的并发调用共享同一 Promise。
- * 覆盖整个网络段（registry + 全部 provider 发现），避免同秒多次 session_start 重复拉网。
- */
-let initModelsInFlight: Promise<InitResult> | null = null;
-
-/**
- * 进程内 per-provider in-flight：同 provider 并发只发一次网络请求，其余 await 同一 Promise。
- */
-const providerDiscoverInFlight = new Map<string, Promise<{ ids: string[]; source: "fresh" | "stale" | "network" } | null>>();
-
-type FlatRegistry = ReturnType<typeof flattenRegistry>;
-
-type AutoModel = {
-  id: string;
-  name: string;
-  reasoning: boolean;
-  input: ("text" | "image")[];
-  cost: ReturnType<typeof toPiCost>;
-  contextWindow: number;
-  maxTokens: number;
-  thinkingLevelMap?: Record<string, string | null>;
-};
-
-function log(msg: string): void {
-  const ts = new Date().toISOString().slice(11, 19);
-  const line = `[${ts}] ${msg}`;
+function log(message: string): void {
+  const line = `[${new Date().toISOString()}] ${message}`;
   try {
-    if (!existsSync(LOG_DIR)) mkdirSync(LOG_DIR, { recursive: true });
-    appendFileSync(LOG_FILE, line + "\n", "utf-8");
-  } catch {
-    // 日志失败不能阻塞 provider 注册。
-  }
+    mkdirSync(dirname(LOG_FILE), { recursive: true });
+    writeFileSync(LOG_FILE, `${line}\n`, { flag: "a" });
+  } catch {}
   if (isDebug) console.warn(line);
 }
 
-function debugLog(msg: string): void {
-  if (isDebug) log(msg);
-}
-
-function readJson<T>(path: string): T | null {
+/** 磁盘 JSON 是不可信输入：解析失败按缺失处理，调用方必须再过 schema。 */
+function readDiskJson(path: string): string | undefined {
   try {
-    // SAFETY: JSON.parse 返回 unknown；结果由各调用方做边界校验（见 readModelsJson / isModelsJsonProvider）
-    return JSON.parse(readFileSync(path, "utf-8")) as T;
-  } catch (e: any) {
-    if (e?.code !== "ENOENT") log(`Read ${path} failed: ${e}`);
-    return null;
+    return readFileSync(path, "utf8");
+  } catch (error) {
+    log(`Could not read ${path}: ${error}`);
+    return undefined;
   }
 }
 
-export function getConfigPaths(cwd: string, homeDir = homedir()): string[] {
+function writeDiskJson(path: string, value: string): void {
+  mkdirSync(dirname(path), { recursive: true });
+  const temporary = `${path}.${process.pid}.tmp`;
+  try {
+    writeFileSync(temporary, value, "utf8");
+    renameSync(temporary, path);
+  } finally {
+    try { unlinkSync(temporary); } catch {}
+  }
+}
+
+function isFresh(path: string): boolean {
+  const stat = statSync(path, { throwIfNoEntry: false });
+  return stat !== undefined && Date.now() - stat.mtimeMs < CACHE_MAX_AGE_MS;
+}
+
+function providerCachePath(name: string): string {
+  return join(PROVIDER_CACHE_DIR, `${encodeURIComponent(name)}.json`);
+}
+
+function readProviderCache(name: string, fingerprint: string): ProviderModelCache | undefined {
+  const raw = readDiskJson(providerCachePath(name));
+  const cached = raw === undefined ? undefined : decodeProviderCache(raw);
+  return cached?.fingerprint === fingerprint ? cached : undefined;
+}
+
+function readRegistryCache(): RegistryCache | undefined {
+  const raw = readDiskJson(REGISTRY_CACHE_FILE);
+  return raw === undefined ? undefined : decodeRegistryCache(raw);
+}
+
+function markFailure(path: string, cached: CacheFile): void {
+  const previous = statSync(path, { throwIfNoEntry: false });
+  try {
+    writeDiskJson(path, JSON.stringify({ ...cached, lastFailedUnix: Date.now() }));
+    if (previous) utimesSync(path, previous.atime, previous.mtime);
+  } catch (error) {
+    log(`Could not persist failure cooldown: ${error}`);
+  }
+}
+
+export function getConfigPaths(cwd: string, home = homedir()): string[] {
+  const agentDir = agentOverride ? AGENT_DIR : join(home, ".pi", "agent");
   return [
-    join(homeDir, ".pi", "agent", "extensions", EXTENSION_NAME, "config.json"),
+    join(agentDir, "extensions", EXTENSION_NAME, "config.json"),
     join(cwd, ".pi", "extensions", EXTENSION_NAME, "config.json"),
   ];
 }
 
-function loadConfig(cwd: string): PluginConfig | null {
-  let config: PluginConfig | null = null;
-  for (const path of getConfigPaths(cwd)) {
-    const parsed = readJson<Partial<PluginConfig>>(path);
-    if (!parsed) continue;
-    // SAFETY: 逐层浅合并用户 config.json；enable 缺省时 resolveEnabledConfig 的 !config.enable 判空兑底
-    config = { ...config, ...parsed } as PluginConfig;
+function resolveEnabledConfig(): Resolved | undefined {
+  const path = getConfigPaths(process.cwd()).reverse().find((candidate) => existsSync(candidate));
+  if (!path) return undefined;
+  const rawConfig = readDiskJson(path);
+  if (rawConfig === undefined) return undefined;
+  const parsedConfig = JSON.parse(rawConfig);
+  if (!Value.Check(pluginConfigSchema, parsedConfig)) {
+    log(`Invalid plugin configuration: ${path}`);
+    return undefined;
   }
-  return config;
+  const config = Value.Parse(pluginConfigSchema, parsedConfig);
+  isDebug = config.debug ?? false;
+  if (!config.enable) return undefined;
+  const rawModels = readDiskJson(MODELS_JSON_PATH);
+  if (rawModels === undefined) return undefined;
+  const parsedModels = JSON.parse(rawModels);
+  if (!Value.Check(modelsJsonSchema, parsedModels)) {
+    log("models.json is missing or invalid");
+    return undefined;
+  }
+  const modelsJson = Value.Parse(modelsJsonSchema, parsedModels);
+  const available = Object.keys(modelsJson.providers).filter((name) => !!modelsJson.providers[name].baseUrl);
+  return { config, modelsJson, providerNames: resolveEnableProviders(config.enableProviders, available) };
 }
 
-function ensureParentDir(path: string): void {
-  if (!existsSync(dirname(path))) mkdirSync(dirname(path), { recursive: true });
+/** 解析 `$VAR` / `${VAR}` 引用；未设置的引用原样保留，不阻断启动。 */
+function requestValue(value: string): string {
+  return value.replace(/\$(?:\{([A-Za-z_][A-Za-z0-9_]*)\}|([A-Za-z_][A-Za-z0-9_]*))/g, (match, braced, plain) => process.env[braced ?? plain] ?? match);
 }
 
-function readRegistryCache(): CacheEntry | null {
+function extractProviderConfig(modelsJson: ModelsJson, name: string): ProviderConfig | undefined {
+  const provider = modelsJson.providers[name];
+  if (!provider?.baseUrl) return undefined;
+  const baseUrl = requestValue(provider.baseUrl).replace(/\/+$/, "");
+  // 指纹基于配置引用而非密钥值：换账户仍失效，磁盘不出现秘密。
+  const fingerprint = createHash("sha256").update(JSON.stringify([
+    baseUrl, provider.api, provider.apiKey, provider.authHeader,
+    Object.entries(provider.headers ?? {}).sort(([a], [b]) => a.localeCompare(b)),
+  ])).digest("hex");
+  return {
+    baseUrl,
+    apiKey: provider.apiKey,
+    api: provider.api,
+    headers: provider.headers,
+    authHeader: provider.authHeader ?? provider.apiKey !== undefined,
+    compat: provider.compat,
+    fingerprint,
+    existingModels: collectExistingIds((provider.models ?? []).map((model) => model.id), getBuiltInModelIds(name)),
+  };
+}
+
+async function fetchRegistry(cached: RegistryCache | undefined): Promise<RegistryData> {
+  const headers = new Headers({ Accept: "application/json" });
+  if (cached?.etag) headers.set("If-None-Match", cached.etag);
+  const response = await fetch(REGISTRY_URL, { headers, signal: AbortSignal.timeout(NETWORK_TIMEOUT_MS) });
+  if (response.status === 304 && cached) {
+    // 304 是成功验证，必须推进成功时间，避免每次启动都重新验证。
+    writeDiskJson(REGISTRY_CACHE_FILE, JSON.stringify({ etag: cached.etag, data: cached.data }));
+    return cached.data;
+  }
+  if (!response.ok) throw new Error(`Registry HTTP ${response.status}`);
+  const data = decodeRegistryPayload(await response.json());
+  const etag = response.headers.get("etag") ?? "";
+  writeDiskJson(REGISTRY_CACHE_FILE, JSON.stringify({ etag, data }));
+  return data;
+}
+
+async function loadRegistry(pi: ExtensionAPI, force: boolean): Promise<RegistryData> {
+  const cached = readRegistryCache();
+  const state = states.get(pi)!;
+  if (!force && cached) {
+    if (!isFresh(REGISTRY_CACHE_FILE) && !inFailureCooldown(cached.lastFailedUnix, Date.now(), FAILURE_COOLDOWN_MS) && !state.registryRefresh) {
+      state.registryRefresh = (async () => {
+        try {
+          await fetchRegistry(cached);
+          flatRegistryMemo = undefined;
+          await initModels(pi, { refreshRegistry: false });
+        } catch (error) {
+          markFailure(REGISTRY_CACHE_FILE, cached);
+          log(`Registry refresh failed: ${error}`);
+        } finally {
+          state.registryRefresh = undefined;
+        }
+      })();
+    }
+    return cached.data;
+  }
   try {
-    // SAFETY: 缓存为本扩展自写；JSON 解析失败 catch 返回 null，结构损坏（合法 JSON 但 shape 错误）与既有行为一致——下游对缺字段已有可选链容错
-    return JSON.parse(readFileSync(REGISTRY_CACHE_FILE, "utf-8")) as CacheEntry;
-  } catch {
-    return null;
+    return await fetchRegistry(cached);
+  } catch (error) {
+    if (cached) markFailure(REGISTRY_CACHE_FILE, cached);
+    log(`Optional registry unavailable: ${error}`);
+    return cached?.data ?? {};
   }
 }
 
-function isRegistryCacheFresh(): boolean {
-  try {
-    return Date.now() - statSync(REGISTRY_CACHE_FILE).mtimeMs < REGISTRY_CACHE_MAX_AGE_MS;
-  } catch {
-    return false;
-  }
-}
-
-function writeRegistryCache(etag: string, data: RegistryData): void {
-  ensureParentDir(REGISTRY_CACHE_FILE);
-  writeFileSync(REGISTRY_CACHE_FILE, JSON.stringify({ etag, data }), "utf-8");
-  // 磁盘更新后失效 flatten memo
-  flatRegistryMemo = null;
-}
-
-function getFlatRegistry(data: RegistryData, key: string): FlatRegistry {
+function getFlatRegistry(data: RegistryData): FlatRegistry {
+  const key = createHash("sha256").update(JSON.stringify(data)).digest("hex");
   if (flatRegistryMemo?.key === key) return flatRegistryMemo.map;
   const map = flattenRegistry(data);
   flatRegistryMemo = { key, map };
   return map;
 }
 
-async function fetchRegistryFromNetwork(cached: CacheEntry | null): Promise<{
-  data: RegistryData;
-  etag: string;
-  fromCache: boolean;
-}> {
+async function fetchModels(config: ProviderConfig): Promise<DiscoveredModel[]> {
   const headers = new Headers({ Accept: "application/json" });
-  if (cached?.etag) headers.set("If-None-Match", cached.etag);
-
-  const res = await fetch(REGISTRY_URL, {
-    headers,
-    signal: AbortSignal.timeout(NETWORK_TIMEOUT_MS),
-  });
-
-  if (res.status === 304 && cached) {
-    // 304 = 网络可达 + 数据未变：清除失败冷却标记（若之前失败过）
-    if (cached.lastFailedUnix) {
-      markRegistryFailureClear(cached);
-    }
-    log(`Registry: 304 Not Modified, using cache (${Object.keys(cached.data).length} providers)`);
-    return { data: cached.data, etag: cached.etag, fromCache: true };
-  }
-
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
-
-  const etag =
-    res.headers.get("etag") ?? createHash("md5").update(`${Date.now()}`).digest("hex");
-  // SAFETY: models.dev 官方 registry 端点，视为可信源；HTTP 非 2xx 已在上方抛错
-  const data = (await res.json()) as RegistryData;
-  writeRegistryCache(etag, data);
-
-  const modelCount = Object.values(data).reduce(
-    (sum, provider) => sum + (provider.models ? Object.keys(provider.models).length : 0),
-    0,
-  );
-  log(`Registry: fetched ${Object.keys(data).length} providers, ${modelCount} models (ETag: ${etag})`);
-  return { data, etag, fromCache: false };
+  // authHeader 为 false 时凭据由 models.json headers 提供；引用未解析时不发送伪凭据。
+  const key = config.apiKey ? requestValue(config.apiKey) : undefined;
+  if (config.authHeader && key && !key.startsWith("$")) headers.set("Authorization", `Bearer ${key}`);
+  for (const [name, value] of Object.entries(config.headers ?? {})) headers.set(name, requestValue(value));
+  const endpoints = config.baseUrl.endsWith("/v1")
+    ? [`${config.baseUrl}/models`]
+    : [`${config.baseUrl}/models`, `${config.baseUrl}/v1/models`];
+  const signal = AbortSignal.timeout(NETWORK_TIMEOUT_MS);
+  return Promise.any(endpoints.map(async (url) => {
+    const response = await fetch(url, { headers, signal });
+    if (!response.ok) throw new Error(`${url}: HTTP ${response.status}`);
+    return decodeRemoteModels(await response.text());
+  }));
 }
 
-function scheduleRegistryRefresh(pi: ExtensionAPI): void {
-  if (registryRefreshInFlight) return;
-  const etagBefore = readRegistryCache()?.etag;
-  registryRefreshInFlight = (async () => {
-    try {
-      const cached = readRegistryCache();
-      const result = await fetchRegistryFromNetwork(cached);
-      log("Registry: background refresh done");
-      // etag 变化：清 hash 并用新 registry 再跑一轮（禁止再 SWR，避免环）；
-      // force 跳过 in-flight 合并与冷却，确保新 registry 参数真正生效
-      if (result.etag !== etagBefore) {
-        registeredAutoHashes.clear();
-        flatRegistryMemo = null;
-        await initModels(pi, { force: true, allowSwr: false });
-      }
-    } catch (err) {
-      // 后台刷新失败同样写冷却标记，下次 session_start 冷却期内不再重试
-      markRegistryFailure(Date.now());
-      log(`Registry: background refresh failed: ${err}`);
-    } finally {
-      registryRefreshInFlight = null;
-    }
-  })();
-}
-
-/**
- * 跨进程网络锁：wx 原子创建锁文件（已存在则失败）。
- * 锁文件超龄（持有者崩溃）可抢占；等待超时则降级无锁继续。
- * 仅 session_start 异步路径调用，factory 不碰，符合「factory 禁同步重 IO」。
- */
-async function acquireNetworkLock(): Promise<() => void> {
-  const deadline = Date.now() + LOCK_WAIT_TIMEOUT_MS;
-  while (true) {
-    ensureParentDir(NETWORK_LOCK_FILE);
-    try {
-      const fd = openSync(NETWORK_LOCK_FILE, "wx");
-      writeFileSync(fd, String(process.pid), "utf-8");
-      closeSync(fd);
-      // 返回释放函数
-      return () => {
-        try {
-          unlinkSync(NETWORK_LOCK_FILE);
-        } catch {}
-      };
-    } catch (err) {
-      // 锁被占：stale 则抢占，否则重试
-      // SAFETY: openSync("wx") 失败只会抛 NodeJS 文件系统错误
-      if ((err as NodeJS.ErrnoException).code === "EEXIST") {
-        let stale = false;
-        try {
-          const st = statSync(NETWORK_LOCK_FILE);
-          stale = Date.now() - st.mtimeMs > LOCK_STALE_MS;
-        } catch {
-          // 锁文件刚被删，重试即可
-        }
-        if (stale) {
-          try {
-            unlinkSync(NETWORK_LOCK_FILE);
-          } catch {}
-          continue;
-        }
-        if (Date.now() >= deadline) {
-          log("Network lock timeout, proceeding without lock");
-          return () => {};
-        }
-        await sleep(LOCK_POLL_INTERVAL_MS);
-      } else {
-        log(`Network lock error: ${err}, proceeding without lock`);
-        return () => {};
-      }
-    }
-  }
-}
-
-const LOCK_POLL_INTERVAL_MS = 50;
-
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-/**
- * 读 registry：新鲜 cache 直接用；过期则先返回 stale 并后台刷新（SWR）；
- * force 时同步拉网。allowSwr=false 用于后台二次注册，避免循环。
- */
-async function loadRegistry(options?: {
-  force?: boolean;
-  allowSwr?: boolean;
-  pi?: ExtensionAPI;
-}): Promise<{ data: RegistryData; etag: string; fromCache: boolean; stale: boolean }> {
-  const cached = readRegistryCache();
-  const force = options?.force ?? false;
-  const allowSwr = options?.allowSwr ?? true;
-
-  if (!force && cached && isRegistryCacheFresh()) {
-    log(`Registry: fresh cache, skip network (${Object.keys(cached.data).length} providers)`);
-    return { data: cached.data, etag: cached.etag, fromCache: true, stale: false };
-  }
-
-  if (!force && allowSwr && cached && !isRegistryCacheFresh()) {
-    // 失败冷却期内不再后台刷新：避免每次 session_start 白等 3s 超时
-    if (inFailureCooldown(cached.lastFailedUnix)) {
-      log(
-        `Registry: in failure cooldown, use cached data without refresh (${Object.keys(cached.data).length} providers)`,
-      );
-      return { data: cached.data, etag: cached.etag, fromCache: true, stale: true };
-    }
-    log(
-      `Registry: stale cache, use now + background refresh (${Object.keys(cached.data).length} providers)`,
-    );
-    if (options?.pi) scheduleRegistryRefresh(options.pi);
-    return { data: cached.data, etag: cached.etag, fromCache: true, stale: true };
-  }
-
-  try {
-    const result = await fetchRegistryFromNetwork(cached);
-    return { ...result, stale: false };
-  } catch (err) {
-    // 失败写冷却标记（不动 mtime），下次冷却期内直接走缓存
-    if (cached) {
-      markRegistryFailure(Date.now());
-      log(`Registry unreachable (${err}), using cached data`);
-      return { data: cached.data, etag: cached.etag, fromCache: true, stale: true };
-    }
-    // 无缓存可回退：标记失败但无法返回数据，抛错由上层处理
-    markRegistryFailure(Date.now());
-    throw err;
-  }
-}
-
-/** 写 registry 网络失败标记（不动 mtime）。无缓存时不写盘，保持「无缓存 = 每次尝试」语义 */
-function markRegistryFailure(lastFailedUnix: number): void {
-  const disk = readRegistryCache();
-  if (!disk) return;
-  const path = REGISTRY_CACHE_FILE;
-  const prev = statSync(path, { throwIfNoEntry: false });
-  writeFileSync(path, JSON.stringify({ ...disk, lastFailedUnix }), "utf-8");
-  if (prev?.mtimeMs) {
-    try {
-      utimesSync(path, new Date(prev.atimeMs), new Date(prev.mtimeMs));
-    } catch {}
-  }
-}
-
-/** 清除 registry 失败冷却标记（304 成功时调用，不动 mtime） */
-function markRegistryFailureClear(disk: CacheEntry): void {
-  const path = REGISTRY_CACHE_FILE;
-  const prev = statSync(path, { throwIfNoEntry: false });
-  const { lastFailedUnix: _drop, ...rest } = disk;
-  writeFileSync(path, JSON.stringify(rest), "utf-8");
-  if (prev?.mtimeMs) {
-    try {
-      utimesSync(path, new Date(prev.atimeMs), new Date(prev.mtimeMs));
-    } catch {}
-  }
-}
-
-function providerCachePath(providerName: string): string {
-  return join(PROVIDER_CACHE_DIR, `${providerName}.json`);
-}
-
-function readProviderCache(providerName: string): ProviderModelCache | null {
-  try {
-    // SAFETY: 缓存为本扩展自写；JSON 解析失败 catch 返回 null，结构损坏（合法 JSON 但 shape 错误）与既有行为一致——下游对缺字段已有可选链容错
-    return JSON.parse(readFileSync(providerCachePath(providerName), "utf-8")) as ProviderModelCache;
-  } catch {
-    return null;
-  }
-}
-
-function writeProviderCache(providerName: string, cache: ProviderModelCache): void {
-  const path = providerCachePath(providerName);
-  ensureParentDir(path);
-  writeFileSync(path, JSON.stringify(cache), "utf-8");
-}
-
-/** 写入网络失败标记；不刷新 mtime，避免把失败伪装成新鲜缓存。无缓存时不写盘 */
-function markProviderFailure(providerName: string, lastFailedUnix: number): void {
-  const disk = readProviderCache(providerName);
-  if (!disk) return;
-  const next = { ...disk, lastFailedUnix };
-  const path = providerCachePath(providerName);
-  const prev = statSync(path, { throwIfNoEntry: false });
-  writeFileSync(path, JSON.stringify(next), "utf-8");
-  // 写文件会刷新 mtime；还原原 mtime 保持成功语义（新鲜度以成功 mtime 为准）
-  if (prev?.mtimeMs) {
-    try {
-      utimesSync(path, new Date(prev.atimeMs), new Date(prev.mtimeMs));
-    } catch {}
-  }
-}
-
-/** 失败冷却是否生效：最近失败在冷却期内 → true（不应发网） */
-function inFailureCooldown(lastFailedUnix: number | undefined): boolean {
-  return inFailureCooldownLogic(lastFailedUnix, Date.now(), FAILURE_COOLDOWN_MS);
-}
-
-function isProviderCacheFresh(providerName: string): boolean {
-  try {
-    return Date.now() - statSync(providerCachePath(providerName)).mtimeMs < PROVIDER_CACHE_MAX_AGE_MS;
-  } catch {
-    return false;
-  }
-}
-
-function resolvePiValue(value: string | undefined): string | undefined {
-  if (!value) return value;
-  const match = value.match(/^\$\{?(\w+)\}?$/);
-  if (match) return process.env[match[1]] ?? value;
-  return value;
-}
-
-// 边界守卫：参数收 any（no-unknown-parameters 禁显式 unknown 参数）；函数即 I/O 边界解析器，返回类型即契约
-function isModelsJsonEntry(value: any): value is ModelLike {
-  if (typeof value !== "object" || value === null) return false;
-  // 只校验扩展消费的 id（去重保护）；其余字段不深校验，错误类型可能透传（与清理前 as-any 行为一致）
-  return typeof value.id === "string";
-}
-
-function isModelsJsonProvider(value: any): value is ModelsJsonProvider {
-  if (typeof value !== "object" || value === null) return false;
-  if (value.baseUrl !== undefined && typeof value.baseUrl !== "string") return false;
-  if (value.apiKey !== undefined && typeof value.apiKey !== "string") return false;
-  if (value.api !== undefined && typeof value.api !== "string") return false;
-  if (
-    value.models !== undefined &&
-    (!Array.isArray(value.models) || !value.models.every(isModelsJsonEntry))
-  ) {
-    return false;
-  }
-  return true;
-}
-
-function readModelsJson(): ModelsJson | null {
-  const raw = readJson<unknown>(MODELS_JSON_PATH);
-  if (!(raw instanceof Object) || Array.isArray(raw)) return null;
-  // SAFETY: instanceof 收敛 JSON 根对象；providers 每项过 isModelsJsonProvider 守卫，坏项仅丢弃不影响其余 provider
-  const providers = (raw as { providers?: unknown }).providers;
-  if (!(providers instanceof Object) || Array.isArray(providers)) return null;
-  const valid: Record<string, ModelsJsonProvider> = {};
-  for (const [name, entry] of Object.entries(providers)) {
-    if (isModelsJsonProvider(entry)) valid[name] = entry;
-  }
-  return { providers: valid };
-}
-
-function listProvidersWithBaseUrl(modelsJson: ModelsJson): string[] {
-  return Object.keys(modelsJson.providers).filter(
-    (name) => modelsJson.providers[name].baseUrl !== undefined,
-  );
-}
-
-function extractProviderConfig(
-  modelsJson: ModelsJson,
-  providerName: string,
-): ProviderConfig | null {
-  const provider = modelsJson.providers?.[providerName];
-  if (!provider) {
-    log(`Provider "${providerName}": not found in models.json`);
-    return null;
-  }
-  if (!provider.baseUrl) {
-    log(`Provider "${providerName}": no baseUrl in models.json, skip`);
-    return null;
-  }
-
-  const fromJsonIds: string[] = [];
-  if (Array.isArray(provider.models)) {
-    for (const model of provider.models) {
-      if (model.id) fromJsonIds.push(model.id);
-    }
-  }
-
-  // 内置 provider（如 openai）同 id 视为已存在：不覆盖参数，只补缺失
-  const builtInIds = getBuiltInModelIds(providerName);
-  const existingModels = collectExistingIds(fromJsonIds, builtInIds);
-  if (builtInIds.length > 0) {
-    log(
-      `Provider "${providerName}": protect ${builtInIds.length} built-in + ${fromJsonIds.length} models.json ids`,
-    );
-  }
-
+function buildAutoModel(remote: DiscoveredModel, registry: FlatRegistry, provider: string): ModelLike {
+  const catalog = lookupModel(remote.id, registry, provider)?.model;
+  const contextWindow = remote.contextWindow ?? (catalog?.limit?.context || 128_000);
+  const reasoning = remote.reasoning ?? catalog?.reasoning ?? false;
+  const maxTokens = remote.maxTokens ?? (catalog?.limit?.output || 16_384);
+  const name = remote.name ?? catalog?.name ?? remote.id;
   return {
-    baseUrl: provider.baseUrl.replace(/\/+$/, ""),
-    apiKey: resolvePiValue(provider.apiKey),
-    api: provider.api,
-    existingModels,
+    id: remote.id,
+    name: `${name} (AUTO)`,
+    contextWindow,
+    maxTokens,
+    reasoning,
+    thinkingLevelMap: reasoning ? remote.thinkingLevelMap ?? toPiThinkingLevelMap(catalog?.reasoning_options, undefined) : undefined,
+    input: remote.input ?? toPiInput(catalog?.modalities?.input, catalog?.attachment),
+    cost: toPiCost(catalog?.cost),
   };
 }
 
-function isModelIdEntry(value: any): value is { id: string } {
-  if (typeof value !== "object" || value === null) return false;
-  return typeof value.id === "string";
+/** provider 级 compat 与模型自身 compat 合并；宿主对扩展模型不会再补这一层。 */
+function mergeCompat(base: Model<Api>["compat"], override: Model<Api>["compat"]): Model<Api>["compat"] {
+  return { ...base, ...override };
 }
 
-/** OpenAI 兼容 /models 端点响应：{ data?: [{ id }] } */
-function isModelsResponse(value: any): value is { data?: Array<{ id: string }> } {
-  if (typeof value !== "object" || value === null) return false;
-  return (
-    value.data === undefined ||
-    (Array.isArray(value.data) && value.data.every(isModelIdEntry))
-  );
-}
-
-async function fetchRemoteModels(cfg: ProviderConfig): Promise<string[]> {
-  const candidates: string[] = [];
-  if (/\/v1\/?$/.test(cfg.baseUrl)) {
-    candidates.push(`${cfg.baseUrl}/models`);
-  } else {
-    candidates.push(`${cfg.baseUrl}/v1/models`);
-    candidates.push(`${cfg.baseUrl}/models`);
-  }
-  const headers = new Headers({ Accept: "application/json" });
-  if (cfg.apiKey) headers.set("Authorization", `Bearer ${cfg.apiKey}`);
-
-  // 候选 URL 并发；整段 3s 总预算，任一成功即返回并 abort 其余
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), NETWORK_TIMEOUT_MS);
-  try {
-    for (const url of candidates) log(`Fetching ${url} ...`);
-    const ids = await Promise.any(
-      candidates.map(async (url) => {
-        const res = await fetch(url, { headers, signal: controller.signal });
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        const body = await res.json();
-        if (!isModelsResponse(body)) throw new Error("unexpected /models response shape");
-        const list = (body.data ?? []).map((model) => model.id);
-        log(`  → ${url} ${list.length} models`);
-        return list;
-      }),
-    );
-    return ids;
-  } catch (e) {
-    // Promise.any 全失败 → AggregateError
-    const msg =
-      e instanceof AggregateError
-        ? e.errors.map((x) => String(x)).join("; ")
-        : String(e);
-    throw new Error(`all candidates failed: ${msg}`);
-  } finally {
-    clearTimeout(timer);
-    if (!controller.signal.aborted) controller.abort();
-  }
-}
-
-function buildAutoModel(
-  id: string,
-  registry: FlatRegistry,
-  providerName: string,
-): AutoModel {
-  const entry = lookupModel(id, registry, providerName);
-  if (!entry) {
-    return {
-      id,
-      name: `${id} (AUTO)`,
-      reasoning: false,
-      input: ["text"],
-      cost: toPiCost(),
-      contextWindow: 128_000,
-      maxTokens: 16_384,
-    };
-  }
-
-  const model = entry.model;
-  return {
-    id,
-    name: `${model.name ?? id} (AUTO)`,
+/** 补齐宿主扩展模型定义要求必填的字段；额外协议字段原样透传。 */
+function toProviderModels(models: ModelLike[]): ProviderModelConfig[] {
+  return models.map((model) => ({
+    ...model,
+    id: model.id,
+    name: model.name ?? model.id,
     reasoning: model.reasoning ?? false,
-    thinkingLevelMap:
-      toPiThinkingLevelMap(
-        model.reasoning_options,
-        getAutoThinkingLevelMap(model.reasoning ?? false),
-      ),
-    input: toPiInput(model.modalities?.input, model.attachment),
-    cost: toPiCost(model.cost),
-    contextWindow: model.limit?.context ?? 128_000,
-    maxTokens: model.limit?.output ?? 16_384,
-  };
+    input: model.input ?? ["text"],
+    cost: model.cost ?? { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+    contextWindow: model.contextWindow ?? 128_000,
+    maxTokens: model.maxTokens ?? 16_384,
+  }));
 }
 
-function registerProviderModels(
-  pi: ExtensionAPI,
-  providerName: string,
-  providerCfg: ProviderConfig,
-  existingRaw: ModelLike[],
-  discoveredModels: AutoModel[],
-): void {
-  // registerProvider(models) 整表替换：必须带上内置 + models.json，再只追加新 AUTO
+function registerProviderModels(pi: ExtensionAPI, name: string, config: ProviderConfig, manual: ModelLike[], auto: ModelLike[]): void {
   const models = mergeProviderModelList({
-    builtIn: getBuiltInModelDefs(providerName),
-    fromModelsJson: existingRaw.map(normalizeModelsJsonModel),
-    autoNew: discoveredModels,
+    builtIn: getBuiltInModelDefs(name),
+    fromModelsJson: manual.map(normalizeModelsJsonModel),
+    autoNew: auto,
+  }).map((model) => config.compat ? { ...model, compat: mergeCompat(model.compat, config.compat) } : model);
+  // models.json 的 modelOverrides 仍由宿主合成；此处只提供合并后的整表。
+  const definitions = toProviderModels(models);
+  pi.registerProvider(name, {
+    baseUrl: config.baseUrl,
+    apiKey: config.apiKey ?? "none",
+    api: config.api ?? "openai-completions",
+    headers: config.headers,
+    authHeader: config.authHeader,
+    models: definitions,
   });
+}
 
-  pi.registerProvider(providerName, {
-    baseUrl: providerCfg.baseUrl,
-    apiKey: providerCfg.apiKey ?? "none",
-    authHeader: !!providerCfg.apiKey,
-    api: providerCfg.api ?? "openai-completions",
-    // SAFETY: ModelLike 未建模透传字段（samplingParams/compat 等）；缺省字段已由 normalizeModelsJsonModel 补齐，与 pi modelFromJson 默认值一致
-    models: models as any[],
+function registerDiscovered(pi: ExtensionAPI, resolved: Resolved, name: string, config: ProviderConfig, remote: DiscoveredModel[], registry: FlatRegistry): ProviderRunSummary {
+  const state = states.get(pi)!;
+  const eligible = remote.filter((model) => !config.existingModels.has(model.id));
+  const { kept } = filterByExcludePatterns(eligible.map((model) => model.id), resolved.config.excludePatterns);
+  const excludedCount = eligible.length - kept.length;
+  const models = kept.flatMap((id) => {
+    const remoteModel = eligible.find((model) => model.id === id);
+    return remoteModel ? [buildAutoModel(remoteModel, registry, name)] : [];
   });
-}
-
-type Resolved = {
-  config: PluginConfig;
-  modelsJson: ModelsJson;
-  providerNames: string[];
-};
-
-function resolveEnabledConfig(): Resolved | null {
-  const config = loadConfig(process.cwd());
-  if (!config) {
-    log(`Config not found in standard extension config paths, skip`);
-    return null;
-  }
-
-  isDebug = config.debug ?? false;
-  if (isDebug) log("Debug mode ON");
-  if (!config.enable) {
-    log("Disabled via config.enable = false");
-    return null;
-  }
-
-  const modelsJson = readModelsJson();
-  if (!modelsJson?.providers) {
-    log("models.json not found or invalid, skip");
-    return null;
-  }
-
-  const available = listProvidersWithBaseUrl(modelsJson);
-  const providerNames = resolveEnableProviders(config.enableProviders, available);
-  if (providerNames.length === 0) {
-    log("No enableProviders resolved, skip");
-    return null;
-  }
-
-  return { config, modelsJson, providerNames };
-}
-
-type BuiltModelsResult = {
-  models: AutoModel[];
-  matched: number;
-  defaults: number;
-  filtered: number;
-  autoHash: string;
-};
-
-function buildAndFilterModels(
-  newIds: string[],
-  registry: FlatRegistry,
-  excludePatterns: string[] | undefined,
-  providerName: string,
-): BuiltModelsResult {
-  const { kept: afterExclude, excluded } = filterByExcludePatterns(newIds, excludePatterns);
-  let matched = 0;
-  let defaults = 0;
-  let filtered = excluded.length;
-  const models: AutoModel[] = [];
-
-  for (const id of afterExclude) {
-    const model = buildAutoModel(id, registry, providerName);
-    if (!isUsableChatModel(model)) {
-      filtered++;
-      debugLog(`    - ${id} → filtered (ctx:${model.contextWindow})`);
-      continue;
-    }
-    const entry = lookupModel(id, registry, providerName);
-    if (!entry) {
-      defaults++;
-      debugLog(`    + ${id} → (defaults, no registry match)`);
-    } else {
-      matched++;
-      debugLog(
-        `    + ${id} → [${entry.provider}] ctx:${model.contextWindow} reasoning:${model.reasoning}`,
-      );
-    }
-    models.push(model);
-  }
-
-  // 含元数据，registry 更新 ctx/cost 等时不应被 id-only hash 误判 unchanged
-  const autoHash = hashModelIds(
-    models.map(
-      (m) =>
-        `${m.id}|${m.contextWindow}|${m.maxTokens}|${m.reasoning ? 1 : 0}|${m.name}`,
-    ),
-  );
-  return { models, matched, defaults, filtered, autoHash };
-}
-
-function tryRegisterProvider(
-  pi: ExtensionAPI,
-  providerName: string,
-  providerCfg: ProviderConfig,
-  modelsJson: ModelsJson,
-  built: ReturnType<typeof buildAndFilterModels>,
-  force: boolean,
-): ProviderRunSummary {
-  const manual = providerCfg.existingModels.size;
-  const auto = built.models.length;
-  const base: ProviderRunSummary = {
-    provider: providerName,
-    manual,
-    auto,
-    matched: built.matched,
-    defaults: built.defaults,
-    filtered: built.filtered,
-    skipped: false,
-    registered: false,
+  const manual = resolved.modelsJson.providers[name]?.models ?? [];
+  const hash = createHash("sha256").update(JSON.stringify([config.fingerprint, manual, models])).digest("hex");
+  const previous = state.hashes.get(name);
+  const matched = eligible.filter((model) => lookupModel(model.id, registry, name)).length;
+  const summary: ProviderRunSummary = {
+    provider: name, manual: config.existingModels.size, auto: models.length,
+    matched, defaults: eligible.length - matched, filtered: excludedCount,
+    skipped: previous === hash, registered: false,
   };
-
-  if (auto === 0) {
-    log(
-      formatProviderSummary({
-        ...base,
-        registered: false,
-      }) + " (nothing to register)",
-    );
-    return base;
+  if (previous !== hash && (models.length > 0 || previous !== undefined)) {
+    registerProviderModels(pi, name, config, manual, models);
+    state.hashes.set(name, hash);
+    summary.registered = true;
   }
-
-  if (!force && shouldSkipByHash(registeredAutoHashes.get(providerName), built.autoHash)) {
-    const summary = { ...base, skipped: true };
-    log(formatProviderSummary(summary));
-    return summary;
-  }
-
-  const existingRaw = modelsJson.providers[providerName]?.models ?? [];
-  registerProviderModels(pi, providerName, providerCfg, existingRaw, built.models);
-  registeredAutoHashes.set(providerName, built.autoHash);
-  const summary = { ...base, registered: true };
-  log(formatProviderSummary(summary));
   return summary;
 }
 
-/**
- * factory 同步：只用磁盘 cache，早于 session restore。
- */
 function eagerRegisterFromCache(pi: ExtensionAPI): void {
-  try {
+  const resolved = resolveEnabledConfig();
+  if (!resolved) return;
+  const state = states.get(pi)!;
+  state.enabled = resolved.providerNames;
+  const registry = getFlatRegistry(readRegistryCache()?.data ?? {});
+  for (const name of resolved.providerNames) {
+    try {
+      const config = extractProviderConfig(resolved.modelsJson, name);
+      if (!config) continue;
+      const cached = readProviderCache(name, config.fingerprint);
+      if (!cached) continue;
+      state.summaries.push(registerDiscovered(pi, resolved, name, config, cached.models, registry));
+    } catch (error) {
+      log(`${name}: eager registration failed: ${error}`);
+    }
+  }
+  state.status = `dynamic-models (cached): ${formatStatusLine(state.summaries)}`;
+}
+
+async function acquireNetworkLock(): Promise<() => void> {
+  mkdirSync(CACHE_DIR, { recursive: true });
+  const deadline = Date.now() + LOCK_WAIT_TIMEOUT_MS;
+  while (true) {
+    try {
+      const descriptor = openSync(NETWORK_LOCK_FILE, "wx");
+      writeFileSync(descriptor, String(process.pid), "utf8");
+      closeSync(descriptor);
+      return () => { try { unlinkSync(NETWORK_LOCK_FILE); } catch {} };
+    } catch (error) {
+      if (!(error instanceof Error) || !("code" in error) || error.code !== "EEXIST") {
+        log(`Network lock unavailable: ${error}`);
+        return () => {};
+      }
+      const stat = statSync(NETWORK_LOCK_FILE, { throwIfNoEntry: false });
+      if (stat && Date.now() - stat.mtimeMs > LOCK_STALE_MS) {
+        try { unlinkSync(NETWORK_LOCK_FILE); } catch {}
+        continue;
+      }
+      if (Date.now() >= deadline) return () => {};
+      await sleep(50);
+    }
+  }
+}
+
+async function processProvider(pi: ExtensionAPI, resolved: Resolved, name: string, registry: FlatRegistry, force: boolean): Promise<ProviderRunSummary | undefined> {
+  const config = extractProviderConfig(resolved.modelsJson, name);
+  if (!config) return undefined;
+  const cached = readProviderCache(name, config.fingerprint);
+  let models = cached?.models;
+  const stale = !cached || (!isFresh(providerCachePath(name)) && !inFailureCooldown(cached.lastFailedUnix, Date.now(), FAILURE_COOLDOWN_MS));
+  if (force || stale) {
+    try {
+      models = await fetchModels(config);
+      writeDiskJson(providerCachePath(name), JSON.stringify({ version: 2, fingerprint: config.fingerprint, models }));
+    } catch (error) {
+      if (cached) markFailure(providerCachePath(name), cached);
+      if (!models) throw error;
+      log(`${name}: model discovery failed, using stale cache`);
+    }
+  }
+  return registerDiscovered(pi, resolved, name, config, models ?? [], registry);
+}
+
+async function initModels(pi: ExtensionAPI, options: { force?: boolean; refreshRegistry?: boolean; ctx?: ExtensionContext } = {}): Promise<InitResult> {
+  const state = states.get(pi)!;
+  if (state.inFlight) {
+    const result = await state.inFlight;
+    // 后台 registry 二次注册需要在新数据上跑一遍；普通并发读取复用结果。
+    if (!options.force && options.refreshRegistry !== false) return result;
+  }
+  const task = (async (): Promise<InitResult> => {
     const resolved = resolveEnabledConfig();
-    if (!resolved) return;
-
-    const { config, modelsJson, providerNames } = resolved;
-    lastEnabledProviders = providerNames;
-    log(`Eager register from cache; providers: ${providerNames.join(", ")}`);
-
-    let registry: FlatRegistry = new Map();
-    const regCache = readRegistryCache();
-    if (regCache?.data) {
-      const key = regCache.etag || "disk";
-      registry = getFlatRegistry(regCache.data, key);
-      log(`  registry cache: ${registry.size} entries`);
-    } else {
-      log(`  registry cache missing; AUTO models use defaults until session_start`);
-    }
-
-    const summaries: ProviderRunSummary[] = [];
-    for (const providerName of providerNames) {
-      const providerCfg = extractProviderConfig(modelsJson, providerName);
-      if (!providerCfg) continue;
-
-      const cached = readProviderCache(providerName);
-      if (!cached?.modelIds?.length) {
-        log(`  [eager ${providerName}] no provider cache, defer to session_start`);
-        continue;
-      }
-
-      const newIds = filterNewModelIds(cached.modelIds, providerCfg.existingModels);
-      if (newIds.length === 0) {
-        log(`  [eager ${providerName}] all ${cached.modelIds.length} already in models.json`);
-        continue;
-      }
-
-      const built = buildAndFilterModels(
-        newIds,
-        registry,
-        config.excludePatterns,
-        providerName,
-      );
-      summaries.push(tryRegisterProvider(pi, providerName, providerCfg, modelsJson, built, false));
-    }
-
-    if (summaries.length > 0) {
-      lastSummaries = summaries;
-      lastStatusText = formatStatusLine(summaries);
-    }
-  } catch (err) {
-    log(`Eager register failed: ${err}`);
-  }
-}
-
-type InitOptions = {
-  force?: boolean;
-  /** false 时过期 registry 同步拉网/用 stale，不再 schedule 后台（防 SWR 环） */
-  allowSwr?: boolean;
-  ctx?: ExtensionContext;
-};
-
-type InitResult = {
-  ok: boolean;
-  summaries: ProviderRunSummary[];
-  error?: string;
-};
-
-async function discoverIds(
-  providerName: string,
-  providerCfg: ProviderConfig,
-  force: boolean,
-): Promise<{ ids: string[]; source: "fresh" | "stale" | "network" } | null> {
-  // 进程内 per-provider 合并：同 provider 并发只发一次网络请求
-  const inflight = providerDiscoverInFlight.get(providerName);
-  if (inflight && !force) return inflight;
-
-  const promise = (async (): Promise<{ ids: string[]; source: "fresh" | "stale" | "network" } | null> => {
-    const pt = Date.now();
-    const disk = readProviderCache(providerName);
-    const cacheIsFresh = disk ? isProviderCacheFresh(providerName) : false;
-
-    // 非 force 仅命中 TTL 内缓存；过期缓存保留为网络失败时的 fallback。
-    if (disk && !shouldRefreshProviderCache(force, true, cacheIsFresh)) {
-      const n = disk.modelIds?.length ?? 0;
-      log(`  [${providerName}] cache hit fresh (${n} models, ${Date.now() - pt}ms)`);
-      if (n === 0) return null;
-      return { ids: disk.modelIds, source: "fresh" };
-    }
-
-    // 失败冷却期内：不发网络，直接用旧缓存（若有）
-    if (!force && inFailureCooldown(disk?.lastFailedUnix)) {
-      if (disk?.modelIds?.length) {
-        log(
-          `  [${providerName}] failure cooldown, use cache (${disk.modelIds.length} models)`,
-        );
-        return { ids: disk.modelIds, source: "stale" };
-      }
-      log(`  [${providerName}] failure cooldown, no cache to fall back`);
-      return null;
-    }
-
-    // force、无缓存或缓存过期：异步请求 API；失败时回退旧缓存（不写盘，避免 mtime 变新鲜）
+    if (!resolved) return { ok: true, summaries: [] };
+    state.enabled = resolved.providerNames;
+    const release = await acquireNetworkLock();
     try {
-      const ids = await fetchRemoteModels(providerCfg);
-      writeProviderCache(providerName, {
-        hash: hashModelIds(ids),
-        modelIds: ids,
-      });
-      return { ids, source: "network" };
-    } catch (err) {
-      log(`  [${providerName}] ✗ unreachable: ${err}`);
-      // 写失败标记（独立字段 + 保留 mtime），冷却期内不重试
-      markProviderFailure(providerName, Date.now());
-      const fallback = providerFetchFailureFallback(disk?.modelIds);
-      if (!fallback) return null;
-      log(`  [${providerName}] → fallback cache (${fallback.ids.length} models)`);
-      return { ids: fallback.ids, source: fallback.source };
-    }
-  })();
-
-  if (!force) providerDiscoverInFlight.set(providerName, promise);
-  try {
-    return await promise;
-  } finally {
-    if (providerDiscoverInFlight.get(providerName) === promise) {
-      providerDiscoverInFlight.delete(providerName);
-    }
-  }
-}
-
-async function initModels(pi: ExtensionAPI, options: InitOptions = {}): Promise<InitResult> {
-  const t0 = Date.now();
-  const force = options.force ?? false;
-  const allowSwr = options.allowSwr ?? true;
-  const ctx = options.ctx;
-
-  // 非 force：进程内并发合并，复用同一 Promise，避免同秒多次 session_start 重复拉网
-  if (!force && initModelsInFlight) {
-    log("initModels: coalescing with in-flight run");
-    return initModelsInFlight;
-  }
-
-  const runPromise = (async (): Promise<InitResult> => {
-    const summaries: ProviderRunSummary[] = [];
-    lastInitError = null;
-
-    try {
-      const resolved = resolveEnabledConfig();
-      if (!resolved) {
-        lastEnabledProviders = [];
-        return { ok: true, summaries };
-      }
-
-      const { config, modelsJson, providerNames } = resolved;
-      lastEnabledProviders = providerNames;
-      log(`Enabled providers: ${providerNames.join(", ")}${force ? " (force)" : ""}`);
-
-      const hadNoCache = providerNames.every(
-        (name) => !readProviderCache(name)?.modelIds?.length,
-      );
-
-      // 跨进程锁：同一时刻只有一个 pi 进程拉网，其余等待或降级
-      const release = force ? () => {} : await acquireNetworkLock();
-      try {
-        // registry + 各 provider 发现全部并发（不准串行等 registry）
-        let t = Date.now();
-        const [registryLoad, ...discoveredList] = await Promise.all([
-          loadRegistry({ force, allowSwr, pi }),
-          ...providerNames.map(async (providerName) => {
-            const providerCfg = extractProviderConfig(modelsJson, providerName);
-            if (!providerCfg) return { providerName, providerCfg: null, discovered: null };
-            const discovered = await discoverIds(providerName, providerCfg, force);
-            return { providerName, providerCfg, discovered };
-          }),
-        ]);
-
-        const { data: registryData, fromCache, stale, etag } = registryLoad;
-        log(
-          `  registry: ${Date.now() - t}ms (${fromCache ? "cached" : "fresh"}${stale ? ",stale" : ""})`,
-        );
-        t = Date.now();
-        const registry = getFlatRegistry(registryData, etag || "live");
-        log(`  flatten: ${Date.now() - t}ms, ${registry.size} entries`);
-
-        const results = await Promise.all(
-          discoveredList.map(async (item) => {
-            if (!item?.providerCfg) return null;
-            const { providerName, providerCfg, discovered } = item;
-            if (!discovered || discovered.ids.length === 0) {
-              log(`  [${providerName}] ✗ 0 models`);
-              return null;
-            }
-
-            const newIds = filterNewModelIds(discovered.ids, providerCfg.existingModels);
-            if (newIds.length === 0) {
-              log(`  [${providerName}] ✓ all ${discovered.ids.length} models already defined`);
-              return null;
-            }
-
-            const built = buildAndFilterModels(
-              newIds,
-              registry,
-              config.excludePatterns,
-              providerName,
-            );
-            return tryRegisterProvider(pi, providerName, providerCfg, modelsJson, built, force);
-          }),
-        );
-
-        for (const r of results) {
-          if (r) summaries.push(r);
-        }
-      } finally {
-        release();
-      }
-
-      lastSummaries = summaries;
-      lastStatusText = formatStatusLine(summaries);
-      if (ctx?.hasUI) {
-        const anyRegistered = summaries.some((s) => s.registered);
-        if (hadNoCache && anyRegistered) {
-          ctx.ui.notify(`dynamic-models: first discovery · ${lastStatusText}`, "info");
-        } else if (anyRegistered) {
-          const changed = summaries.filter((s) => s.registered);
-          if (changed.length > 0 && !summaries.every((s) => s.skipped)) {
-            ctx.ui.notify(`dynamic-models: ${formatStatusLine(changed)}`, "info");
-          }
+      const data = options.refreshRegistry === false ? readRegistryCache()?.data ?? {} : await loadRegistry(pi, options.force ?? false);
+      const registry = getFlatRegistry(data);
+      const settled = await Promise.allSettled(resolved.providerNames.map((name) => processProvider(pi, resolved, name, registry, options.force ?? false)));
+      const summaries: ProviderRunSummary[] = [];
+      const errors: string[] = [];
+      for (const [index, result] of settled.entries()) {
+        if (result.status === "fulfilled") {
+          if (result.value) summaries.push(result.value);
+        } else {
+          errors.push(`${resolved.providerNames[index]}: discovery failed`);
+          log(`${resolved.providerNames[index]}: ${result.reason}`);
         }
       }
-
-      log(`=== End (${Date.now() - t0}ms) ===`);
-      return { ok: true, summaries };
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      lastInitError = message;
-      log(`Fatal error: ${err}`);
-      if (err instanceof Error && err.stack) {
-        for (const line of err.stack.split("\n")) log(`  ${line}`);
+      state.summaries = summaries;
+      state.status = `dynamic-models: ${formatStatusLine(summaries)}`;
+      state.error = errors.length ? errors.join("; ") : null;
+      log(state.status);
+      for (const summary of summaries) log(formatProviderSummary(summary));
+      // 只提示发生变化的 provider；纯缓存命中不打扰用户。
+      const changed = summaries.filter((summary) => summary.registered);
+      if (options.ctx?.hasUI && changed.length > 0) {
+        options.ctx.ui.notify(`dynamic-models: ${formatStatusLine(changed)}`, "info");
       }
-      ctx?.ui.notify(`dynamic-models failed: ${message}`, "error");
-      log(`=== End (${Date.now() - t0}ms) ===`);
-      return { ok: false, summaries, error: message };
+      if (state.error && options.ctx) options.ctx.ui.notify(`dynamic-models failed: ${state.error}`, "error");
+      return { ok: errors.length === 0, summaries };
+    } finally {
+      release();
     }
   })();
-
-  if (!force) initModelsInFlight = runPromise;
+  state.inFlight = task;
   try {
-    return await runPromise;
+    return await task;
   } finally {
-    if (initModelsInFlight === runPromise) initModelsInFlight = null;
+    if (state.inFlight === task) state.inFlight = undefined;
   }
 }
 
-function listProviderCacheNames(): string[] {
-  try {
-    if (!existsSync(PROVIDER_CACHE_DIR)) return [];
-    return readdirSync(PROVIDER_CACHE_DIR)
-      .filter((f) => f.endsWith(".json"))
-      .map((f) => f.replace(/\.json$/, ""));
-  } catch {
-    return [];
-  }
+/** 显式刷新入口：命令与测试共用，避免为 UI 上下文复制发现流程。 */
+export async function refreshDiscovery(pi: ExtensionAPI, ctx?: ExtensionContext): Promise<InitResult> {
+  return initModels(pi, { force: true, ctx });
 }
 
 function registerCommands(pi: ExtensionAPI): void {
@@ -1085,74 +466,45 @@ function registerCommands(pi: ExtensionAPI): void {
       const items = [
         { value: "status", label: "status", description: "查看启用与缓存状态（默认）" },
         { value: "refresh", label: "refresh", description: "强制刷新远端模型" },
-      ];
-      const p = prefix.trim().toLowerCase();
-      const filtered = p
-        ? items.filter((i) => i.value.startsWith(p) || i.label.startsWith(p))
-        : items;
-      return filtered.length > 0 ? filtered : null;
+      ].filter((item) => item.value.startsWith(prefix.trim().toLowerCase()));
+      return items.length > 0 ? items : null;
     },
     handler: async (args, ctx) => {
-      const sub = (args.trim().split(/\s+/)[0] || "status").toLowerCase();
+      const sub = args.trim().split(/\s+/)[0].toLowerCase();
       if (sub === "refresh" || sub === "r") {
         ctx.ui.notify("dynamic-models: refreshing…", "info");
-        const result = await initModels(pi, { force: true, ctx });
-        if (!result.ok) {
-          // initModels 已 error notify；勿再报 nothing to do
-          return;
+        try {
+          const result = await refreshDiscovery(pi, ctx);
+          if (result.ok) ctx.ui.notify(`dynamic-models: ${formatStatusLine(result.summaries)}`, "info");
+        } catch (error) {
+          ctx.ui.notify(`dynamic-models: refresh failed: ${error}`, "error");
         }
-        const line = formatStatusLine(result.summaries);
-        ctx.ui.notify(
-          result.summaries.length === 0
-            ? "dynamic-models: nothing to register"
-            : `dynamic-models: ${line}`,
-          "info",
-        );
         return;
       }
-
-      // status：解析当前 enable + 上次摘要 + cache
-      const resolved = resolveEnabledConfig();
-      const enabled =
-        resolved?.providerNames ??
-        (lastEnabledProviders.length ? lastEnabledProviders : []);
-      const caches = listProviderCacheNames();
-      const enabledSet = new Set(enabled);
-      const activeCaches = caches.filter((c) => enabledSet.has(c));
-      const staleCaches = caches.filter((c) => !enabledSet.has(c));
+      const state = states.get(pi)!;
+      const caches = readdirSync(PROVIDER_CACHE_DIR, { withFileTypes: true })
+        .filter((entry) => entry.isFile() && entry.name.endsWith(".json"))
+        .map((entry) => decodeURIComponent(entry.name.slice(0, -5)));
       const lines = [
         "dynamic-models status",
-        `enabled: ${enabled.length ? enabled.join(", ") : "(none)"}`,
-        lastStatusText,
-        ...lastSummaries.map((s) => formatProviderSummary(s)),
-        activeCaches.length
-          ? `caches (enabled): ${activeCaches.join(", ")}`
-          : "caches (enabled): none",
+        `enabled: ${state.enabled.join(", ") || "(none)"}`,
+        state.status,
+        ...state.summaries.map(formatProviderSummary),
+        `caches: ${caches.join(", ") || "none"}`,
+        ...(state.error ? [`last error: ${state.error}`] : []),
       ];
-      if (staleCaches.length) {
-        lines.push(`caches (other): ${staleCaches.join(", ")}`);
-      }
-      if (lastInitError) lines.push(`last error: ${lastInitError}`);
       ctx.ui.notify(lines.join("\n"), "info");
     },
   });
 }
 
-export default function (pi: ExtensionAPI) {
-  // /new、fork 等会 createRuntime → 新 ModelRegistry + 重新 load 扩展。
-  // 进程内 hash 若不清空，eager/session_start 会 skip registerProvider，
-  // pending 为空，新 registry 只剩 models.json，动态模型「全没了」。
-  registeredAutoHashes.clear();
-  lastInitError = null;
-
-  // 启动同步路径：只读盘注册，零网络
+export default function dynamicModels(pi: ExtensionAPI): void {
+  states.set(pi, { hashes: new Map(), summaries: [], enabled: [], status: "dynamic-models: idle", error: null });
   eagerRegisterFromCache(pi);
   registerCommands(pi);
-
-  // 进 session 之后再异步刷；handler 立刻返回，不挡 UI / createRuntime
   pi.on("session_start", (_event, ctx) => {
     setTimeout(() => {
-      void initModels(pi, { ctx }).catch((err) => log(`Unhandled: ${err}`));
+      void initModels(pi, { ctx }).catch((error) => log(`Discovery failed: ${error}`));
     }, 0);
   });
 }

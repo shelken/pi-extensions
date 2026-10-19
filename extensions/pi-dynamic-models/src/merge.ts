@@ -3,24 +3,25 @@
  * 合并时：内置参数优先保留 → models.json 同 id 覆盖内置 → 仅追加全新 AUTO id。
  */
 
+import type { Api, Model, SamplingParams } from "@earendil-works/pi-ai";
+
 export type ModelLike = {
   id: string;
   name?: string;
-  api?: string;
+  api?: Api;
   reasoning?: boolean;
-  thinkingLevelMap?: Partial<
-    Record<"off" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max", string | null>
-  >;
+  thinkingLevelMap?: Model<Api>["thinkingLevelMap"];
   input?: ("text" | "image")[];
-  cost?: {
-    input: number;
-    output: number;
-    cacheRead: number;
-    cacheWrite: number;
-  };
+  inputLimits?: Model<Api>["inputLimits"];
+  cost?: Model<Api>["cost"];
   contextWindow?: number;
   maxTokens?: number;
   baseUrl?: string;
+  promptCache?: Model<Api>["promptCache"];
+  samplingParams?: SamplingParams;
+  samplingParamsByThinkingLevel?: Model<Api>["samplingParamsByThinkingLevel"];
+  // 宿主 Model 的协议/兼容字段；扩展整表替换模型时不能丢。
+  compat?: Model<Api>["compat"];
 };
 
 /**

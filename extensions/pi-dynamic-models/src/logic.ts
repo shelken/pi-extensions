@@ -1,29 +1,3 @@
-import { createHash } from "node:crypto";
-
-/** 模型 id 列表稳定 hash（排序后 md5）。 */
-export function hashModelIds(ids: string[]): string {
-  return createHash("md5").update([...ids].sort().join("\0")).digest("hex");
-}
-
-/** force 或缺失/过期时重新发现 provider 模型。 */
-export function shouldRefreshProviderCache(
-  force: boolean,
-  hasCache: boolean,
-  isFresh: boolean,
-): boolean {
-  return force || !hasCache || !isFresh;
-}
-
-/**
- * 远端列表拉取失败：只用磁盘旧 ids 回退，禁止写缓存（写盘会刷新 mtime，把失败伪装成 6h 新鲜）。
- */
-export function providerFetchFailureFallback(
-  diskModelIds: string[] | undefined,
-): { ids: string[]; source: "stale"; writeCache: false } | null {
-  if (!diskModelIds || diskModelIds.length === 0) return null;
-  return { ids: diskModelIds, source: "stale", writeCache: false };
-}
-
 /** 失败冷却是否生效：最近失败在冷却期内 → true（不应发网）。 */
 export function inFailureCooldown(
   lastFailedUnix: number | undefined,
@@ -57,16 +31,6 @@ export function getAutoThinkingLevelMap(
         max: "max",
       }
     : undefined;
-}
-
-/** 仅返回 models.json 尚未声明的 id。 */
-export function filterNewModelIds(discoveredIds: string[], existing: Set<string>): string[] {
-  return discoveredIds.filter((id) => !existing.has(id));
-}
-
-/** hash 相同则跳过重注册。 */
-export function shouldSkipByHash(prev: string | undefined, next: string): boolean {
-  return prev !== undefined && prev === next;
 }
 
 /**

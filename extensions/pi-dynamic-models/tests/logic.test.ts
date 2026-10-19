@@ -1,38 +1,14 @@
 import { describe, expect, it } from "vitest";
 import {
   filterByExcludePatterns,
-  filterNewModelIds,
   formatProviderSummary,
   formatStatusLine,
-  hashModelIds,
   inFailureCooldown,
   isUsableChatModel,
   matchesExcludePattern,
-  providerFetchFailureFallback,
   resolveEnableProviders,
-  shouldRefreshProviderCache,
-  shouldSkipByHash,
   getAutoThinkingLevelMap,
 } from "../src/logic.ts";
-
-describe("provider cache refresh", () => {
-  it("refreshes a stale cache instead of treating it as permanently valid", () => {
-    expect(shouldRefreshProviderCache(false, true, true)).toBe(false);
-    expect(shouldRefreshProviderCache(false, true, false)).toBe(true);
-    expect(shouldRefreshProviderCache(false, false, false)).toBe(true);
-    expect(shouldRefreshProviderCache(true, true, true)).toBe(true);
-  });
-
-  it("on fetch failure only falls back to disk ids and never requests a cache rewrite", () => {
-    expect(providerFetchFailureFallback(undefined)).toBeNull();
-    expect(providerFetchFailureFallback([])).toBeNull();
-    expect(providerFetchFailureFallback(["m1", "m2"])).toEqual({
-      ids: ["m1", "m2"],
-      source: "stale",
-      writeCache: false,
-    });
-  });
-});
 
 describe("failure cooldown", () => {
   const now = 1_000_000_000_000;
@@ -64,30 +40,6 @@ describe("automatic thinking levels", () => {
       max: "max",
     });
     expect(getAutoThinkingLevelMap(false)).toBeUndefined();
-  });
-});
-
-describe("hashModelIds / shouldSkipByHash", () => {
-  it("is order-independent", () => {
-    expect(hashModelIds(["b", "a"])).toBe(hashModelIds(["a", "b"]));
-  });
-
-  it("skips only when previous hash equals next", () => {
-    const h = hashModelIds(["grok-4.5"]);
-    expect(shouldSkipByHash(undefined, h)).toBe(false);
-    expect(shouldSkipByHash(h, h)).toBe(true);
-    expect(shouldSkipByHash(h, hashModelIds(["other"]))).toBe(false);
-  });
-});
-
-describe("filterNewModelIds", () => {
-  it("keeps only ids missing from models.json", () => {
-    expect(
-      filterNewModelIds(
-        ["grok-4.5", "plus/gpt-5.5", "claude-sonnet-4-6"],
-        new Set(["plus/gpt-5.5"]),
-      ),
-    ).toEqual(["grok-4.5", "claude-sonnet-4-6"]);
   });
 });
 
