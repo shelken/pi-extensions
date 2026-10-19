@@ -29,6 +29,9 @@
       "./src/index.ts"
     ]
   },
+  "dependencies": {
+    "typebox": "^1.3.36"
+  },
   "peerDependencies": {
     "@earendil-works/pi-ai": ">=0.80.0",
     "@earendil-works/pi-coding-agent": ">=0.80.0"
