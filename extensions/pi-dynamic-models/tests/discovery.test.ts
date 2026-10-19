@@ -208,6 +208,56 @@ describe("discovery registration lifecycle", () => {
     expect(runtime.target()?.contextWindow).toBe(1000000);
   });
 
+  it("treats an all-invalid-row response as failure, not an authoritative empty list", async () => {
+    const runtime = await start();
+    await runtime.refresh();
+    expect(runtime.target()?.contextWindow).toBe(1000000);
+    // 网关坏掉返回全坏行：不是「无模型」，不得清空注册或覆盖缓存。
+    // SAFETY: 故意注入非对象/null 行——被测行为是全坏行响应按失败处理。
+    const brokenRows = [null, {}, { nope: true }] as unknown[];
+    // SAFETY: brokenRows 是注入的坏行，只用于触发全坏行响应路径。
+    remote = brokenRows as RemoteFixture[];
+    await runtime.refresh();
+    expect(runtime.modelIds()).toContain("alias/flash");
+    const restored = await start();
+    expect(restored.target()?.contextWindow).toBe(1000000);
+  });
+
+  it("drops manual models with invalid cost rates instead of feeding NaN billing", async () => {
+    // 故意写非法 cost（字符串费率）——被测行为正是该坏条目被丢弃。
+    // SAFETY: 该字面量非法于 ModelCost（input 应为 number），断言只为进入被测边界。
+    const badCost = { id: "bad-cost", cost: { input: "3", output: 1, cacheRead: 0, cacheWrite: 0 } } as ModelLike;
+    providerConfig.models = [badCost, { id: "good-cost", cost: { input: 2, output: 4, cacheRead: 1, cacheWrite: 0 } }];
+    writeModelsJson();
+    const runtime = await start();
+    await runtime.refresh();
+    expect(modelAt(runtime, "bad-cost")).toBeUndefined();
+    expect(modelAt(runtime, "good-cost")?.cost?.input).toBe(2);
+  });
+
+  it("lets manual model compat override provider compat like the host models.json path", async () => {
+    providerConfig.compat = { sessionAffinityFormat: "openrouter" };
+    providerConfig.models = [{ id: "manual", compat: { useModelIdForToolCallId: false } }];
+    writeModelsJson();
+    const runtime = await start();
+    await runtime.refresh();
+    const manual = modelAt(runtime, "manual");
+    expect(manual?.compat).toMatchObject({ useModelIdForToolCallId: false, sessionAffinityFormat: "openrouter" });
+  });
+
+  it("re-registers when provider compat changes even if models did not", async () => {
+    const runtime = await start();
+    await runtime.refresh();
+    expect(modelAt(runtime, "alias/flash")?.compat).toBeUndefined();
+    // compat 改变 → 注册哈希改变 → 新实例 eager 阶段（不联网）即用新 compat 重注册。
+    providerConfig.compat = { sessionAffinityFormat: "openrouter" };
+    writeModelsJson();
+    calls.length = 0;
+    const eager = await start();
+    expect(calls).toEqual([]);
+    expect(modelAt(eager, "alias/flash")?.compat).toEqual({ sessionAffinityFormat: "openrouter" });
+  });
+
   it("does not expose unsupported levels for a gateway that reports no levels", async () => {
     remote = [{ id: "alias/flash", reasoning: true }];
     const runtime = await start();

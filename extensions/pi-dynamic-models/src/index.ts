@@ -504,11 +504,22 @@ function toProviderModels(models: ModelLike[]): ProviderModelConfig[] {
 }
 
 function registerProviderModels(pi: ExtensionAPI, name: string, config: ProviderConfig, manual: ModelLike[], auto: ModelLike[]): void {
+  const manualIds = new Set(manual.map((model) => model.id));
   const models = mergeProviderModelList({
     builtIn: getBuiltInModelDefs(name),
     fromModelsJson: manual.map(normalizeModelsJsonModel),
     autoNew: auto,
-  }).map((model) => config.compat ? { ...model, compat: mergeCompat(model.compat, config.compat) } : model);
+  }).map((model) => {
+    if (!config.compat) return model;
+    // 手写模型按宿主 models.json 语义：模型显式 compat 优先于 provider 级；
+    // 内置与 AUTO 模型与宿主 applyModelsJson 一致：provider 级覆盖模型默认。
+    return {
+      ...model,
+      compat: manualIds.has(model.id)
+        ? mergeCompat(config.compat, model.compat)
+        : mergeCompat(model.compat, config.compat),
+    };
+  });
   // models.json 的 modelOverrides 仍由宿主合成；此处只提供合并后的整表。
   const definitions = toProviderModels(models);
   pi.registerProvider(name, {
@@ -531,7 +542,8 @@ function registerDiscovered(pi: ExtensionAPI, resolved: Resolved, name: string, 
     return remoteModel ? [buildAutoModel(remoteModel, registry, name)] : [];
   });
   const manual = decodeManualModels(resolved.modelsJson.providers[name]?.models, log);
-  const hash = createHash("sha256").update(JSON.stringify([config.fingerprint, manual, models])).digest("hex");
+  // compat 不在缓存指纹里（改 compat 不重抓模型列表），但影响注册结果，必须进哈希。
+  const hash = createHash("sha256").update(JSON.stringify([config.fingerprint, config.compat, manual, models])).digest("hex");
   const previous = state.hashes.get(name);
   const matched = eligible.filter((model) => lookupModel(model.id, registry, name)).length;
   const summary: ProviderRunSummary = {

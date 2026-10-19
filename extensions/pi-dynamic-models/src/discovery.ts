@@ -1,4 +1,4 @@
-import type { Api, Model, SamplingParams } from "@earendil-works/pi-ai";
+import type { Api, Model, ModelCostTier, SamplingParams } from "@earendil-works/pi-ai";
 import { Type } from "typebox";
 import type { Static } from "typebox";
 import * as Value from "typebox/value";
@@ -32,6 +32,13 @@ export type PluginConfig = Static<typeof pluginConfigSchema>;
 export type ModelsJson = Static<typeof modelsJsonSchema>;
 
 // models.json 手写模型：与 ModelLike 对齐的宽松 schema，坏条目逐条丢弃。
+// 手写模型 cost：费率字段必须是非负有限数值，坏值会让宿主计费产出 NaN。
+const costRatesSchema = Type.Object({
+  input: Type.Number({ minimum: 0 }),
+  output: Type.Number({ minimum: 0 }),
+  cacheRead: Type.Number({ minimum: 0 }),
+  cacheWrite: Type.Number({ minimum: 0 }),
+});
 const manualModelSchema = Type.Object({
   id: Type.String({ minLength: 1 }),
   name: Type.Optional(Type.String()),
@@ -40,7 +47,18 @@ const manualModelSchema = Type.Object({
   thinkingLevelMap: Type.Optional(Type.Unsafe<Model<Api>["thinkingLevelMap"]>({ type: "object", additionalProperties: true })),
   input: Type.Optional(Type.Array(Type.Union([Type.Literal("text"), Type.Literal("image")]))),
   inputLimits: Type.Optional(Type.Unsafe<Model<Api>["inputLimits"]>({ type: "object", additionalProperties: true })),
-  cost: Type.Optional(Type.Unsafe<Model<Api>["cost"]>({ type: "object", additionalProperties: true })),
+  cost: Type.Optional(Type.Unsafe<Model<Api>["cost"]>({
+    ...costRatesSchema,
+    properties: {
+      ...costRatesSchema.properties,
+      tiers: Type.Optional(Type.Array(Type.Unsafe<ModelCostTier>({
+        ...costRatesSchema,
+        properties: { ...costRatesSchema.properties, inputTokensAbove: Type.Number() },
+        required: [...(costRatesSchema.required ?? []), "inputTokensAbove"],
+      }))),
+    },
+    additionalProperties: false,
+  })),
   contextWindow: Type.Optional(Type.Number()),
   maxTokens: Type.Optional(Type.Number()),
   baseUrl: Type.Optional(Type.String()),
@@ -255,8 +273,9 @@ function toDiscovered(row: RemoteRow): DiscoveredModel | undefined {
 export function decodeRemoteModels(raw: string): DiscoveredModel[] {
   const body: unknown = JSON.parse(raw);
   if (!Value.Check(remoteRowListEnvelopeSchema, body)) throw new Error("Model list response has no data/models array");
+  const rows = rowsOf(Value.Parse(remoteRowListEnvelopeSchema, body));
   const models = new Map<string, DiscoveredModel>();
-  for (const candidate of rowsOf(Value.Parse(remoteRowListEnvelopeSchema, body))) {
+  for (const candidate of rows) {
     // 逐行降级：完整行提取能力，只有 id 的行仍可注册，其余行跳过。
     if (Value.Check(remoteRowSchema, candidate)) {
       const decoded = Value.Parse(remoteRowSchema, candidate);
@@ -267,6 +286,8 @@ export function decodeRemoteModels(raw: string): DiscoveredModel[] {
       models.set(id, { id });
     }
   }
+  // 有行但零有效：内容畸形而非「无模型」，按失败处理，保住 stale cache。
+  if (rows.length > 0 && models.size === 0) throw new Error("Model list response has rows but none are valid");
   return [...models.values()];
 }
 
