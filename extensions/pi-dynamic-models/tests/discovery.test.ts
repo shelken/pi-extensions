@@ -63,7 +63,7 @@ async function start() {
     on() {},
   };
   const api = asApi(stub);
-  module.default(api);
+  await module.default(api);
   return {
     registrations,
     async refresh(ctx?: Parameters<typeof module.refreshDiscovery>[1]) {
@@ -108,10 +108,10 @@ afterEach(() => {
 });
 
 describe("discovery registration lifecycle", () => {
-  it("uses gateway capabilities for an unknown alias and restores them without startup networking", async () => {
+  it("registers gateway capabilities during a cold start and restores them from cache without startup networking", async () => {
     const runtime = await start();
-    expect(calls).toEqual([]);
-    await runtime.refresh();
+    // 冷缓存：factory 内只发现一次，只请求网关，不请求 models.dev
+    expect(calls.map((call) => call.url)).toEqual(["https://gateway.example/v1/models"]);
     expect(runtime.target()).toMatchObject({
       contextWindow: 1000000, maxTokens: 32000, reasoning: true, input: ["text", "image"],
       thinkingLevelMap: { low: "low", high: "high", max: "max" },
@@ -153,15 +153,16 @@ describe("discovery registration lifecycle", () => {
   });
 
   it("does not reuse cache from a different endpoint or account", async () => {
-    const runtime = await start();
-    await runtime.refresh();
+    await start();
+    remote = [{ ...remote[0], context_length: 777000 }];
     providerConfig.baseUrl = "https://different.example/v1";
     providerConfig.apiKey = "different-account";
     writeModelsJson();
+    calls.length = 0;
     const restored = await start();
-    expect(restored.target()).toBeUndefined();
-    await restored.refresh();
-    expect(restored.target()?.contextWindow).toBe(1000000);
+    // 指纹不同，旧缓存不可用：按冷启动重新请求新端点，拿到的是新数据而不是旧缓存里的 1000000
+    expect(calls.map((call) => call.url)).toEqual(["https://different.example/v1/models"]);
+    expect(restored.target()?.contextWindow).toBe(777000);
   });
 
   it("keeps provider-level compat on every registered model", async () => {
@@ -363,9 +364,11 @@ describe("discovery registration lifecycle", () => {
     const terminalLog = vi.spyOn(console, "warn").mockImplementation(() => {});
     try {
       const runtime = await start();
+      // 冷启动已注册 mp；网关随后改变能力，刷新才会产生变更通知
+      remote = [{ ...remote[0], context_length: 2000000 }];
       // SAFETY: 测试桩仅提供 ui.notify 用于断言终端通知级别
       await runtime.refresh(ctx as ExtensionContext);
-      expect(runtime.target()?.contextWindow).toBe(1000000);
+      expect(runtime.target()?.contextWindow).toBe(2000000);
       expect(notifications).toEqual([{ level: "info", message: "dynamic-models: mp +1" }]);
       expect(terminalLog).not.toHaveBeenCalled();
       expect(readFileSync(join(agent, "logs", "pi-dynamic-models.log"), "utf8")).toContain("offline:");
