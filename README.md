@@ -14,6 +14,7 @@
 | `pi-guard` | `@shelken/pi-guard` | 硬禁 agent 危险 bash 与机密路径读写。 |
 | `pi-inline-skills` | `@shelken/pi-inline-skills` | 输入 `/` 时内联补全 skill，并自动展开已加载 skill 内容。 |
 | `pi-title` | `@shelken/pi-title` | **弃用**：已禁用入口。曾复用 session 缓存前缀自动生成会话标题。 |
+| `simple-plannotator` | `@shelken/simple-plannotator` | 基于浏览器的代码审查和 Markdown 标注（`/pnr` `/pna` `/pnl`）。 |
 | `copy-cut` | `@shelken/copy-cut` | `alt+shift+x` 剪切输入框文本到剪贴板。 |
 | `pi-sounds` | `@shelken/pi-sounds` | Agent 任务完成/事件提示音扩展，内置经典轻量提示音。 |
 

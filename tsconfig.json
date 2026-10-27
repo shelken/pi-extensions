@@ -8,6 +8,11 @@
     "allowImportingTsExtensions": true,
     "skipLibCheck": true,
     "types": ["node"],
+    "paths": {
+      "@plannotator/pi-extension/plannotator-browser": [
+        "./extensions/simple-plannotator/src/plannotator-browser.d.ts"
+      ]
+    },
     "resolveJsonModule": true
   },
   "include": ["extensions/**/*.ts"],
