@@ -41,7 +41,8 @@ pi install npm:@shelken/pi-dynamic-models
 - 非对话输出（图片、向量）不注册。思考档位按网关自报项写入 `thinkingLevelMap`，未自报的档位显式标为 `null`，避免选择器暴露网关不接受的档位。
 - registry（models.dev）只是可选的数据源：不可达时仍会注册网关模型；缓存 6h，过期后台刷新。
 - provider 列表缓存 6h；缓存与端点、协议、账户标识绑定，换端点或账户会重新发现。
-- factory 同步用磁盘 cache 注册（session restore 能找到上次的 `provider/id`），**不在启动时联网**；联网发生在 `session_start` 或 `/dynamic-models refresh`。
+- factory 同步用磁盘 cache 注册（session restore 能找到上次的 `provider/id`），**有缓存的 provider 不在启动时联网**；联网发生在 `session_start` 或 `/dynamic-models refresh`。
+- **冷启动**：没有可用缓存的 provider（新数据目录、清缓存、换端点或账户后）在 factory 内发现一次，让 `pi -p --model <provider/id>` 在 `session_start` 之前就能解析到动态模型。pi 会等 async factory 完成，官方文档也允许在 factory 里注册启动所需的 provider。只拉网关 `/models`，不拉 models.dev，补全仍由 `session_start` 的后台二次注册完成。等待上限是锁等待 2 秒加单次请求超时 3 秒；失败不抛错，记 10 分钟冷却标记（`cache/provider-models/<名>.cold-failed`），冷却期内启动不再等待，之后由 `session_start` 兜底。
 - 同一次 runtime 内模型内容 hash 未变则跳过重注册；**每次扩展 factory 会清空 hash**（`/new` 会换 ModelRegistry，必须重新 register）。
 - 发现结果变化时 `notify`；发现错误只写日志，包含手动刷新异常；其他 provider 继续更新。`debug` 与 `status` 均不向终端输出错误详情。
 - 日志：`{pi-agent-dir}/logs/pi-dynamic-models.log`

@@ -1,4 +1,4 @@
-/** factory 只读缓存；网络发现推迟到 session_start 或显式刷新。 */
+/** factory 同步读缓存；只有缺缓存的 provider 才在 factory 内发现一次（冷启动），其余网络发现推迟到 session_start 或显式刷新。 */
 import type { ExtensionAPI, ExtensionContext, ProviderModelConfig } from "@earendil-works/pi-coding-agent";
 import type { OpenAICompletionsCompat } from "@earendil-works/pi-ai";
 import type { Api, Model } from "@earendil-works/pi-ai";
@@ -150,6 +150,28 @@ function markFailure(path: string, cached: CacheFile): void {
   } catch (error) {
     log(`Could not persist failure cooldown: ${error}`);
   }
+}
+
+/** 冷启动失败标记：没有缓存可以记 lastFailedUnix，所以用独立文件的 mtime 表示最近一次失败。 */
+function coldFailurePath(name: string): string {
+  return join(PROVIDER_CACHE_DIR, `${encodeURIComponent(name)}.cold-failed`);
+}
+
+function inColdCooldown(name: string): boolean {
+  const stat = statSync(coldFailurePath(name), { throwIfNoEntry: false });
+  return stat !== undefined && inFailureCooldown(stat.mtimeMs, Date.now(), FAILURE_COOLDOWN_MS);
+}
+
+function markColdFailure(name: string): void {
+  try {
+    writeDiskJson(coldFailurePath(name), "{}");
+  } catch (error) {
+    log(`Could not persist cold-start cooldown: ${error}`);
+  }
+}
+
+function clearColdFailure(name: string): void {
+  try { unlinkSync(coldFailurePath(name)); } catch {}
 }
 
 export function getConfigPaths(cwd: string, home = homedir()): string[] {
@@ -563,20 +585,27 @@ function registerDiscovered(pi: ExtensionAPI, resolved: Resolved, name: string, 
   return summary;
 }
 
-function eagerRegisterFromCache(pi: ExtensionAPI): void {
+type StartupPlan = { resolved: Resolved; coldNames: string[] };
+
+/** 同步注册有缓存的 provider，并列出没有可用缓存、需要冷启动发现的 provider。 */
+function eagerRegisterFromCache(pi: ExtensionAPI): StartupPlan | undefined {
   const resolved = resolveEnabledConfig();
-  if (!resolved) return;
+  if (!resolved) return undefined;
   const state = states.get(pi)!;
   state.enabled = resolved.providerNames;
-  const cachedProviders = resolved.providerNames.flatMap((name) => {
+  const cachedProviders: { name: string; config: ProviderConfig; cached: ProviderModelCache }[] = [];
+  const coldNames: string[] = [];
+  for (const name of resolved.providerNames) {
     const config = extractProviderConfig(resolved.modelsJson, name);
-    const cached = config ? readProviderCache(name, config.fingerprint) : undefined;
-    return config && cached ? [{ name, config, cached }] : [];
-  });
-  // factory 禁止同步重 IO：没有可用 provider 缓存时不解析 registry。
+    if (!config) continue;
+    const cached = readProviderCache(name, config.fingerprint);
+    if (cached) cachedProviders.push({ name, config, cached });
+    else if (!inColdCooldown(name)) coldNames.push(name);
+  }
+  // 热路径不联网、不重 IO：没有可用 provider 缓存时不解析 registry。
   if (cachedProviders.length === 0) {
     state.status = `dynamic-models (cached): ${formatStatusLine(state.summaries)}`;
-    return;
+    return { resolved, coldNames };
   }
   const registry = getFlatRegistry(readRegistryCache()?.data ?? {});
   for (const { name, config, cached } of cachedProviders) {
@@ -587,6 +616,36 @@ function eagerRegisterFromCache(pi: ExtensionAPI): void {
     }
   }
   state.status = `dynamic-models (cached): ${formatStatusLine(state.summaries)}`;
+  return { resolved, coldNames };
+}
+
+/**
+ * 冷启动：缺缓存的 provider 没有任何模型可注册，而 `pi -p --model` 在 session_start 之前解析模型，
+ * 会直接 model not found。pi 允许 async factory 并等它完成，所以只对这些 provider 发现一次。
+ * 有缓存的 provider 不走这里。失败不抛错，写冷却标记，冷却期内不再重试，
+ * 离线或网关故障时不会每次启动都等超时；之后仍由 session_start 兜底。
+ * 等待上限：锁等待 LOCK_WAIT_TIMEOUT_MS + 单次请求 NETWORK_TIMEOUT_MS。
+ */
+async function coldStart(pi: ExtensionAPI, resolved: Resolved, names: string[]): Promise<void> {
+  const state = states.get(pi)!;
+  // 不拉 models.dev：只用已有的 registry 缓存，补全留给 session_start 的后台二次注册。
+  const registry = getFlatRegistry(readRegistryCache()?.data ?? {});
+  const release = await acquireNetworkLock();
+  try {
+    await Promise.all(names.map(async (name) => {
+      try {
+        const summary = await processProvider(pi, resolved, name, registry, false);
+        if (summary) state.summaries.push(summary);
+        clearColdFailure(name);
+      } catch (error) {
+        markColdFailure(name);
+        log(`${name}: cold-start discovery failed: ${error}`);
+      }
+    }));
+  } finally {
+    release();
+  }
+  state.status = `dynamic-models (cold start): ${formatStatusLine(state.summaries)}`;
 }
 
 async function acquireNetworkLock(): Promise<() => void> {
@@ -726,13 +785,14 @@ function registerCommands(pi: ExtensionAPI): void {
   });
 }
 
-export default function dynamicModels(pi: ExtensionAPI): void {
+export default async function dynamicModels(pi: ExtensionAPI): Promise<void> {
   states.set(pi, { hashes: new Map(), summaries: [], enabled: [], status: "dynamic-models: idle", error: null });
-  eagerRegisterFromCache(pi);
+  const plan = eagerRegisterFromCache(pi);
   registerCommands(pi);
   pi.on("session_start", (_event, ctx) => {
     setTimeout(() => {
       void initModels(pi, { ctx }).catch((error) => log(`Discovery failed: ${error}`));
     }, 0);
   });
+  if (plan && plan.coldNames.length > 0) await coldStart(pi, plan.resolved, plan.coldNames);
 }
