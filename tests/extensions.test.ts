@@ -11,6 +11,10 @@
  *
  * 入口只读根 pi.extensions（与 monorepo 路径引入场景一致）。
  * 单独引入子包时 pi 才读子包自己的 pi.extensions——不在本测试范围。
+ *
+ * vitest 默认用 oxc transformer，不读 tsconfig.json 的 paths 字段。
+ * 这点让 simple-plannotator 的 .d.ts shim 不被当模块加载（bun test 会，
+ * 因为 bun 读 tsconfig paths）——所以本测试必须用 vitest 而非 bun test。
  */
 import { describe, it, expect } from "vitest";
 import { readFile } from "node:fs/promises";
