@@ -1,5 +1,11 @@
 # @shelken/pi-dynamic-models
 
+## 0.2.7
+
+### Patch Changes
+
+- [#92](https://github.com/shelken/pi-extensions/pull/92) [`87d1fd9`](https://github.com/shelken/pi-extensions/commit/87d1fd995a7b4b37f553e22a79abc2501dfe9462) Thanks [@shelken](https://github.com/shelken)! - 修复冷缓存首启时 `pi -p --model <动态模型>` 找不到模型：没有缓存的 provider 在 factory 内发现一次，有缓存的 provider 仍不联网；发现失败记 10 分钟冷却，离线时不再每次启动等待超时。
+
 ## 0.2.6
 
 ### Patch Changes
