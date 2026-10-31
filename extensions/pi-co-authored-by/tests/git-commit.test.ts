@@ -43,6 +43,102 @@ describe("isGitCommitCommand", () => {
 		expect(isGitCommitCommand("RTK_DB_PATH=/tmp/x rtk git commit")).toBe(true);
 	});
 
+	it("detects commits after shell comments", () => {
+		expect(isGitCommitCommand("# don't\ngit commit -m x")).toBe(true);
+		expect(isGitCommitCommand("git status # note\n git commit -m x")).toBe(true);
+		expect(isGitCommitCommand("echo hi && # note\n git commit -m x")).toBe(true);
+		expect(isGitCommitCommand("{ # note\ngit commit -m x; }")).toBe(true);
+	});
+
+	it("ignores text inside comments", () => {
+		expect(isGitCommitCommand("# git commit -m x")).toBe(false);
+		expect(isGitCommitCommand("echo done # git commit -m x")).toBe(false);
+		expect(isGitCommitCommand("git status # 上文; git commit -m x")).toBe(false);
+		expect(isGitCommitCommand("(echo hi)# git commit -m x")).toBe(false);
+		expect(isGitCommitCommand("(echo hi)# note\ngit commit -m x")).toBe(true);
+	});
+
+	it("keeps # that is not a comment start as literal", () => {
+		expect(isGitCommitCommand("n=${#x} && git commit -m x")).toBe(true);
+		expect(isGitCommitCommand("git commit -m 'fix #42'")).toBe(true);
+		expect(isGitCommitCommand("echo '# git commit -m x'")).toBe(false);
+		expect(isGitCommitCommand("echo ${#x}#y")).toBe(false);
+	});
+
+	it("keeps # literal after escaped chars and inside ${...}", () => {
+		// 转义空格使 #bar 仍属同一个词，bash 不当注释
+		expect(
+			isGitCommitCommand("printf '%s\\n' foo\\ #bar; git commit --allow-empty -m escaped"),
+		).toBe(true);
+		expect(isGitCommitCommand("echo a\\ #b\ngit commit -m x")).toBe(true);
+		// ${...} 内的 # 是参数展开运算符，括号也不是词边界
+		expect(
+			isGitCommitCommand('v=")#hello"; echo ${v#)#}; git commit --allow-empty -m actual'),
+		).toBe(true);
+		expect(isGitCommitCommand("echo ${v#)#}")).toBe(false);
+		expect(isGitCommitCommand("echo ${a:-${b#c}} # note\ngit commit -m x")).toBe(true);
+	});
+
+	it("treats plain braces inside ${...} as literals", () => {
+		expect(
+			isGitCommitCommand(
+				'v="{hello"; echo ${v#{}}; git commit --allow-empty -m literal-brace',
+			),
+		).toBe(true);
+		expect(
+			isGitCommitCommand("echo ${missing:-{}; git commit --allow-empty -m default-brace"),
+		).toBe(true);
+		expect(isGitCommitCommand("echo ${missing:-{}}")).toBe(false);
+		expect(isGitCommitCommand("echo ${v%\\}}# literal\ngit commit -m x")).toBe(true);
+	});
+
+	it("resets word state at control operators", () => {
+		// bash 只打印 x;，其余全是注释，不会提交
+		expect(
+			isGitCommitCommand("echo x\\;;# comment; git commit --allow-empty -m commented"),
+		).toBe(false);
+		expect(isGitCommitCommand("echo x\\;; # c\ngit commit --allow-empty -m real")).toBe(true);
+	});
+
+	it("does not let an unterminated ${...} swallow later lines", () => {
+		expect(isGitCommitCommand("cat <<'EOF'\n${x\nEOF\ngit commit -m x")).toBe(true);
+	});
+
+	it("detects brace group bodies", () => {
+		expect(isGitCommitCommand("{ git commit -m x; }")).toBe(true);
+		expect(isGitCommitCommand("{ git commit -m x\n}")).toBe(true);
+		expect(isGitCommitCommand("git add . && { git commit -m x; }")).toBe(true);
+		expect(isGitCommitCommand("{ echo hi; }")).toBe(false);
+		expect(isGitCommitCommand("{git commit -m x;}")).toBe(false);
+	});
+
+	it("detects subshells glued to parens", () => {
+		expect(isGitCommitCommand("(git commit -m x)")).toBe(true);
+		expect(isGitCommitCommand("(cd repo && git commit -m x)")).toBe(true);
+		expect(isGitCommitCommand("$(git commit -m x)")).toBe(true);
+		expect(isGitCommitCommand("x=$(git commit -m x)")).toBe(true);
+		expect(isGitCommitCommand("(echo hi)")).toBe(false);
+		expect(isGitCommitCommand("echo \"$(git commit)\"")).toBe(false);
+	});
+
+	it("detects negation and loop keywords", () => {
+		expect(isGitCommitCommand("! git commit -m x")).toBe(true);
+		expect(isGitCommitCommand("! echo hi")).toBe(false);
+		expect(isGitCommitCommand("while git commit -m x; do :; done")).toBe(true);
+		expect(isGitCommitCommand("until git commit -m x; do :; done")).toBe(true);
+	});
+
+	it("keeps transparent wrappers working inside groups", () => {
+		expect(isGitCommitCommand("exec git commit -m x")).toBe(true);
+		expect(isGitCommitCommand("{ exec git commit -m x; }")).toBe(true);
+		expect(isGitCommitCommand("! exec env FOO=1 git commit")).toBe(true);
+	});
+
+	it("keeps detecting commit lines inside heredoc bodies", () => {
+		expect(isGitCommitCommand("git commit -F - <<'EOF'\nsubject\nEOF")).toBe(true);
+		expect(isGitCommitCommand("cat <<'EOF' > msg\ngit commit -m x\nEOF")).toBe(true);
+	});
+
 	it("rejects non-commit git commands", () => {
 		expect(isGitCommitCommand("git status")).toBe(false);
 		expect(isGitCommitCommand("git add -A")).toBe(false);
