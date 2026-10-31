@@ -1,5 +1,11 @@
 # @shelken/pi-dynamic-models
 
+## 0.2.8
+
+### Patch Changes
+
+- [#99](https://github.com/shelken/pi-extensions/pull/99) [`9d6994d`](https://github.com/shelken/pi-extensions/commit/9d6994ddaba2f582881badde1a1cd3a0d43f9f90) Thanks [@shelken](https://github.com/shelken)! - `typebox` 改为 optional `peerDependencies`（`"*"`），由宿主提供，消除 pi 的 “Host-provided extension packages must be declared in peerDependencies” 警告，并避免装出重复的运行时副本。
+
 ## 0.2.7
 
 ### Patch Changes
