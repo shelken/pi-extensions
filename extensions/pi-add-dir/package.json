@@ -30,7 +30,7 @@
     ]
   },
   "dependencies": {
-    "typebox": "^1.4.2"
+    "typebox": "^1.4.3"
   },
   "peerDependencies": {
     "@earendil-works/pi-coding-agent": ">=0.80.0",
