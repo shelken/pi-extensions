@@ -1,5 +1,11 @@
 # pi-co-authored-by
 
+## 0.2.17
+
+### Patch Changes
+
+- [#97](https://github.com/shelken/pi-extensions/pull/97) [`7391a0a`](https://github.com/shelken/pi-extensions/commit/7391a0ad45149015456f5fc595deecb44f7cfbaf) Thanks [@shelken](https://github.com/shelken)! - 修复 `git -C`、`command git`、绝对路径 git、`exec git commit`、shell 分组等直接提交形态漏写 Co-Authored-By / Generated-By（`exec` 还会残留 hook）的问题：改用进程级 GIT_CONFIG hooksPath + 全量 hook 转发器，不再向用户仓库安装或修改任何 hook。
+
 ## 0.2.16
 
 ### Patch Changes
