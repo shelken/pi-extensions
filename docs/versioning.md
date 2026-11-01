@@ -100,8 +100,17 @@ just package-baseline <slug> <publish-commit>
 ## 配置
 
 - `.changeset/config.json`：independent、`privatePackages` version+tag、`@changesets/changelog-github`
-- `.github/workflows/ci.yml`：PR 与 push 门禁，经 `jdx/mise-action` 还原 `.mise.toml` 执行 `just verify`
-- `.github/workflows/publish.yml`：OIDC 发包，经 `jdx/mise-action` 还原工具链，`changesets/action@v2` 驱动发布
-- `.github/workflows/renovate-changeset.yml`：Renovate PR 自动生成补齐依赖 changeset
-- `renovate.json`：Bun 工作区依赖自动升级调度，排除 mise
+- `.github/workflows/ci.yml`：PR 与 push 门禁，经 `jdx/mise-action` 还原 `.mise.toml` 执行 `just verify`；支持 `workflow_dispatch`，供 `GITHUB_TOKEN` 产生的提交补跑
+- `.github/workflows/publish.yml`：OIDC 发包，经 `jdx/mise-action` 还原工具链，`changesets/action` 驱动发布；release PR 创建或更新后派发一次 CI
+- `.github/workflows/renovate-changeset.yml`：Renovate PR 自动生成补齐依赖 changeset，补完后派发 CI
+- `renovate.json`：依赖升级规则，见下「依赖更新」
 - `scripts/public-package.mjs` / `just package-*`：首发与门禁
+
+## 依赖更新
+
+- 工具链版本只写在 `.mise.toml`：bun 精确版本由 Renovate 升级；node 保持 `"24"`，只在出现新 major 时提 PR（minor/patch 被禁用，否则 Renovate 会把 `"24"` 改写成精确版本）。`publish.yml` 的 `setup-node` 读同一个文件
+- 通常每周一只有 2 个非 major 分组 PR 并自动合并：`renovate/infra`（Actions、mise 工具链、devDependencies，含 pi-core）与 `renovate/runtime`（发布到 npm 的 runtime 依赖）。major 单独成 PR，人工合并；同一 monorepo 的 major（如 oxlint 与 `@oxlint/plugins`）由预设放进同一个 PR，因为它们必须一起升
+- runtime 依赖自动合并后会生成 changeset 并累积到 `chore(release)` PR；该 PR 保持人工合并，合并即发布 npm
+- 自动合并由 Renovate 自己等检查通过后执行。不给 main 设「必过检查」的 ruleset：`workflow_dispatch` 产生的检查不出现在 PR 检查区，也满足不了 ruleset 的必过检查，会让 runtime 组和 release PR 永远被挡住。`GITHUB_TOKEN` 推送的提交和创建的 PR 不触发 `pull_request` CI，所以补 changeset 与创建 release PR 后用 `workflow_dispatch` 补跑，让 head 上有 Renovate 能读到的检查
+- Action 引用写 `SHA # vN`（只写 major），摘要由 Renovate 维护
+- `typebox` 不交给 Renovate：根版本必须等于宿主 `pi-coding-agent` 声明的版本，由 `scripts/host-typebox.node-test.mjs` 校验；宿主升级导致它失败时手动同步
