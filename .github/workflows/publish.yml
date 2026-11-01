@@ -24,12 +24,13 @@ jobs:
       id-token: write   # npm Trusted Publishing OIDC
       contents: write   # 打 tag + 建 GitHub Release
       pull-requests: write  # 自动开 release PR
+      actions: write  # 给 release PR 分支派发 CI
     steps:
-      - uses: actions/checkout@v7
-      - uses: jdx/mise-action@v5.2.1
-      - uses: actions/setup-node@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: jdx/mise-action@6612f0ef07ed2a736cd1e00a94a065522dd41195 # v5
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
         with:
-          node-version: "24.22.0"
+          node-version-file: .mise.toml
           registry-url: "https://registry.npmjs.org"
 
       - run: bun install --frozen-lockfile
@@ -40,7 +41,7 @@ jobs:
           NAMES=$(sed -n 's/^"\([^"]*\)".*/\1/p' .changeset/*.md | sort -u | tr '\n' ' ')
           echo "names=$NAMES" >> "$GITHUB_OUTPUT"
 
-      - uses: changesets/action@v2.1.2
+      - uses: changesets/action@ae32849d5ba541f9ae29e40e22a623bc13562f51 # v2
         id: changesets
         with:
           publish-script: bunx changeset publish
@@ -58,3 +59,14 @@ jobs:
           done
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # release PR 由 GITHUB_TOKEN 创建，不会触发 pull_request CI。派发一次，让分支 head 上有可读的检查结果；
+      # workflow_dispatch 的检查不出现在 PR 检查区，也满足不了 ruleset 的必过检查，所以不要给 main 设必过检查
+      - name: 给 release PR 分支派发 CI
+        if: steps.changesets.outputs.pr-number != ''
+        run: |
+          ref=$(gh pr view "$PR_NUMBER" --json headRefName --jq .headRefName)
+          gh workflow run ci.yml --ref "$ref"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ steps.changesets.outputs.pr-number }}

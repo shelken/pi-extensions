@@ -5,6 +5,8 @@ on:
     branches: [main]
   push:
     branches: [main]
+  # 供其他 workflow 在 GITHUB_TOKEN 推送的提交上补跑：该类提交不会触发 pull_request
+  workflow_dispatch:
 
 concurrency:
   group: ci-${{ github.ref }}
@@ -17,7 +19,7 @@ jobs:
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@v7
-      - uses: jdx/mise-action@v5.2.1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: jdx/mise-action@6612f0ef07ed2a736cd1e00a94a065522dd41195 # v5
       - run: bun install --frozen-lockfile
       - run: bun run verify

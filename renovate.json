@@ -1,48 +1,58 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
   "extends": [
-    "config:recommended"
+    "config:recommended",
+    "helpers:pinGitHubActionDigests",
+    "security:minimumReleaseAgeNpm"
   ],
   "packageRules": [
-    {
-      "description": "排除 mise 工具链更新，由项目 .mise.toml 锁定",
-      "matchManagers": ["mise"],
-      "enabled": false
-    },
     {
       "description": "忽略子包的 peerDependencies，由宿主环境决定",
       "matchDepTypes": ["peerDependencies"],
       "enabled": false
     },
     {
-      "description": "根目录开发工具链（构建、测试与代码检查）合并为一个 PR",
-      "matchDepTypes": ["devDependencies"],
-      "matchFileNames": ["package.json"],
-      "excludePackageNames": ["@earendil-works/{/,}**"],
-      "groupName": "根构建工具链 (tsc/vitest/oxlint/changesets)",
+      "description": "typebox 锁宿主自带版本，不由 Renovate 升级；与宿主是否一致由 scripts/host-typebox.node-test.mjs 校验",
+      "matchPackageNames": ["typebox"],
+      "enabled": false
+    },
+    {
+      "description": "node 在 .mise.toml 里保持 \"24\"（mise 安装最新 24.x），否则 Renovate 会把它改写成精确版本；只有新 major 才提 PR",
+      "matchManagers": ["mise"],
+      "matchDepNames": ["node"],
+      "matchUpdateTypes": ["minor", "patch"],
+      "enabled": false
+    },
+    {
+      "description": "基础设施的非 major 更新合并为一个 PR 并自动合并：Actions、mise 工具链（bun/gitleaks）",
+      "matchManagers": ["github-actions", "mise"],
+      "matchUpdateTypes": ["minor", "patch", "pin", "digest"],
+      "groupName": "基础设施",
+      "groupSlug": "infra",
       "automerge": true
     },
     {
-      "description": "pi-core 宿主依赖（需关注 breaking changes，人工验证）",
-      "groupName": "pi-core 宿主依赖",
-      "automerge": false,
-      "matchPackageNames": ["@earendil-works/{/,}**"]
+      "description": "基础设施的非 major 更新：开发依赖（tsc/vitest/oxlint/changesets，含 pi-core 宿主依赖）",
+      "matchDepTypes": ["devDependencies"],
+      "matchUpdateTypes": ["minor", "patch", "pin", "digest"],
+      "groupName": "基础设施",
+      "groupSlug": "infra",
+      "automerge": true
     },
     {
-      "description": "各 extension 的 runtime 生产依赖",
+      "description": "会发布到 npm 的 runtime 生产依赖：非 major 自动合并，发布由 chore(release) PR 人工把关",
       "matchDepTypes": ["dependencies"],
       "matchFileNames": ["extensions/**"],
-      "groupName": "插件 runtime 依赖"
+      "matchUpdateTypes": ["minor", "patch", "pin", "digest"],
+      "groupName": "插件 runtime 依赖",
+      "groupSlug": "runtime",
+      "automerge": true
     }
   ],
   "schedule": ["before 6am on monday"],
   "timezone": "Asia/Shanghai",
   "prHourlyLimit": 5,
   "rangeStrategy": "bump",
-  "ignorePaths": [
-    "**/.mise.toml",
-    "**/mise.toml"
-  ],
   "gitIgnoredAuthors": [
     "github-actions[bot]@users.noreply.github.com",
     "41898282+github-actions[bot]@users.noreply.github.com"
