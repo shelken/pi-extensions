@@ -1,6 +1,6 @@
 # mise 管理项目工具链版本，保证本地与 CI 一致。
 # 详细说明见 docs/versioning.md
 [tools]
-node = "24"
+node = "26.13.0"
 bun = "1.4.4"
 gitleaks = "8.30.1"
