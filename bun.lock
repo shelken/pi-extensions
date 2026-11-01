@@ -150,9 +150,9 @@
     },
     "extensions/simple-plannotator": {
       "name": "@shelken/simple-plannotator",
-      "version": "0.1.7",
+      "version": "0.1.8",
       "dependencies": {
-        "@plannotator/pi-extension": "^0.28.36",
+        "@plannotator/pi-extension": "^0.28.37",
       },
       "peerDependencies": {
         "@earendil-works/pi-coding-agent": ">=0.80.0",
