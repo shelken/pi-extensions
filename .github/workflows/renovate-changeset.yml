@@ -17,11 +17,22 @@ jobs:
     permissions:
       contents: write
       pull-requests: write
+      actions: write  # 补 changeset 后派发 CI
     steps:
       - name: 生成 Changeset
+        id: changeset
         uses: mscharley/dependency-changesets-action@874dac2372a085cb94f750e8bdf5b1173a838a75 # v1.2.5
         with:
           changeset-folder: .changeset
           use-conventional-commits: true
           commit-message: "chore(deps): 自动补齐 changeset"
           token: ${{ secrets.GITHUB_TOKEN }}
+
+      # GITHUB_TOKEN 推送的提交不触发 pull_request 工作流，补完 changeset 后 head 上没有 CI，
+      # 自动合并会看到「无检查」。workflow_dispatch 不受该限制，所以显式派发一次
+      - name: 为 changeset 提交派发 CI
+        if: steps.changeset.outputs.created-changeset == 'true'
+        run: gh workflow run ci.yml --repo "$GITHUB_REPOSITORY" --ref "$HEAD_REF"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          HEAD_REF: ${{ github.head_ref }}

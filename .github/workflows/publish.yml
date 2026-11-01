@@ -24,6 +24,7 @@ jobs:
       id-token: write   # npm Trusted Publishing OIDC
       contents: write   # 打 tag + 建 GitHub Release
       pull-requests: write  # 自动开 release PR
+      actions: write  # 给 release PR 分支派发 CI
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - uses: jdx/mise-action@6612f0ef07ed2a736cd1e00a94a065522dd41195 # v5
@@ -58,3 +59,14 @@ jobs:
           done
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # release PR 由 GITHUB_TOKEN 创建，不会触发 pull_request CI。派发一次，让分支 head 上有可读的检查结果；
+      # workflow_dispatch 的检查不出现在 PR 检查区，也满足不了 ruleset 的必过检查，所以不要给 main 设必过检查
+      - name: 给 release PR 分支派发 CI
+        if: steps.changesets.outputs.pr-number != ''
+        run: |
+          ref=$(gh pr view "$PR_NUMBER" --json headRefName --jq .headRefName)
+          gh workflow run ci.yml --ref "$ref"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ steps.changesets.outputs.pr-number }}
