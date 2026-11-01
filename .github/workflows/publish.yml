@@ -25,9 +25,9 @@ jobs:
       contents: write   # 打 tag + 建 GitHub Release
       pull-requests: write  # 自动开 release PR
     steps:
-      - uses: actions/checkout@v7
-      - uses: jdx/mise-action@v5.2.1
-      - uses: actions/setup-node@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: jdx/mise-action@6612f0ef07ed2a736cd1e00a94a065522dd41195 # v5
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
         with:
           node-version-file: .mise.toml
           registry-url: "https://registry.npmjs.org"
@@ -40,7 +40,7 @@ jobs:
           NAMES=$(sed -n 's/^"\([^"]*\)".*/\1/p' .changeset/*.md | sort -u | tr '\n' ' ')
           echo "names=$NAMES" >> "$GITHUB_OUTPUT"
 
-      - uses: changesets/action@v2.1.2
+      - uses: changesets/action@ae32849d5ba541f9ae29e40e22a623bc13562f51 # v2
         id: changesets
         with:
           publish-script: bunx changeset publish

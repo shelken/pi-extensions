@@ -19,7 +19,7 @@ jobs:
       pull-requests: write
     steps:
       - name: 生成 Changeset
-        uses: mscharley/dependency-changesets-action@v1.2.5
+        uses: mscharley/dependency-changesets-action@874dac2372a085cb94f750e8bdf5b1173a838a75 # v1.2.5
         with:
           changeset-folder: .changeset
           use-conventional-commits: true
