@@ -10,6 +10,7 @@
 | `pi-auto-model-prompts` | `@shelken/pi-auto-model-prompts` | 按模型加载额外 system prompt。 |
 | `pi-co-authored-by` | `@shelken/pi-co-authored-by` | agent 执行 `git commit` 时追加 Co-Authored-By / Generated-By trailer。 |
 | `pi-command-history` | `@shelken/pi-command-history` | 按工作目录持久化输入历史，支持快捷键回填。 |
+| `pi-status-bar` | `@shelken/pi-status-bar` | 编辑器上方一行状态条（模型、思考、目录、分支、上下文、缓存、费用），下方显示上一条提示；不替换编辑器。 |
 | `pi-dynamic-models` | `@shelken/pi-dynamic-models` | 自动发现 provider 远端模型，并用 models.dev registry 补全模型参数。 |
 | `pi-guard` | `@shelken/pi-guard` | 硬禁 agent 危险 bash 与机密路径读写。 |
 | `pi-inline-skills` | `@shelken/pi-inline-skills` | 输入 `/` 时内联补全 skill，并自动展开已加载 skill 内容。 |

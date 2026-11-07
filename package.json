@@ -26,6 +26,7 @@
       "./extensions/pi-inline-skills/src/index.ts",
       "./extensions/pi-co-authored-by/src/index.ts",
       "./extensions/pi-command-history/src/index.ts",
+      "./extensions/pi-status-bar/src/index.ts",
       "-./extensions/pi-add-dir/src/index.ts",
       "-./extensions/pi-title/src/index.ts",
       "./extensions/simple-plannotator/src/index.ts",

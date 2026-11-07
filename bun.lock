@@ -133,6 +133,18 @@
         "@earendil-works/pi-coding-agent",
       ],
     },
+    "extensions/pi-status-bar": {
+      "name": "@shelken/pi-status-bar",
+      "version": "0.1.0",
+      "peerDependencies": {
+        "@earendil-works/pi-coding-agent": ">=1.4.0",
+        "@earendil-works/pi-tui": ">=1.4.0",
+      },
+      "optionalPeers": [
+        "@earendil-works/pi-coding-agent",
+        "@earendil-works/pi-tui",
+      ],
+    },
     "extensions/pi-title": {
       "name": "@shelken/pi-title",
       "version": "0.3.0",
@@ -450,6 +462,8 @@
     "@shelken/pi-inline-skills": ["@shelken/pi-inline-skills@workspace:extensions/pi-inline-skills"],
 
     "@shelken/pi-sounds": ["@shelken/pi-sounds@workspace:extensions/pi-sounds"],
+
+    "@shelken/pi-status-bar": ["@shelken/pi-status-bar@workspace:extensions/pi-status-bar"],
 
     "@shelken/pi-title": ["@shelken/pi-title@workspace:extensions/pi-title"],
 
