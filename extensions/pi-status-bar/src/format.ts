@@ -136,15 +136,32 @@ function contextSegment(context: NonNullable<BarData["context"]>, paint: Paint):
 	return `${ICON.context} ${paint(tone, text)}`;
 }
 
-export function renderBar(data: BarData, paint: Paint): string {
+/** 默认顺序，也是 statusBar.order 的白名单取值 */
+export const BAR_IDS = ["model", "thinking", "dir", "context", "git", "cacheRead", "cost"] as const;
+export type BarId = (typeof BAR_IDS)[number];
+
+type SegmentRenderer = (data: BarData, paint: Paint) => string | null;
+
+/** 返回 null 表示该段当前无内容，跳过 */
+const SEGMENTS = {
+	model: (data: BarData, paint: Paint) => (data.model ? paint("model", `${ICON.model} ${data.model.replace(/^Claude /, "")}`) : null),
+	thinking: (data: BarData, paint: Paint) => (data.thinking ? thinkingSegment(data.thinking, paint) : null),
+	dir: (data: BarData, paint: Paint) => paint("path", `${ICON.folder} ${data.dir}`),
+	git: (data: BarData, paint: Paint) => (data.branch ? gitSegment(data.branch, data.git, paint) : null),
+	context: (data: BarData, paint: Paint) => (data.context ? contextSegment(data.context, paint) : null),
+	cacheRead: (data: BarData, paint: Paint) =>
+		data.cacheRead > 0 ? paint("tokens", `${ICON.cache} ${ICON.input} ${formatTokens(data.cacheRead)}`) : null,
+	cost: (data: BarData, paint: Paint) => (data.cost > 0 ? paint("cost", `$${data.cost.toFixed(2)}`) : null),
+} satisfies Record<BarId, SegmentRenderer>;
+
+/** order 即显示清单：只渲染列出的段，按列出顺序；空清单返回空串 */
+export function renderBar(data: BarData, paint: Paint, order: readonly BarId[] = BAR_IDS): string {
 	const segments: string[] = [];
-	if (data.model) segments.push(paint("model", `${ICON.model} ${data.model.replace(/^Claude /, "")}`));
-	if (data.thinking) segments.push(thinkingSegment(data.thinking, paint));
-	segments.push(paint("path", `${ICON.folder} ${data.dir}`));
-	if (data.branch) segments.push(gitSegment(data.branch, data.git, paint));
-	if (data.context) segments.push(contextSegment(data.context, paint));
-	if (data.cacheRead > 0) segments.push(paint("tokens", `${ICON.cache} ${ICON.input} ${formatTokens(data.cacheRead)}`));
-	if (data.cost > 0) segments.push(paint("cost", `$${data.cost.toFixed(2)}`));
+	for (const id of order) {
+		const segment = SEGMENTS[id](data, paint);
+		if (segment) segments.push(segment);
+	}
+	if (!segments.length) return "";
 	const sep = ` ${SEP_ANSI}${ICON.separator}${RESET} `;
 	return ` ${segments.join(sep)}${RESET}`;
 }

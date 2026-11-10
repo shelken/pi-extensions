@@ -31,13 +31,18 @@ describe("format", () => {
   it("renderBar 带图标与 powerline 细分隔符，行首只有一个空格", () => {
     const out = strip(renderBar(data, paint));
     expect(out).toBe(
-      " \uEC19 Sonnet 5.5 \uE0B1 think:high \uE0B1 \uF115 pi-extensions \uE0B1 \uF126 main \uE0B1 \uF1C0 169k/1.0M (16.9%) \uE0B1 \uF1C0 \uF090 8.4M \uE0B1 $1.93",
+      " \uEC19 Sonnet 5.5 \uE0B1 think:high \uE0B1 \uF115 pi-extensions \uE0B1 \uF1C0 169k/1.0M (16.9%) \uE0B1 \uF126 main \uE0B1 \uF1C0 \uF090 8.4M \uE0B1 $1.93",
     );
   });
 
   it("缓存与费用为 0 时省略；无分支无上下文时不留空段", () => {
     const out = strip(renderBar({ ...data, cacheRead: 0, cost: 0, branch: null, context: undefined }, paint));
     expect(out).toBe(" \uEC19 Sonnet 5.5 \uE0B1 think:high \uE0B1 \uF115 pi-extensions");
+  });
+
+  it("order 决定段与顺序，空 order 不输出任何行", () => {
+    expect(strip(renderBar(data, paint, ["dir", "cost"]))).toBe(" \uF115 pi-extensions \uE0B1 $1.93");
+    expect(renderBar(data, paint, [])).toBe("");
   });
 
   it("git 脏状态：分支转黄并追加 *未暂存 +已暂存 ?未跟踪", () => {

@@ -12,14 +12,16 @@ const theme = { fg: (_tone: string, text: string) => text };
 const strip = (s: string) => s.replace(/\x1b\[[0-9;]*m/g, "");
 const tui = { requestRender: vi.fn() };
 
-async function setup(entries: any[]) {
+async function setup(entries: any[], settings: { statusBar?: unknown } = {}) {
   const handlers = new Map<string, (...args: any[]) => void>();
   const pi = asApi({
     on: (name: string, fn: (...args: any[]) => void) => handlers.set(name, fn),
     getThinkingLevel: () => "high",
+    getSettings: () => settings,
     exec: async () => ({ code: 0, stdout: " M a\n?? b\n", stderr: "" }),
   });
   const widgets = new Map<string, { factory: any; options?: any }>();
+  const notify = vi.fn();
   const ctx = {
     hasUI: true,
     cwd: "/work/demo",
@@ -27,6 +29,7 @@ async function setup(entries: any[]) {
     getContextUsage: () => ({ tokens: 1000, contextWindow: 100_000, percent: 1 }),
     sessionManager: { getBranch: () => entries },
     ui: {
+      notify,
       setFooter: (factory: any) => factory(tui, theme, { getGitBranch: () => "main", onBranchChange: () => () => {}, getExtensionStatuses: () => new Map() }),
       setWidget: (key: string, factory: any, options?: any) => widgets.set(key, { factory, options }),
     },
@@ -35,7 +38,7 @@ async function setup(entries: any[]) {
   handlers.get("session_start")!({}, ctx);
   await Promise.resolve();
   const render = (key: string, width = 120) => widgets.get(key)!.factory(tui, theme).render(width);
-  return { handlers, widgets, render };
+  return { handlers, widgets, render, notify };
 }
 
 const assistant = (id: string, cacheRead: number, cost: number) => ({
@@ -49,8 +52,30 @@ describe("pi-status-bar", () => {
     const { render } = await setup([assistant("a", 1000, 0.5), assistant("b", 2000, 0.25)]);
     const [line] = render("status-bar");
     expect(strip(line)).toBe(
-      " \uEC19 Demo \uE0B1 think:high \uE0B1 \uF115 demo \uE0B1 \uF126 main *1 ?1 \uE0B1 \uF1C0 1.0k/100k (1.0%) \uE0B1 \uF1C0 \uF090 3.0k \uE0B1 $0.75",
+      " \uEC19 Demo \uE0B1 think:high \uE0B1 \uF115 demo \uE0B1 \uF1C0 1.0k/100k (1.0%) \uE0B1 \uF126 main *1 ?1 \uE0B1 \uF1C0 \uF090 3.0k \uE0B1 $0.75",
     );
+  });
+
+  it("statusBar.order 决定显示哪几段与先后", async () => {
+    const { render } = await setup([assistant("a", 3000, 0.5)], { statusBar: { order: ["dir", "cost"] } });
+    expect(strip(render("status-bar")[0])).toBe(" \uF115 demo \uE0B1 $0.50");
+  });
+
+  it("空 order 时状态条不占行", async () => {
+    const { render } = await setup([assistant("a", 3000, 0.5)], { statusBar: { order: [] } });
+    expect(render("status-bar")).toEqual([]);
+  });
+
+  it("非法 order 项：警告一次并在 TUI 提示，合法项照常生效", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    try {
+      const { notify, render } = await setup([], { statusBar: { order: ["dir", "nope"] } });
+      expect(strip(render("status-bar")[0])).toBe(" \uF115 demo");
+      expect(warn).toHaveBeenCalledWith('[status-bar] 忽略无效的 statusBar.order 项: "nope"');
+      expect(notify).toHaveBeenCalledWith('忽略无效的 statusBar.order 项: "nope"', "warning");
+    } finally {
+      warn.mockRestore();
+    }
   });
 
   it("上一条提示来自会话分支，并随新用户消息更新；放在编辑器下方", async () => {

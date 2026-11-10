@@ -3,7 +3,7 @@
 编辑器上方一行状态条，下方一行上一条提示。不替换编辑器，编辑器边框行首没有多余空格。
 
 ```text
-  Sonnet 5.5  think:high   pi-extensions   main *2 ?1   169k/1.0M (16.9%)    8.4M  $1.93
+  Sonnet 5.5  think:high   pi-extensions   169k/1.0M (16.9%)   main *2 ?1    8.4M  $1.93
 ────────────────────────────────────────────────────────
 > 编辑器
 ────────────────────────────────────────────────────────
@@ -24,7 +24,7 @@ pi install npm:@shelken/pi-status-bar
 
 ### 相对上游保留
 
-- 段的顺序：模型、思考档、目录名、git、上下文、缓存读、费用
+- 段的默认顺序：模型、思考档、目录名、上下文、git、缓存读、费用
 - 图标与分隔：Nerd Font 码位，段间用 powerline 细分隔符
 - 配色：沿用上游 `theme.json` 里的 catppuccin 配色
 - 思考档：`high`、`xhigh`、`max` 逐字彩虹，`min`、`low`、`med` 用 pi 主题色
@@ -40,12 +40,44 @@ pi install npm:@shelken/pi-status-bar
 - 上一条提示取自会话分支与 `message_start`，切换会话或分支后自动对应
 - git 状态由 `git status --porcelain=v1` 异步刷新：启动、每轮结束、分支变化时各一次
 - 费用固定显示美元，不做汇率换算
-- 配色与图标写死在代码里，没有 `theme.json`、预设和分隔符选项
+- 配色与图标写死在代码里，没有 `theme.json`、预设与分隔符选项。顺序改为读宿主 settings 的 `statusBar.order`，不另开配置文件
 - 没有上下文后面的自动压缩图标
 
 ## 配置
 
-无配置文件。要改配色或图标，编辑 `src/format.ts` 顶部的常量。
+写在宿主 settings 里，全局 `{pi-agent-dir}/settings.json` 或项目 `.pi/settings.json`（项目优先，需该项目受信任）。改完开新会话生效。
+
+```json
+{
+  "statusBar": {
+    "order": ["model", "thinking", "dir", "context", "git", "cacheRead", "cost"]
+  }
+}
+```
+
+`order` 就是显示清单：只显示列出的段，按列出顺序。默认值为上例这七项。
+
+| 段 | 内容 |
+|---|---|
+| `model` | 模型名，去掉 `Claude ` 前缀 |
+| `thinking` | 思考档 |
+| `dir` | 当前目录名 |
+| `context` | 上下文 `已用/窗口 (百分比)` |
+| `git` | 分支与 `*未暂存 +已暂存 ?未跟踪` |
+| `cacheRead` | 缓存读 token |
+| `cost` | 费用 |
+
+示例：只留模型、目录和费用。
+
+```json
+{
+  "statusBar": {
+    "order": ["model", "dir", "cost"]
+  }
+}
+```
+
+`order` 缺失或不是数组时，整个状态条用默认顺序。数组内的未知名、非字符串项与重复项会被忽略，其余照常生效；被忽略的项在开新会话时提示一次（TUI 内通知，同时写一条 `[status-bar]` 日志）。配色与图标仍只改 `src/format.ts` 顶部的常量。
 
 ## 验证
 

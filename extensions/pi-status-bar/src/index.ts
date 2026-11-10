@@ -1,6 +1,17 @@
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { truncateToWidth } from "@earendil-works/pi-tui";
-import { basename, createPaint, parseGitStatus, promptText, renderBar, renderLastPrompt, type GitCounts } from "./format.ts";
+import { describeInvalidSegments, readStatusBarConfig } from "./config.ts";
+import {
+	BAR_IDS,
+	basename,
+	createPaint,
+	parseGitStatus,
+	promptText,
+	renderBar,
+	renderLastPrompt,
+	type BarId,
+	type GitCounts,
+} from "./format.ts";
 
 const BAR_KEY = "status-bar";
 const PROMPT_KEY = "status-bar-last-prompt";
@@ -18,6 +29,7 @@ export default function statusBar(pi: ExtensionAPI) {
 	let lastPrompt = "";
 	let requestRender = () => {};
 	let stats: Stats = { key: "", cacheRead: 0, cost: 0 };
+	let order: readonly BarId[] = BAR_IDS;
 
 	// 不替换编辑器，只用 widget：编辑器边框保持原生，行首不加空格
 	function readStats(c: ExtensionContext): Stats {
@@ -53,6 +65,13 @@ export default function statusBar(pi: ExtensionAPI) {
 	pi.on("session_start", (_event, context) => {
 		if (!context.hasUI) return;
 		ctx = context;
+		const config = readStatusBarConfig(pi.getSettings());
+		order = config.order;
+		if (config.invalid.length) {
+			const message = describeInvalidSegments(config.invalid);
+			console.warn(`[status-bar] ${message}`);
+			context.ui.notify(message, "warning");
+		}
 		lastPrompt = lastPromptOf(context);
 		stats = { key: "", cacheRead: 0, cost: 0 };
 		void refreshGit(context.cwd);
@@ -96,8 +115,9 @@ export default function statusBar(pi: ExtensionAPI) {
 							cost,
 						},
 						paint,
+						order,
 					);
-					return [truncateToWidth(line, width)];
+					return line ? [truncateToWidth(line, width)] : [];
 				},
 			};
 		});
