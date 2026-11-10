@@ -1,6 +1,6 @@
 {
   "name": "@shelken/pi-status-bar",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "编辑器上方的一行状态条（模型、思考、目录、分支、上下文、缓存、费用）和下方的上一条提示，不替换编辑器",
   "type": "module",
   "license": "MIT",
