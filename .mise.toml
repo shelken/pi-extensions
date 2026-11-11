@@ -1,6 +1,4 @@
-# mise 管理项目工具链版本，保证本地与 CI 一致。
+# mise 只管理 CI 专用工具；node/bun 用系统自带，版本见 package.json。
 # 详细说明见 docs/versioning.md
 [tools]
-node = "24"
-bun = "1.4.4"
 gitleaks = "8.30.1"

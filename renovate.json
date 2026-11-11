@@ -17,15 +17,23 @@
       "enabled": false
     },
     {
-      "description": "node 在 .mise.toml 里保持 \"24\"（mise 安装最新 24.x），否则 Renovate 会把它改写成精确版本；只有新 major 才提 PR",
-      "matchManagers": ["mise"],
+      "description": "node 在 package.json engines 里保持 major（setup-node 安装最新 26.x），否则 Renovate 会把它改写成精确版本；只有新 major 才提 PR",
+      "matchDepTypes": ["engines"],
       "matchDepNames": ["node"],
       "matchUpdateTypes": ["minor", "patch"],
       "enabled": false
     },
     {
-      "description": "基础设施的非 major 更新合并为一个 PR 并自动合并：Actions、mise 工具链（bun/gitleaks）",
+      "description": "基础设施的非 major 更新合并为一个 PR 并自动合并：Actions、mise 工具链（gitleaks）",
       "matchManagers": ["github-actions", "mise"],
+      "matchUpdateTypes": ["minor", "patch", "pin", "digest"],
+      "groupName": "基础设施",
+      "groupSlug": "infra",
+      "automerge": true
+    },
+    {
+      "description": "基础设施的非 major 更新：bun（package.json packageManager）",
+      "matchDepTypes": ["packageManager"],
       "matchUpdateTypes": ["minor", "patch", "pin", "digest"],
       "groupName": "基础设施",
       "groupSlug": "infra",
