@@ -46,6 +46,13 @@ function isGitCommitArgv(argv: string[]): boolean {
 	if (i >= argv.length) return false;
 
 	const executable = argv[i].split("/").pop() ?? argv[i];
+
+	// mise exec [选项/工具@版本] -- git commit：`--` 之后才是被执行的命令；没有 `--` 时 mise 把 git 当工具名
+	if (executable === "mise" && (argv[i + 1] === "exec" || argv[i + 1] === "x")) {
+		const separator = argv.indexOf("--", i + 2);
+		return separator !== -1 && isGitCommitArgv(argv.slice(separator + 1));
+	}
+
 	if (executable !== "git") return false;
 	i++;
 

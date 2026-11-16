@@ -15,6 +15,7 @@ Generated-By: pi <version>
 
 - 只挂钩 `bash` 工具调用
 - 只处理直接执行的 `git commit`；`printf`、`git status`、脚本内 commit 等一律不改
+- 识别 `env`、`sudo`、`timeout`、`rtk` 等透明前缀，以及 `mise exec`/`mise x` 的 `--` 之后的命令；没有 `--` 的 `mise exec git commit` 里 git 是工具名，不算
 - 模型名取当前 session；没有则 `unknown`
 - 与仓库已有 hook 兼容：先写 trailer，再转发执行原 hook（`pre-commit`、`commit-msg`、`pre-push` 等都会照常运行）
 

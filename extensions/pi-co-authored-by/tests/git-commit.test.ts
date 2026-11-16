@@ -22,6 +22,23 @@ describe("isGitCommitCommand", () => {
 		expect(isGitCommitCommand("rtk git commit -m x")).toBe(true);
 	});
 
+	it("detects git commit behind mise exec", () => {
+		expect(isGitCommitCommand("mise exec -- git commit -m x")).toBe(true);
+		expect(isGitCommitCommand("mise x -- git commit")).toBe(true);
+		expect(isGitCommitCommand("mise exec --cd dir -- git commit")).toBe(true);
+		expect(isGitCommitCommand("mise exec node@20 -- git commit")).toBe(true);
+		expect(isGitCommitCommand("mise exec -C repo -- git -C x commit")).toBe(true);
+		expect(isGitCommitCommand("FOO=bar /usr/bin/mise exec -- git commit")).toBe(true);
+	});
+
+	it("ignores mise commands that do not run git commit", () => {
+		expect(isGitCommitCommand("mise exec -- git status")).toBe(false);
+		expect(isGitCommitCommand("mise run commit")).toBe(false);
+		// 没有 `--` 时 mise 把 git 当工具名，不是直接执行 git
+		expect(isGitCommitCommand("mise exec git commit")).toBe(false);
+		expect(isGitCommitCommand("mise exec -- echo -- git commit")).toBe(false);
+	});
+
 	it("detects git global options", () => {
 		expect(isGitCommitCommand("git -C repo commit -m x")).toBe(true);
 		expect(isGitCommitCommand("git --git-dir=.git commit")).toBe(true);
