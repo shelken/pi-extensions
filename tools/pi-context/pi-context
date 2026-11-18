@@ -1,0 +1,100 @@
+#!/usr/bin/env bash
+# 量化 pi 每次请求固定携带的上下文（系统提示词 + 工具 schema）。
+#
+#   pi-context full                         当前目录、当前配置下的一次真实请求
+#   pi-context ext [--keep PATH]... L=PATH...  空环境里逐个加载扩展，输出相对空载的增量
+#   pi-context sdk L=PATH...                不调用模型；无 UI 时隐藏工具的扩展用它测
+#
+# full/ext 会发一次 "say hi"。模型取 $PI_CONTEXT_MODEL，未设时用 pi 的默认模型。
+# ext 用 -ne 关掉全部扩展；若模型来自扩展提供的 provider，用 --keep 把该扩展带上（计入空载，不影响增量）。
+# 字符数按 JSON 序列化长度计；tokens 是 provider 返回的 input 用量。
+set -euo pipefail
+
+here=$(cd "$(dirname "$0")" && pwd)
+probe="$here/probe.ts"
+model_args=()
+[[ -n "${PI_CONTEXT_MODEL:-}" ]] && model_args=(--model "$PI_CONTEXT_MODEL")
+
+# 发一次请求：输出 {"tokens":N,"system":N,"tools":{name:N}}
+request() {
+	local out
+	out=$(mktemp -u)
+	local tokens
+	tokens=$(PROBE_OUT="$out" pi --no-session "${model_args[@]}" --mode json -e "$probe" "$@" -p "say hi" 2>/dev/null |
+		grep -o '"usage":{"input":[0-9]*' | tail -1 | grep -o '[0-9]*$' || true)
+	python3 - "${tokens:-0}" "$out" <<'EOF'
+import json, sys
+tokens, path = int(sys.argv[1]), sys.argv[2]
+try:
+    d = json.load(open(path))
+except Exception:
+    print(json.dumps({"error": "no request captured"})); sys.exit()
+msgs = d.get("input") or d.get("messages") or []
+system = sum(len(json.dumps(m, ensure_ascii=False)) for m in msgs if m.get("role") in ("developer", "system"))
+if isinstance(d.get("system"), (str, list)):
+    system += len(json.dumps(d["system"], ensure_ascii=False))
+tools = {}
+for t in d.get("tools", []):
+    name = t.get("name") or t.get("function", {}).get("name")
+    tools[name] = len(json.dumps(t, ensure_ascii=False))
+print(json.dumps({"tokens": tokens, "system": system, "tools": tools}))
+EOF
+	rm -f "$out"
+}
+
+mode=${1:-}
+shift || true
+case "$mode" in
+full)
+	python3 - "$(request "$@")" <<'EOF'
+import json, sys
+r = json.loads(sys.argv[1])
+if "error" in r: sys.exit(r["error"])
+tools = r["tools"]
+print(f"tokens  {r['tokens']}")
+print(f"system  {r['system']}")
+print(f"tools   {sum(tools.values())}  ({len(tools)} 个)")
+for n, c in sorted(tools.items(), key=lambda x: -x[1]):
+    print(f"  {c:>6}  {n}")
+EOF
+	;;
+ext)
+	keep=()
+	while [[ "${1:-}" == --keep ]]; do keep+=(-e "$2"); shift 2; done
+	work=$(mktemp -d)
+	trap 'rm -rf "$work"' EXIT
+	cd "$work"
+	base=$(request -ne -ns -nc "${keep[@]}")
+	for spec in "$@"; do
+		r=$(request -ne -ns -nc "${keep[@]}" -e "${spec#*=}")
+		python3 - "${spec%%=*}" "$base" "$r" <<'EOF'
+import json, sys
+label, base, r = sys.argv[1], json.loads(sys.argv[2]), json.loads(sys.argv[3])
+if "error" in r or "error" in base:
+    print(f"{label:36} 失败"); sys.exit()
+bt = base["tools"]
+extra = {(n if n not in bt else n + "Δ"): c - bt.get(n, 0) for n, c in r["tools"].items() if c != bt.get(n)}
+note = "  （没有新工具：可能在无 UI 时隐藏，改用 sdk 模式）" if not extra else ""
+print(f"{label:36} +{r['tokens'] - base['tokens']:>5} tokens  +{r['system'] - base['system'] + sum(extra.values()):>6} chars  {extra}{note}")
+EOF
+	done
+	# provider 偶尔返回偏高的 input 用量；空载前后不一致时 tokens 增量不可信，字符数不受影响
+	base_end=$(request -ne -ns -nc "${keep[@]}")
+	[[ "$base" == "$base_end" ]] || echo "警告：空载前后不一致，tokens 增量仅供参考  $base  →  $base_end" >&2
+	;;
+sdk)
+	shim=$(command -v pi)
+	target=$(sed -n 's/^# aube-bin-shim v[0-9]* target=//p' "$shim")
+	entry=$( [[ -n "$target" ]] && echo "$(dirname "$shim")/$target" || realpath "$shim")
+	pkg=$(dirname "$entry")
+	until [[ -f "$pkg/package.json" && "$(python3 -c 'import json,sys;print(json.load(open(sys.argv[1])).get("name"))' "$pkg/package.json")" == "@earendil-works/pi-coding-agent" ]]; do
+		[[ "$pkg" == / ]] && { echo "找不到 pi-coding-agent 包目录" >&2; exit 1; }
+		pkg=$(dirname "$pkg")
+	done
+	PI_PKG="$pkg" bun "$here/sdk.ts" "$@"
+	;;
+*)
+	sed -n '2,10p' "$0" | sed 's/^# \{0,1\}//'
+	exit 1
+	;;
+esac

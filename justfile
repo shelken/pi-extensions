@@ -85,3 +85,8 @@ changeset-status:
 # 本地预览 version 应用结果 (bump + CHANGELOG); 预览后 git checkout . 撤销
 changeset-version:
     bunx changeset version
+
+# 量化 pi 固定上下文: full | ext [--keep PATH] L=PATH... | sdk L=PATH...（在调用目录执行; 模型取 $PI_CONTEXT_MODEL）
+[no-cd]
+pi-context *args:
+    {{ justfile_directory() }}/tools/pi-context/pi-context {{ args }}
