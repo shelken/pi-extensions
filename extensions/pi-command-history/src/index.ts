@@ -166,6 +166,9 @@ export default function commandHistoryExtension(pi: ExtensionAPI): void {
   });
 
   pi.on("input", (event, _ctx) => {
+    // 其他扩展经 sendUserMessage 注入的文本不是用户敲的，不进历史
+    if (event.source === "extension") return;
+
     const text = event.text?.trim();
     if (!text || !currentCwd) return;
 
