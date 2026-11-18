@@ -7,39 +7,14 @@ import {
   SkillInvocationMessageComponent,
   type ParsedSkillBlock,
 } from "@earendil-works/pi-coding-agent"
-import { Box, Container, Text } from "@earendil-works/pi-tui"
-
-type AutocompleteItem = {
-  value: string
-  label: string
-  description?: string
-}
-
-type AutocompleteSuggestions = {
-  items: AutocompleteItem[]
-  prefix: string
-}
-
-type AutocompleteProvider = {
-  getSuggestions(
-    lines: string[],
-    cursorLine: number,
-    cursorCol: number,
-    options: { signal: AbortSignal; force?: boolean },
-  ): Promise<AutocompleteSuggestions | null>
-  applyCompletion(
-    lines: string[],
-    cursorLine: number,
-    cursorCol: number,
-    item: AutocompleteItem,
-    prefix: string,
-  ): { lines: string[]; cursorLine: number; cursorCol: number }
-  shouldTriggerFileCompletion?(
-    lines: string[],
-    cursorLine: number,
-    cursorCol: number,
-  ): boolean
-}
+import {
+  Box,
+  Container,
+  Text,
+  type AutocompleteItem,
+  type AutocompleteProvider,
+  type AutocompleteSuggestions,
+} from "@earendil-works/pi-tui"
 
 type SkillCommand = {
   name: string
@@ -542,13 +517,13 @@ export default function (pi: ExtensionAPI): void {
 
   pi.registerMessageRenderer(
     INLINE_SKILL_MESSAGE_TYPE,
-    (message, { expanded }, theme) => {
+    (message, { expanded, keyHint }, theme) => {
       // SAFETY: details 由扩展自身 appendEntry 写入（INLINE_SKILL_MESSAGE_TYPE），结构自洽
       const details = message.details as InlineSkillMessageDetails | undefined
       const names = details?.names?.length ? details.names.join(", ") : "skill"
       const label = theme.fg(
         "customMessageLabel",
-        `\x1b[1m[${INLINE_SKILL_MESSAGE_TYPE}]\x1b[22m`,
+        theme.bold(`[${INLINE_SKILL_MESSAGE_TYPE}]`),
       )
       if (details?.skills?.length) {
         const container = new Container()
@@ -563,7 +538,7 @@ export default function (pi: ExtensionAPI): void {
       const box = new Box(1, 1, (text) => theme.bg("customMessageBg", text))
       box.addChild(
         new Text(
-          `${label} ${theme.fg("customMessageText", names)}${theme.fg("dim", " (ctrl+o to expand)")}`,
+          `${label} ${theme.fg("customMessageText", names)} (${keyHint("app.tools.expand", "to expand")})`,
           0,
           0,
         ),
