@@ -1,5 +1,11 @@
 # @shelken/copy-cut
 
+## 0.2.3
+
+### Patch Changes
+
+- [#116](https://github.com/shelken/pi-extensions/pull/116) [`e168d08`](https://github.com/shelken/pi-extensions/commit/e168d0882752e4b5b74cdf854799808d7780067e) Thanks [@shelken](https://github.com/shelken)! - 宿主包的 peerDependencies 改为 `"*"`，与 pi 官方打包规范一致。
+
 ## 0.2.2
 
 ### Patch Changes

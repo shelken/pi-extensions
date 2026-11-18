@@ -1,5 +1,15 @@
 # @shelken/pi-auto-model-prompts
 
+## 0.4.0
+
+### Minor Changes
+
+- [#115](https://github.com/shelken/pi-extensions/pull/115) [`d1f91ae`](https://github.com/shelken/pi-extensions/commit/d1f91ae75e895cbef51a5fd43bdce89e2e961724) Thanks [@shelken](https://github.com/shelken)! - pi 下改为写入 `auto_model_prompt` prompt section，不再整段替换 system prompt：注入内容会进入会话记录与 `/export`，切换到不命中的模型后自动移除。Oh My Pi 行为不变。
+
+### Patch Changes
+
+- [#116](https://github.com/shelken/pi-extensions/pull/116) [`e168d08`](https://github.com/shelken/pi-extensions/commit/e168d0882752e4b5b74cdf854799808d7780067e) Thanks [@shelken](https://github.com/shelken)! - 宿主包的 peerDependencies 改为 `"*"`，与 pi 官方打包规范一致。
+
 ## 0.3.1
 
 ### Patch Changes
