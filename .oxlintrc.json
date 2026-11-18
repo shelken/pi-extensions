@@ -12,7 +12,8 @@
     ".roo/**",
     ".windsurf/**",
     "tools/oxlint/anti-slop/**",
-    "extensions/pi-title/**"
+    "extensions/pi-title/**",
+    "extensions/pi-background-lean/**"
   ],
   "jsPlugins": [
     {

@@ -1,6 +1,6 @@
 # pi-background-lean（弃用）
 
-**此包已弃用、不再维护，请直接用 [pi-background](https://github.com/pringled/pi-extensions/tree/main/packages/pi-background)。** 压短后的规则缺了「可以结束回合等通知」「输出已在任务日志里」，模型改成自己重定向日志、`sleep` 后再读。用 `claude-sonnet-5-5` 复测，每次请求只省 795 tokens（上游 +1417，本包 +622），按缓存读价不到 $0.0001。一个 203 次请求的会话共省 $0.016，而多出的 9 次 sleep 往返花了 $0.20。
+**此包已弃用、不再维护，入口已从根 `package.json` 的 `pi.extensions` 移除，请直接用 [pi-background](https://github.com/pringled/pi-extensions/tree/main/packages/pi-background)。** 压短后的规则缺了「可以结束回合等通知」「输出已在任务日志里」，模型改成自己重定向日志、`sleep` 后再读。用 `claude-sonnet-5-5` 复测，每次请求只省 795 tokens（上游 +1417，本包 +622），按缓存读价不到 $0.0001。一个 203 次请求的会话共省 $0.016，而多出的 9 次 sleep 往返花了 $0.20。
 
 [pi-background](https://github.com/pringled/pi-extensions/tree/main/packages/pi-background) 的 lean 包装。执行、投递、UI、`/bg` 命令全部沿用上游，只精简模型每次请求都会看到的工具描述、参数描述和规则。
 

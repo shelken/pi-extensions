@@ -18,7 +18,7 @@
 | `simple-plannotator` | `@shelken/simple-plannotator` | 基于浏览器的代码审查和 Markdown 标注（`/pnr` `/pna` `/pnl`）。 |
 | `copy-cut` | `@shelken/copy-cut` | `alt+shift+x` 剪切输入框文本到剪贴板。 |
 | `pi-sounds` | `@shelken/pi-sounds` | Agent 任务完成/事件提示音扩展，内置经典轻量提示音。 |
-| `pi-background-lean` | `@shelken/pi-background-lean` | **弃用**：请直接用 pi-background。曾精简其模型可见文字，但会诱发模型 sleep 等待。 |
+| `pi-background-lean` | `@shelken/pi-background-lean` | **弃用**：已禁用入口，请直接用 pi-background。曾精简其模型可见文字，但会诱发模型 sleep 等待。 |
 
 新增、移除或改名任何子 package 时，必须同步更新本表和根 `package.json` 的 `pi.extensions`。
 
