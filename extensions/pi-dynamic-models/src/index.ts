@@ -1,11 +1,11 @@
 /** factory 同步读缓存；只有缺缓存的 provider 才在 factory 内发现一次（冷启动），其余网络发现推迟到 session_start 或显式刷新。 */
 import type { ExtensionAPI, ExtensionContext, ProviderModelConfig } from "@earendil-works/pi-coding-agent";
+import { CONFIG_DIR_NAME, getAgentDir } from "@earendil-works/pi-coding-agent";
 import type { OpenAICompletionsCompat } from "@earendil-works/pi-ai";
 import type { Api, Model } from "@earendil-works/pi-ai";
 import { createHash, randomUUID } from "node:crypto";
 import { closeSync, mkdirSync, openSync, readFileSync, readdirSync, renameSync, statSync, unlinkSync, utimesSync, writeFileSync } from "node:fs";
-import { homedir } from "node:os";
-import { dirname, join, resolve } from "node:path";
+import { dirname, join } from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
 import * as Value from "typebox/value";
 import { getBuiltInModelDefs, getBuiltInModelIds } from "./builtin.ts";
@@ -52,10 +52,7 @@ type RuntimeState = {
 type CacheFile = RegistryCache | ProviderModelCache;
 
 const EXTENSION_NAME = "pi-dynamic-models";
-const agentOverride = process.env.PI_CODING_AGENT_DIR;
-const AGENT_DIR = agentOverride
-  ? resolve(agentOverride.startsWith("~/") ? join(homedir(), agentOverride.slice(2)) : agentOverride)
-  : join(homedir(), ".pi", "agent");
+const AGENT_DIR = getAgentDir();
 const MODELS_JSON_PATH = join(AGENT_DIR, "models.json");
 const CACHE_DIR = join(AGENT_DIR, "cache");
 const REGISTRY_CACHE_FILE = join(CACHE_DIR, "models-registry.json");
@@ -174,11 +171,10 @@ function clearColdFailure(name: string): void {
   try { unlinkSync(coldFailurePath(name)); } catch {}
 }
 
-export function getConfigPaths(cwd: string, home = homedir()): string[] {
-  const agentDir = agentOverride ? AGENT_DIR : join(home, ".pi", "agent");
+export function getConfigPaths(cwd: string, agentDir = AGENT_DIR): string[] {
   return [
     join(agentDir, "extensions", EXTENSION_NAME, "config.json"),
-    join(cwd, ".pi", "extensions", EXTENSION_NAME, "config.json"),
+    join(cwd, CONFIG_DIR_NAME, "extensions", EXTENSION_NAME, "config.json"),
   ];
 }
 
