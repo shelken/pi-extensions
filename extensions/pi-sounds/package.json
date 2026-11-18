@@ -46,7 +46,6 @@
     ]
   },
   "devDependencies": {
-    "@earendil-works/pi-coding-agent": "latest",
     "bun-types": "latest",
     "typescript": "latest",
     "vitest": "latest"
