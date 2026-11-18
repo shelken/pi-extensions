@@ -46,6 +46,28 @@ function handleDecision(
   }
 }
 
+/**
+ * 反馈可能在 /new、/resume、/reload 之后才到，那时命令捕获的 pi 与 ctx 已失效、调用即抛；
+ * 未处理的 rejection 会让宿主进程退出，所以过期会话的结果直接丢弃
+ */
+function awaitDecision<
+  T extends { exit?: boolean; approved?: boolean; feedback?: string },
+>(
+  pi: ExtensionAPI,
+  ctx: ExtensionContext,
+  label: string,
+  session: { waitForDecision: () => Promise<T> },
+  describeError: (err: unknown) => string,
+): void {
+  session
+    .waitForDecision()
+    .then(
+      (result) => handleDecision(pi, ctx, label, result),
+      (err) => ctx.ui.notify(`${label} failed: ${describeError(err)}`, "error"),
+    )
+    .catch(() => {});
+}
+
 export default function pn(pi: ExtensionAPI): void {
   // ── /pnr: Code Review ────────────────────────────────────────────
 
@@ -70,14 +92,7 @@ export default function pn(pi: ExtensionAPI): void {
         const session = await startCodeReviewBrowserSession(ctx, {});
         ctx.ui.notify("Code review opened in browser.", "info");
 
-        void session.waitForDecision().then(
-          (result) => handleDecision(pi, ctx, "Code review", result),
-          (err) =>
-            ctx.ui.notify(
-              `Code review failed: ${getStartupErrorMessage(err)}`,
-              "error",
-            ),
-        );
+        awaitDecision(pi, ctx, "Code review", session, getStartupErrorMessage);
       } catch (err) {
         ctx.ui.notify(
           `Failed to start code review: ${getStartupErrorMessage(err)}`,
@@ -154,14 +169,7 @@ export default function pn(pi: ExtensionAPI): void {
           );
         }
 
-        void session.waitForDecision().then(
-          (result) => handleDecision(pi, ctx, "Annotation", result),
-          (err) =>
-            ctx.ui.notify(
-              `Annotation failed: ${getStartupErrorMessage(err)}`,
-              "error",
-            ),
-        );
+        awaitDecision(pi, ctx, "Annotation", session, getStartupErrorMessage);
       } catch (err) {
         ctx.ui.notify(
           `Failed to open UI: ${getStartupErrorMessage(err)}`,
@@ -201,14 +209,7 @@ export default function pn(pi: ExtensionAPI): void {
         ctx.ui.notify("Opening annotation UI for last message...", "info");
         const session = await startLastMessageAnnotationSession(ctx, lastText);
 
-        void session.waitForDecision().then(
-          (result) => handleDecision(pi, ctx, "Annotation", result),
-          (err) =>
-            ctx.ui.notify(
-              `Annotation failed: ${getStartupErrorMessage(err)}`,
-              "error",
-            ),
-        );
+        awaitDecision(pi, ctx, "Annotation", session, getStartupErrorMessage);
       } catch (err) {
         ctx.ui.notify(
           `Failed to open UI: ${getStartupErrorMessage(err)}`,
