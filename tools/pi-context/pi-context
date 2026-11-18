@@ -7,7 +7,7 @@
 #
 # full/ext 会发一次 "say hi"。模型取 $PI_CONTEXT_MODEL，未设时用 pi 的默认模型。
 # ext 用 -ne 关掉全部扩展；若模型来自扩展提供的 provider，用 --keep 把该扩展带上（计入空载，不影响增量）。
-# 字符数按 JSON 序列化长度计；tokens 是 provider 返回的 input 用量。
+# 字符数按 JSON 序列化长度计；tokens 是 provider 返回的 input + cacheRead + cacheWrite（命中缓存时 input 只含未命中部分）。
 set -euo pipefail
 
 here=$(cd "$(dirname "$0")" && pwd)
@@ -21,7 +21,8 @@ request() {
 	out=$(mktemp -u)
 	local tokens
 	tokens=$(PROBE_OUT="$out" pi --no-session "${model_args[@]}" --mode json -e "$probe" "$@" -p "say hi" 2>/dev/null |
-		grep -o '"usage":{"input":[0-9]*' | tail -1 | grep -o '[0-9]*$' || true)
+		grep -o '"usage":{"input":[0-9]*,"output":[0-9]*,"cacheRead":[0-9]*,"cacheWrite":[0-9]*' | tail -1 |
+		awk -F'[:,]' '{ print $3 + $7 + $9 }' || true)
 	python3 - "${tokens:-0}" "$out" <<'EOF'
 import json, sys
 tokens, path = int(sys.argv[1]), sys.argv[2]
@@ -78,7 +79,7 @@ note = "  （没有新工具：可能在无 UI 时隐藏，改用 sdk 模式）"
 print(f"{label:36} +{r['tokens'] - base['tokens']:>5} tokens  +{r['system'] - base['system'] + sum(extra.values()):>6} chars  {extra}{note}")
 EOF
 	done
-	# provider 偶尔返回偏高的 input 用量；空载前后不一致时 tokens 增量不可信，字符数不受影响
+	# 空载前后不一致说明 provider 计量有波动，tokens 增量不可信，字符数不受影响
 	base_end=$(request -ne -ns -nc "${keep[@]}")
 	[[ "$base" == "$base_end" ]] || echo "警告：空载前后不一致，tokens 增量仅供参考  $base  →  $base_end" >&2
 	;;
