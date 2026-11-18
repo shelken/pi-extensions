@@ -1,0 +1,44 @@
+{
+  "name": "@shelken/pi-background-lean",
+  "version": "0.0.0",
+  "description": "pi-background 的 lean 包装：执行逻辑沿用上游，只精简模型可见的描述与规则",
+  "type": "module",
+  "license": "MIT",
+  "files": [
+    "src"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/shelken/pi-extensions.git",
+    "directory": "extensions/pi-background-lean"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "test": "vitest run"
+  },
+  "keywords": [
+    "pi-package",
+    "background",
+    "lean"
+  ],
+  "pi": {
+    "extensions": [
+      "./src/index.ts"
+    ]
+  },
+  "dependencies": {
+    "pi-background": "0.4.4"
+  },
+  "peerDependencies": {
+    "@earendil-works/pi-coding-agent": "*",
+    "@earendil-works/pi-tui": "*",
+    "typebox": "*"
+  },
+  "peerDependenciesMeta": {
+    "@earendil-works/pi-coding-agent": { "optional": true },
+    "@earendil-works/pi-tui": { "optional": true },
+    "typebox": { "optional": true }
+  }
+}
