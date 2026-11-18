@@ -21,6 +21,7 @@ const DEFAULT_CONFIG: Config = { enabled: true, liveReload: false };
 
 const EXTENSION_NAME = "pi-auto-model-prompts";
 const FILE_PREFIX = "AGENTS.";
+const SECTION_NAME = "auto_model_prompt";
 
 type Prompt =
   | { path: string; priority: number; kind: "exact"; modelId: string }
@@ -169,15 +170,24 @@ export default function (pi: ExtensionAPI) {
     }
     if (!cachedPrompt) return;
 
+    // pi：写结构化 section，才会进会话记录与导出；不命中的轮次不写，pi 自动删掉旧 section
+    // SAFETY: omp 宿主不提供 systemPromptOptions
+    const sections = (event.systemPromptOptions as typeof event.systemPromptOptions | undefined)
+      ?.sections;
+    if (sections) {
+      sections[SECTION_NAME] = cachedPrompt;
+      return;
+    }
+
     const extra = `# AUTO MODEL PROMPT(模型特别规则)\n\n${cachedPrompt}`;
-    // 上游 Pi 的 event/result.systemPrompt 是 string, OMP 是 string[]。
-    // 本扩展按 Pi 类型编译, 运行时按实际类型追加: 数组必须整体入列, 否则被模板字符串
-    // 按逗号拼成一整段, 破坏 Markdown 段落。故此处对 OMP 分支做一次显式类型放宽。
+    // omp 的 systemPrompt 是 string[]：数组必须整体入列，否则被模板字符串按逗号拼成
+    // 一整段。本扩展按 pi 类型编译，这里显式放宽类型
     if (Array.isArray(event.systemPrompt)) {
       return {
         systemPrompt: [...event.systemPrompt, extra],
       } as unknown as { systemPrompt: string };
     }
+    // 没有 systemPromptOptions 的旧版 pi 只能整段追加（peer 范围是 "*"，旧宿主仍可能加载）
     return {
       systemPrompt: `${event.systemPrompt}\n\n${extra}`,
     };

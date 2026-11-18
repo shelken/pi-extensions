@@ -220,7 +220,7 @@ describe("findPrompt", () => {
 });
 
 describe("before_agent_start systemPrompt handling", () => {
-  it("appends prompt as string when event.systemPrompt is a string (Pi)", () =>
+  it("writes a named section instead of replacing systemPrompt (Pi)", () =>
     withTempHome((_home, cwd) => {
       writeFileSync(join(cwd, ".agents", "AGENTS.claude-3-7-sonnet.md"), "Special rules");
 
@@ -233,10 +233,57 @@ describe("before_agent_start systemPrompt handling", () => {
       autoModelPrompts(pi);
 
       listeners.session_start({}, { cwd });
-      const result = listeners.before_agent_start(
-        { systemPrompt: "Base prompt" },
-        { cwd, model: { id: "anthropic/claude-3-7-sonnet" } },
-      );
+      const event = { systemPrompt: "Base prompt", systemPromptOptions: { sections: {} as Record<string, string> } };
+      const result = listeners.before_agent_start(event, {
+        cwd,
+        model: { id: "anthropic/claude-3-7-sonnet" },
+      });
+
+      expect(result).toBeUndefined();
+      expect(event.systemPromptOptions.sections).toEqual({ auto_model_prompt: "Special rules" });
+    }));
+
+  it("leaves sections untouched when no prompt matches (Pi)", () =>
+    withTempHome((_home, cwd) => {
+      writeFileSync(join(cwd, ".agents", "AGENTS.claude-3-7-sonnet.md"), "Special rules");
+
+      const listeners: Record<string, Function> = {};
+      const pi = asApi({
+        on: vi.fn((event: string, handler: Function) => {
+          listeners[event] = handler;
+        }),
+      });
+      autoModelPrompts(pi);
+
+      listeners.session_start({}, { cwd });
+      const event = { systemPrompt: "Base prompt", systemPromptOptions: { sections: {} as Record<string, string> } };
+      const result = listeners.before_agent_start(event, {
+        cwd,
+        model: { id: "other/model-x" },
+      });
+
+      expect(result).toBeUndefined();
+      expect(event.systemPromptOptions.sections).toEqual({});
+    }));
+
+  it("falls back to string append when systemPromptOptions is missing (older Pi)", () =>
+    withTempHome((_home, cwd) => {
+      writeFileSync(join(cwd, ".agents", "AGENTS.claude-3-7-sonnet.md"), "Special rules");
+
+      const listeners: Record<string, Function> = {};
+      const pi = asApi({
+        on: vi.fn((event: string, handler: Function) => {
+          listeners[event] = handler;
+        }),
+      });
+      autoModelPrompts(pi);
+
+      listeners.session_start({}, { cwd });
+      const event = { systemPrompt: "Base prompt" };
+      const result = listeners.before_agent_start(event, {
+        cwd,
+        model: { id: "anthropic/claude-3-7-sonnet" },
+      });
 
       expect(result).toEqual({
         systemPrompt: "Base prompt\n\n# AUTO MODEL PROMPT(模型特别规则)\n\nSpecial rules",

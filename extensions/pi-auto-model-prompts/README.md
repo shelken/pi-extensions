@@ -1,6 +1,6 @@
 # pi-auto-model-prompts
 
-按当前模型 ID 读本地 Markdown，在 `before_agent_start` 追加到 system prompt 末尾（标题：`# AUTO MODEL PROMPT(模型特别规则)`）。
+按当前模型 ID 读本地 Markdown，在 `before_agent_start` 注入 system prompt：pi 下写入名为 `auto_model_prompt` 的 prompt section（渲染为 `<auto_model_prompt>…</auto_model_prompt>`，会进入会话记录与 `/export`）；Oh My Pi 下作为 `# AUTO MODEL PROMPT(模型特别规则)` 段落追加到末尾。
 
 ## 功能
 
