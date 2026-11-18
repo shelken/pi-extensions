@@ -44,8 +44,10 @@ just package-login
 just package-first-publish <slug> <publish-commit>
 # 浏览器：login 一次；publish 写 OTP 一次并勾选 skip 2FA for 5 minutes
 
-just package-status <slug>
+just package-status <slug>   # 逐项 ✓/✗：npm 版本、owner、trust、tag、release
 ```
+
+`package-first-publish` 跳过已完成的步骤：publish 成功后中途失败，重跑同一命令即可续传。registry 传播最多等 10 分钟，超时时 publish 与 trust 已完成，按提示只跑 `just package-baseline`。
 
 **禁止：** 拆 `bootstrap`/`trust`/`baseline` 当常规路径；首发前写 changeset（会再顶一版）；默认 `package-auth-clean`。
 
@@ -71,6 +73,8 @@ gh run list --workflow=publish.yml --limit 5
 | 同 job 单包失败 | 只处理失败包 |
 | trust `E409` | 绑定已在，改现有配置勿重复创建 |
 | npm 有版、无 tag/Release | `just package-baseline <slug> <commit>` |
+| 首发等待 registry 超时 | publish 与 trust 已完成，稍后 `just package-baseline <slug> <commit>` |
+| `trust list` 报 `EOTP` | 查询也算写操作认证；status 显示 `?`，2FA 后 5 分钟内重跑可见 |
 
 **补发（仅止血，先修 trust）：**
 
@@ -93,7 +97,7 @@ just package-baseline <slug> <publish-commit>
 - 首发 OTP 弹多次 → 只用 `package-first-publish`，publish 时勾 5 分钟免 2FA。
 - 首发前写了 changeset → 删掉或等首发完成后再写，避免双版本。
 - 登录后又被 auth-clean → 默认保留 `/tmp/.npmrc-user`，除非主动要清。
-- baseline 报版本不存在 / Release 超时 → 等 registry 传播后重试，勿重复 publish。
+- baseline 报版本不存在 / Release 超时 → 等 registry 传播后重试，勿重复 publish。新包实测约 3 分钟才在公开 `npm view` 可见，owner 列表立刻可见。
 
 ---
 
