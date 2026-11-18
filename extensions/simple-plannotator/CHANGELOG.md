@@ -1,5 +1,13 @@
 # @shelken/simple-plannotator
 
+## 0.1.11
+
+### Patch Changes
+
+- [#116](https://github.com/shelken/pi-extensions/pull/116) [`e168d08`](https://github.com/shelken/pi-extensions/commit/e168d0882752e4b5b74cdf854799808d7780067e) Thanks [@shelken](https://github.com/shelken)! - 宿主包的 peerDependencies 改为 `"*"`，与 pi 官方打包规范一致。
+
+- [#118](https://github.com/shelken/pi-extensions/pull/118) [`7f49719`](https://github.com/shelken/pi-extensions/commit/7f49719e0795ca05d9009a0a255970ee9935310d) Thanks [@shelken](https://github.com/shelken)! - 在浏览器里提交审查或标注时，若原会话已被 `/new`、`/resume`、`/reload` 替换，结果会被丢弃，不再因调用失效的会话对象产生未处理 rejection 而让 pi 退出。
+
 ## 0.1.10
 
 ### Patch Changes

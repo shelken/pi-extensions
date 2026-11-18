@@ -1,5 +1,13 @@
 # @shelken/pi-command-history
 
+## 0.1.7
+
+### Patch Changes
+
+- [#120](https://github.com/shelken/pi-extensions/pull/120) [`a6eecd4`](https://github.com/shelken/pi-extensions/commit/a6eecd4c523fa0734863c8bc2d14ab44c04fa039) Thanks [@shelken](https://github.com/shelken)! - 不再把其他扩展通过 `sendUserMessage` 注入的消息记入目录历史，`shift+up/down` 只回填用户自己的输入。
+
+- [#116](https://github.com/shelken/pi-extensions/pull/116) [`e168d08`](https://github.com/shelken/pi-extensions/commit/e168d0882752e4b5b74cdf854799808d7780067e) Thanks [@shelken](https://github.com/shelken)! - 宿主包的 peerDependencies 改为 `"*"`，与 pi 官方打包规范一致。
+
 ## 0.1.6
 
 ### Patch Changes
