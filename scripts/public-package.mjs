@@ -105,8 +105,14 @@ function inspectTarball(pkg) {
   for (const path of paths) console.log(`  ${path}`);
 }
 
+export function firstVersionErrors(manifest, published) {
+  return published === null && manifest.version !== "0.1.0"
+    ? [`首发 version 必须是 0.1.0（当前 ${manifest.version}）`]
+    : [];
+}
+
 function auditPackage(pkg) {
-  const errors = manifestErrors(pkg);
+  const errors = [...manifestErrors(pkg), ...firstVersionErrors(pkg.manifest, registryVersion(pkg.manifest.name))];
   if (errors.length > 0) fail(errors.join("\n"));
 
   run("bun", ["--filter", pkg.manifest.name, "test"]);
@@ -148,16 +154,30 @@ export function packageExists(name, publishedVersion, packages) {
   return Boolean(publishedVersion) || Object.hasOwn(packages, name);
 }
 
+// 新包刚 publish 时公开 npm view 会 404 数分钟，owner 列表立刻可见
+function isOnNpm(pkg, env) {
+  return packageExists(pkg.manifest.name, registryVersion(pkg.manifest.name), ownedPackages(env));
+}
+
 function bootstrapPackage(pkg) {
   auditPackage(pkg);
   const env = npmEnvironment();
-  const published = registryVersion(pkg.manifest.name);
-  const packages = ownedPackages(env);
-  if (packageExists(pkg.manifest.name, published, packages)) {
-    fail(`${pkg.manifest.name} 已存在于 npm (${published ?? packages[pkg.manifest.name]})，不要重复人工首发`);
+  if (isOnNpm(pkg, env)) {
+    fail(`${pkg.manifest.name} 已存在于 npm，不要重复人工首发`);
   }
 
   run("npm", ["publish", `--workspace=${pkg.manifest.name}`, "--access", "public"], { env });
+}
+
+export function hasPublishTrust(trustList) {
+  return trustList.includes("file: publish.yml") && trustList.includes(`repository: ${REPOSITORY}`);
+}
+
+// npm trust list 也要 OTP；只在刚通过 2FA（skip 5 minutes）时查得到，否则返回 null 表示未知
+function isTrusted(pkg, env) {
+  const result = run("npm", ["trust", "list", pkg.manifest.name], { capture: true, allowFailure: true, env });
+  if (result.status !== 0) return null;
+  return hasPublishTrust(result.stdout);
 }
 
 function trustPackage(pkg) {
@@ -178,33 +198,40 @@ function sleepMs(ms) {
   spawnSync("sleep", [String(Math.ceil(ms / 1000))], { stdio: "ignore" });
 }
 
-function waitForRegistryVersion(name, expected, attempts = 12, delayMs = 5000) {
+// 实测新包传播约 3 分钟，留到 10 分钟
+function waitForRegistryVersion(name, expected, resumeHint, attempts = 40, delayMs = 15000) {
   for (let i = 1; i <= attempts; i++) {
     const published = registryVersion(name);
     if (published === expected) return published;
     console.log(`等待 registry 传播 ${name}@${expected}（${i}/${attempts}，当前=${published ?? "无"}）`);
     sleepMs(delayMs);
   }
-  fail(`registry 在超时后仍不是 ${name}@${expected}`);
+  fail(`registry 10 分钟后仍不是 ${name}@${expected}。publish 与 trust 已完成，稍后只补 baseline：${resumeHint}`);
+}
+
+export function firstPublishSteps({ exists, trusted }) {
+  return [...(exists ? [] : ["publish"]), ...(trusted ? [] : ["trust"]), "baseline"];
 }
 
 /**
- * 首发一站式：publish → trust → baseline。
+ * 首发一站式：publish → trust → baseline。已完成的步骤跳过，中途失败后重跑同一命令即可续传。
  * 前提：已 package-login；.changeset 里不要有该包的待发布项（否则随后 release PR 会再 bump 一版）。
  * npm 对 publish/trust 各算一次写操作 2FA：浏览器若出现 “skip 2FA for 5 minutes” 必须勾选，trust 才不二次 OTP。
  */
 function firstPublishPackage(pkg, commit) {
-  npmEnvironment();
+  const env = npmEnvironment();
+  const exists = isOnNpm(pkg, env);
+  const steps = firstPublishSteps({ exists, trusted: exists && isTrusted(pkg, env) });
   console.log(`
-=== 首发 ${pkg.manifest.name}@${pkg.manifest.version} ===
-接下来最多 1 次写操作 OTP（publish）。
+=== 首发 ${pkg.manifest.name}@${pkg.manifest.version}：${steps.join(" → ")} ===
 若浏览器出现 skip 2FA for 5 minutes，务必勾选，这样随后 trust 不用再 OTP。
 不要拆开跑 bootstrap/trust；不要 auth-clean，除非你主动要清登录。
 `);
 
-  bootstrapPackage(pkg);
-  trustPackage(pkg);
-  waitForRegistryVersion(pkg.manifest.name, pkg.manifest.version);
+  if (steps.includes("publish")) bootstrapPackage(pkg);
+  if (steps.includes("trust")) trustPackage(pkg);
+  const resumeHint = `just package-baseline ${pkg.slug} ${resolveCommit(commit)}`;
+  waitForRegistryVersion(pkg.manifest.name, pkg.manifest.version, resumeHint);
   createBaseline(pkg, commit);
   console.log(`${pkg.manifest.name} 首发完成：npm + Trusted Publisher + baseline 已齐`);
 }
@@ -252,25 +279,26 @@ function createBaseline(pkg, commit) {
   console.log(`${tag} baseline 已对齐 ${commitSha}`);
 }
 
+// 逐项列出首发的五个产物，缺哪项一眼可见
 function showStatus(pkg) {
-  const result = run("npm", [
-    "view",
-    pkg.manifest.name,
-    "name",
-    "version",
-    "repository",
-    "license",
-    "dist-tags",
-    "--json",
-  ], { capture: true, allowFailure: true });
-  if (result.status === 0) console.log(result.stdout.trim());
-
+  const name = pkg.manifest.name;
+  const published = registryVersion(name);
+  const loggedIn = existsSync(DEFAULT_USERCONFIG);
   const env = withTempNpmConfig(process.env);
-  const owned = existsSync(DEFAULT_USERCONFIG) && Object.hasOwn(ownedPackages(env), pkg.manifest.name);
-  if (owned) console.log(accessStatus(pkg.manifest.name, env));
+  const owned = loggedIn && Object.hasOwn(ownedPackages(env), name);
+  const tag = published ? `${name}@${published}` : null;
+  const release = tag && run("gh", ["release", "view", tag, "--repo", REPOSITORY], { capture: true, allowFailure: true }).status === 0;
+  const mark = (ok, unknown = false) => (unknown ? "?" : ok ? "✓" : "✗");
 
-  if (result.status !== 0 && !owned) fail(`${pkg.manifest.name} 在 npm 不可见`);
-  if (result.status !== 0) console.log("npm view 尚未传播完成，请等待后重试");
+  console.log(`${mark(published)} npm 公开版本  ${published ?? (owned ? "尚未传播" : "无")}`);
+  console.log(`${mark(owned, !loggedIn)} owner        ${owned ? accessStatus(name, env) : loggedIn ? "不在 shelken 名下" : "未登录，跳过"}`);
+  const trusted = owned ? isTrusted(pkg, env) : false;
+  const trustNote = trusted === null ? "查询需要 OTP，跳过；2FA 后 5 分钟内重跑可见" : `publish.yml @ ${REPOSITORY}`;
+  console.log(`${mark(trusted, !loggedIn || trusted === null)} trust        ${trustNote}`);
+  console.log(`${mark(tag && remoteTagSha(tag))} tag          ${tag ?? "-"}`);
+  console.log(`${mark(release)} release      ${tag ?? "-"}`);
+
+  if (!published && !owned) fail(`${name} 在 npm 不可见`);
 }
 
 function usage() {

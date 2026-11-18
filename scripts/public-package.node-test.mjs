@@ -1,6 +1,14 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { manifestErrors, packageExists, tarballErrors, withTempNpmConfig } from "./public-package.mjs";
+import {
+  firstPublishSteps,
+  firstVersionErrors,
+  hasPublishTrust,
+  manifestErrors,
+  packageExists,
+  tarballErrors,
+  withTempNpmConfig,
+} from "./public-package.mjs";
 
 const validManifest = {
   name: "@shelken/example",
@@ -65,4 +73,23 @@ test("tarballErrors rejects tests and env files", () => {
     "tarball 包含禁止文件: tests/index.test.ts",
     "tarball 包含禁止文件: .env",
   ]);
+});
+
+test("firstVersionErrors requires 0.1.0 only before the first publish", () => {
+  assert.deepEqual(firstVersionErrors({ version: "0.0.0" }, null), ["首发 version 必须是 0.1.0（当前 0.0.0）"]);
+  assert.deepEqual(firstVersionErrors({ version: "0.1.0" }, null), []);
+  assert.deepEqual(firstVersionErrors({ version: "0.3.0" }, "0.2.0"), []);
+});
+
+test("hasPublishTrust recognizes the publish workflow binding", () => {
+  const bound = "type: github\nid: x\nfile: publish.yml\nrepository: shelken/pi-extensions\npermissions: publish, stage publish\n";
+  assert.equal(hasPublishTrust(bound), true);
+  assert.equal(hasPublishTrust(""), false);
+  assert.equal(hasPublishTrust(bound.replace("shelken/pi-extensions", "someone/else")), false);
+});
+
+test("firstPublishSteps resumes after a partial first publish", () => {
+  assert.deepEqual(firstPublishSteps({ exists: false, trusted: false }), ["publish", "trust", "baseline"]);
+  assert.deepEqual(firstPublishSteps({ exists: true, trusted: false }), ["trust", "baseline"]);
+  assert.deepEqual(firstPublishSteps({ exists: true, trusted: true }), ["baseline"]);
 });
