@@ -1,6 +1,6 @@
 {
   "name": "@shelken/pi-background-lean",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "description": "pi-background 的 lean 包装：执行逻辑沿用上游，只精简模型可见的描述与规则",
   "type": "module",
   "license": "MIT",
