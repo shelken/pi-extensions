@@ -12,7 +12,7 @@
 | `pi-command-history` | `@shelken/pi-command-history` | 按工作目录持久化输入历史，支持快捷键回填。 |
 | `pi-status-bar` | `@shelken/pi-status-bar` | 编辑器上方一行状态条（模型、思考、目录、上下文、分支、缓存、费用），下方显示上一条提示；不替换编辑器。 |
 | `pi-dynamic-models` | `@shelken/pi-dynamic-models` | 自动发现 provider 远端模型，并用 models.dev registry 补全模型参数。 |
-| `pi-guard` | `@shelken/pi-guard` | 硬禁 agent 危险 bash 与机密路径读写。 |
+| `pi-guard` | `@shelken/pi-guard` | **已归档**：源码已从本仓删除。guard 改由 [shelken/nix-config](https://github.com/shelken/nix-config) 的 `modules/features/ai/omp/extensions/guard` 维护，pi 与 Oh My Pi 共用。 |
 | `pi-inline-skills` | `@shelken/pi-inline-skills` | 输入 `/` 时内联补全 skill，并自动展开已加载 skill 内容。 |
 | `pi-title` | `@shelken/pi-title` | **弃用**：已禁用入口。曾复用 session 缓存前缀自动生成会话标题。 |
 | `simple-plannotator` | `@shelken/simple-plannotator` | 基于浏览器的代码审查和 Markdown 标注（`/pnr` `/pna` `/pnl`）。 |

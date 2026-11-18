@@ -26,7 +26,6 @@
     "extensions": [
       "./extensions/pi-auto-model-prompts/src/index.ts",
       "./extensions/pi-dynamic-models/src/index.ts",
-      "./extensions/pi-guard/src/index.ts",
       "./extensions/pi-inline-skills/src/index.ts",
       "./extensions/pi-co-authored-by/src/index.ts",
       "./extensions/pi-command-history/src/index.ts",
