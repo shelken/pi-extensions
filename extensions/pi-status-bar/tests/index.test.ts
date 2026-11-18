@@ -12,13 +12,17 @@ const theme = { fg: (_tone: string, text: string) => text };
 const strip = (s: string) => s.replace(/\x1b\[[0-9;]*m/g, "");
 const tui = { requestRender: vi.fn() };
 
-async function setup(entries: any[], settings: { statusBar?: unknown } = {}) {
+async function setup(
+  entries: any[],
+  settings: { statusBar?: unknown } = {},
+  exec: () => Promise<unknown> = async () => ({ code: 0, stdout: " M a\n?? b\n", stderr: "" }),
+) {
   const handlers = new Map<string, (...args: any[]) => void>();
   const pi = asApi({
     on: (name: string, fn: (...args: any[]) => void) => handlers.set(name, fn),
     getThinkingLevel: () => "high",
     getSettings: () => settings,
-    exec: async () => ({ code: 0, stdout: " M a\n?? b\n", stderr: "" }),
+    exec,
   });
   const widgets = new Map<string, { factory: any; options?: any }>();
   const notify = vi.fn();
@@ -66,16 +70,28 @@ describe("pi-status-bar", () => {
     expect(render("status-bar")).toEqual([]);
   });
 
-  it("非法 order 项：警告一次并在 TUI 提示，合法项照常生效", async () => {
+  it("非法 order 项：只在 TUI 提示，不写 stderr，合法项照常生效", async () => {
     const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
     try {
       const { notify, render } = await setup([], { statusBar: { order: ["dir", "nope"] } });
       expect(strip(render("status-bar")[0])).toBe(" \uF115 demo");
-      expect(warn).toHaveBeenCalledWith('[status-bar] 忽略无效的 statusBar.order 项: "nope"');
+      expect(warn).not.toHaveBeenCalled();
       expect(notify).toHaveBeenCalledWith('忽略无效的 statusBar.order 项: "nope"', "warning");
     } finally {
       warn.mockRestore();
     }
+  });
+
+  it("git 状态在 agent_settled 刷新，agent_end 不刷新", async () => {
+    const exec = vi.fn(async () => ({ code: 0, stdout: "", stderr: "" }));
+    const { handlers } = await setup([], {}, exec);
+    const n = exec.mock.calls.length;
+    handlers.get("agent_end")?.();
+    await Promise.resolve();
+    expect(exec).toHaveBeenCalledTimes(n);
+    handlers.get("agent_settled")!({ type: "agent_settled", aborted: false });
+    await Promise.resolve();
+    expect(exec).toHaveBeenCalledTimes(n + 1);
   });
 
   it("上一条提示来自会话分支，并随新用户消息更新；放在编辑器下方", async () => {
