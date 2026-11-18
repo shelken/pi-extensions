@@ -35,7 +35,7 @@
       "./extensions/simple-plannotator/src/index.ts",
       "./extensions/copy-cut/src/index.ts",
       "./extensions/pi-sounds/src/index.ts",
-      "./extensions/pi-background-lean/src/index.ts"
+      "-./extensions/pi-background-lean/src/index.ts"
     ]
   },
   "devDependencies": {

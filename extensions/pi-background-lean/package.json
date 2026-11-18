@@ -16,7 +16,7 @@
     "access": "public"
   },
   "scripts": {
-    "test": "vitest run"
+    "test": "echo pi-background-lean 已停用（冻结）测试已跳过"
   },
   "keywords": [
     "pi-package",

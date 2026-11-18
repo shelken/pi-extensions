@@ -55,6 +55,11 @@
       "groupName": "插件 runtime 依赖",
       "groupSlug": "runtime",
       "automerge": true
+    },
+    {
+      "description": "冻结（停用不删）的子包不再升级依赖，否则会自动生成 changeset 并发新版；清单与 vitest.config.ts 的 frozenExcludes 保持一致",
+      "matchFileNames": ["extensions/pi-background-lean/**"],
+      "enabled": false
     }
   ],
   "schedule": ["before 6am on monday"],
