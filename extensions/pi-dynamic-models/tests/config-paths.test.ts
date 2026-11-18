@@ -41,7 +41,7 @@ describe("pi-dynamic-models extension", () => {
 
 describe("pi-dynamic-models config paths", () => {
   it("uses the standard global and project extension config paths", () => {
-    expect(getConfigPaths("/repo/app", "/home/me")).toEqual([
+    expect(getConfigPaths("/repo/app", "/home/me/.pi/agent")).toEqual([
       "/home/me/.pi/agent/extensions/pi-dynamic-models/config.json",
       "/repo/app/.pi/extensions/pi-dynamic-models/config.json",
     ]);
