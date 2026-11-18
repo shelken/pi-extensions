@@ -38,8 +38,6 @@
     ]
   },
   "devDependencies": {
-    "@earendil-works/pi-coding-agent": "latest",
-    "@earendil-works/pi-tui": "latest",
     "bun-types": "latest",
     "typescript": "latest",
     "vitest": "latest"
