@@ -69,7 +69,6 @@ export default function statusBar(pi: ExtensionAPI) {
 		order = config.order;
 		if (config.invalid.length) {
 			const message = describeInvalidSegments(config.invalid);
-			console.warn(`[status-bar] ${message}`);
 			context.ui.notify(message, "warning");
 		}
 		lastPrompt = lastPromptOf(context);
@@ -138,7 +137,7 @@ export default function statusBar(pi: ExtensionAPI) {
 		requestRender();
 	});
 	pi.on("message_end", () => requestRender());
-	pi.on("agent_end", () => {
+	pi.on("agent_settled", () => {
 		if (ctx) void refreshGit(ctx.cwd);
 	});
 	pi.on("model_select", () => requestRender());
