@@ -2,7 +2,6 @@ import { homedir } from "node:os";
 import { join, resolve } from "node:path";
 import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
-import { getAgentDir } from "@earendil-works/pi-coding-agent";
 
 declare const Bun:
   | {
@@ -11,16 +10,13 @@ declare const Bun:
     }
   | undefined;
 
-// ============================================================================
-// 类型与接口定义 (Types)
-// ============================================================================
-
 export interface NormalizedSound {
   path: string;
   volume?: number;
 }
 
 export interface Context {
+  hasUI?: boolean;
   ui: { notify(message: string, type: "info" | "warning" | "error"): void };
 }
 
@@ -34,12 +30,29 @@ export interface ExtensionAPI {
   getSettings?(): Record<string, unknown>;
 }
 
-// ============================================================================
-// 扩展主体 (Extension)
-// ============================================================================
+function expandHome(inputPath: string): string {
+  if (inputPath === "~") return homedir();
+  if (inputPath.startsWith("~/")) return resolve(homedir(), inputPath.slice(2));
+  return inputPath;
+}
+
+function getAgentConfigDir(isPiHost: boolean): string {
+  const envDir = isPiHost ? process.env.PI_CODING_AGENT_DIR : process.env.OMP_AGENT_DIR;
+  if (envDir && envDir.trim().length > 0) {
+    return expandHome(envDir.trim());
+  }
+  return resolve(homedir(), isPiHost ? ".pi/agent" : ".omp/agent");
+}
+
+function safeNotify(ctx: Context, message: string, type: "info" | "warning" | "error"): void {
+  try {
+    ctx.ui.notify(message, type);
+  } catch {
+    // 宿主在会话退出/替换/重载后会使旧 ctx 失效，异步回调此时静默忽略通知
+  }
+}
 
 export default function sounds(pi: ExtensionAPI): void {
-  // 子代理会话（如 omp 中的嵌套代理）不重复加载提示音
   if (process.env.OMPCODE === "1") return;
 
   const isPiHost = typeof pi.getSettings === "function";
@@ -48,14 +61,7 @@ export default function sounds(pi: ExtensionAPI): void {
   let activeSound: NormalizedSound | false = { path: defaultSoundPath };
   let configSource = "默认内置 (done.mp3)";
 
-  /**
-   * 优雅解析配置：
-   * - 正常运行时优先读取宿主已解析好的设置（零磁盘 I/O）
-   * - 显式 reload 时或 omp 环境下直接读取磁盘文件
-   * - 未配置时直接采用默认内置 done.mp3（开箱即用，零配置要求）
-   */
   async function resolveSoundConfig(fromDisk = false): Promise<{ source: string; raw: unknown }> {
-    // 1. Pi 环境优先读取宿主内存设置（如果不是强制读盘）
     if (isPiHost && !fromDisk) {
       try {
         const settings = pi.getSettings?.();
@@ -70,9 +76,8 @@ export default function sounds(pi: ExtensionAPI): void {
       }
     }
 
-    // 2. 磁盘文件读取（omp 环境，或 pi 环境下显式 /sounds reload）
     try {
-      const dir = typeof getAgentDir === "function" ? getAgentDir() : resolve(homedir(), isPiHost ? ".pi/agent" : ".omp/agent");
+      const dir = getAgentConfigDir(isPiHost);
       const configFileName = isPiHost ? "settings.json" : "config.yml";
       const configPath = join(dir, configFileName);
 
@@ -100,24 +105,17 @@ export default function sounds(pi: ExtensionAPI): void {
     }
   }
 
-  /**
-   * 规范化音效配置
-   */
   async function reload(fromDisk = false): Promise<void> {
     const { source, raw } = await resolveSoundConfig(fromDisk);
     configSource = source;
 
-    // 显式配置为 false，表示关闭提示音
     if (raw === false) {
       activeSound = false;
       return;
     }
 
-    // 未配置时的默认内置音效（开箱即用，原始 100% 音量）
     if (raw === undefined || raw === null) {
-      activeSound = {
-        path: defaultSoundPath,
-      };
+      activeSound = { path: defaultSoundPath };
       return;
     }
 
@@ -144,32 +142,28 @@ export default function sounds(pi: ExtensionAPI): void {
         volume = raw.volume;
       }
 
-      activeSound = {
-        path: trimmed,
-        volume,
-      };
+      activeSound = { path: trimmed, volume };
       return;
     }
 
     throw new Error("agent_end 必须是音频路径、{ path, volume? } 或 false");
   }
 
-  /**
-   * 播放音效（纯异步非阻塞执行）
-   */
-  async function play(ctx: Context): Promise<void> {
+  async function play(ctx: Context, options?: { interactive?: boolean }): Promise<void> {
     if (activeSound === false) return;
 
-    try {
-      if (process.platform !== "darwin") {
-        throw new Error("提示音目前支持 macOS afplay");
+    if (process.platform !== "darwin") {
+      if (options?.interactive) {
+        safeNotify(ctx, "提示音目前仅支持 macOS afplay", "error");
       }
+      return;
+    }
 
+    try {
       const { path, volume } = activeSound;
-      const baseDir = typeof getAgentDir === "function" ? getAgentDir() : homedir();
-      const expandedPath = path.startsWith("~/")
-        ? resolve(homedir(), path.slice(2))
-        : resolve(baseDir, path);
+      const expandedPath = path.startsWith("~/") || path === "~"
+        ? expandHome(path)
+        : resolve(getAgentConfigDir(isPiHost), path);
 
       const args = volume === undefined ? [expandedPath] : ["-v", String(volume), expandedPath];
       const result = await pi.exec("/usr/bin/afplay", args, { timeout: 5000 });
@@ -177,32 +171,28 @@ export default function sounds(pi: ExtensionAPI): void {
         throw new Error(result.stderr?.trim() || `afplay 退出码 ${result.code}`);
       }
     } catch (error) {
-      ctx.ui.notify(`提示音播放失败：${String(error)}`, "error");
+      safeNotify(ctx, `提示音播放失败：${String(error)}`, "error");
     }
   }
 
-  async function safeLoad(ctx: Context, fromDisk = false): Promise<void> {
+  async function safeLoad(ctx: Context, fromDisk = false): Promise<boolean> {
     try {
       await reload(fromDisk);
+      return true;
     } catch (error) {
       activeSound = false;
-      ctx.ui.notify(`提示音配置异常：${String(error)}`, "error");
+      safeNotify(ctx, `提示音配置异常：${String(error)}`, "error");
+      return false;
     }
   }
-
-  // --------------------------------------------------------------------------
-  // 生命周期事件注册
-  // --------------------------------------------------------------------------
 
   pi.on("session_start", async (_event, ctx) => {
     await safeLoad(ctx, false);
   });
 
-  // 根据宿主精准监听完成事件：
-  // 1. Pi 环境监听 agent_settled：重试、压缩和排队消息完全处理完毕后触发
-  // 2. OMP 环境监听 agent_end：通过 willContinue 过滤多轮迭代
   if (isPiHost) {
     pi.on("agent_settled", (event: unknown, ctx: Context) => {
+      if (ctx.hasUI === false) return;
       if (typeof event === "object" && event !== null && "aborted" in event && event.aborted === true) {
         return;
       }
@@ -210,6 +200,7 @@ export default function sounds(pi: ExtensionAPI): void {
     });
   } else {
     pi.on("agent_end", (event: unknown, ctx: Context) => {
+      if (ctx.hasUI === false) return;
       if (typeof event === "object" && event !== null && "willContinue" in event && event.willContinue === true) {
         return;
       }
@@ -217,31 +208,31 @@ export default function sounds(pi: ExtensionAPI): void {
     });
   }
 
-  // --------------------------------------------------------------------------
-  // 斜杠命令支持
-  // --------------------------------------------------------------------------
-
   pi.registerCommand("sounds", {
     description: "提示音：test 试听、list 查看、reload 重载配置",
     async handler(args, ctx) {
       switch (args.trim()) {
         case "":
         case "list":
-          ctx.ui.notify(
+          safeNotify(
+            ctx,
             `配置来源: ${configSource}\nagent_end: ${activeSound ? JSON.stringify(activeSound) : "已禁用 (false)"}`,
             "info"
           );
           return;
-        case "reload":
-          await safeLoad(ctx, true);
-          ctx.ui.notify(`提示音配置已重新加载 (${configSource})`, "info");
+        case "reload": {
+          const ok = await safeLoad(ctx, true);
+          if (ok) {
+            safeNotify(ctx, `提示音配置已重新加载 (${configSource})`, "info");
+          }
           return;
+        }
         case "test":
         case "agent_end":
-          void play(ctx);
+          void play(ctx, { interactive: true });
           return;
         default:
-          ctx.ui.notify("用法：/sounds [test | list | reload | agent_end]", "warning");
+          safeNotify(ctx, "用法：/sounds [test | list | reload | agent_end]", "warning");
       }
     },
   });
