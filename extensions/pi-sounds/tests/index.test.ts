@@ -166,12 +166,14 @@ describe("pi-sounds 扩展", () => {
     Object.defineProperty(process, "platform", { value: "darwin", configurable: true });
     const handlers: Record<string, Function> = {};
     let rejectExec!: (err: Error) => void;
-    const execMock = vi.fn(
-      () =>
-        new Promise<{ code: number; stderr?: string }>((_resolve, reject) => {
-          rejectExec = reject;
-        })
-    );
+    const execMock = vi.fn((command: string) => {
+      if (command === "/usr/sbin/ioreg") {
+        return Promise.resolve({ code: 0, stdout: '      "System Capabilities" = 15\n', stderr: "" });
+      }
+      return new Promise<{ code: number; stderr?: string }>((_resolve, reject) => {
+        rejectExec = reject;
+      });
+    });
 
     const piMock = {
       on: (event: string, handler: Function) => {
@@ -200,6 +202,7 @@ describe("pi-sounds 扩展", () => {
     try {
       await handlers.session_start({}, ctx);
       handlers.agent_settled({}, ctx);
+      await new Promise((r) => setTimeout(r, 10));
       stale = true;
       rejectExec(new Error("afplay terminated"));
       await new Promise((r) => setTimeout(r, 20));
@@ -323,6 +326,177 @@ describe("pi-sounds 扩展", () => {
       if (prevPiDir === undefined) delete process.env.PI_CODING_AGENT_DIR;
       else process.env.PI_CODING_AGENT_DIR = prevPiDir;
       rmSync(piDir, { recursive: true, force: true });
+    }
+  });
+
+  it("macOS 暗唤醒无音频能力位时跳过 afplay 并降级终端响铃", async () => {
+    const originalPlatform = Object.getOwnPropertyDescriptor(process, "platform")!;
+    Object.defineProperty(process, "platform", { value: "darwin", configurable: true });
+    const originalIsTTY = Object.getOwnPropertyDescriptor(process.stdout, "isTTY");
+    Object.defineProperty(process.stdout, "isTTY", { value: true, configurable: true });
+    const writeSpy = vi.spyOn(process.stdout, "write").mockReturnValue(true);
+
+    try {
+      const handlers: Record<string, Function> = {};
+      let commandDef: any = null;
+      const execMock = vi.fn((command: string) => {
+        if (command === "/usr/sbin/ioreg") {
+          return Promise.resolve({ code: 0, stdout: '      "System Capabilities" = 9\n', stderr: "" });
+        }
+        return Promise.resolve({ code: 0, stderr: "" });
+      });
+
+      const piMock = {
+        on: (event: string, handler: Function) => {
+          handlers[event] = handler;
+        },
+        registerCommand: (_name: string, def: any) => {
+          commandDef = def;
+        },
+        exec: execMock,
+        getSettings: () => ({}),
+      };
+
+      factory(piMock as any);
+      const notify = vi.fn();
+      const ctx = { hasUI: true, ui: { notify } };
+
+      await handlers.session_start({}, ctx);
+      handlers.agent_settled({}, ctx);
+      await new Promise((r) => setTimeout(r, 15));
+
+      expect(execMock).toHaveBeenCalledWith("/usr/sbin/ioreg", ["-r", "-c", "IOPMrootDomain", "-d", "1"], { timeout: 1000 });
+      expect(execMock).not.toHaveBeenCalledWith("/usr/bin/afplay", expect.anything(), expect.anything());
+      expect(writeSpy).toHaveBeenCalledWith("\x07");
+      expect(notify).not.toHaveBeenCalled();
+
+      await commandDef.handler("test", ctx);
+      await new Promise((r) => setTimeout(r, 15));
+      expect(notify).toHaveBeenCalledWith(expect.stringContaining("暗唤醒"), "info");
+    } finally {
+      writeSpy.mockRestore();
+      if (originalIsTTY) Object.defineProperty(process.stdout, "isTTY", originalIsTTY);
+      else Reflect.deleteProperty(process.stdout, "isTTY");
+      Object.defineProperty(process, "platform", originalPlatform);
+    }
+  });
+
+  it("macOS 具备音频能力位（含合盖外接亮屏）时正常调用 afplay", async () => {
+    const originalPlatform = Object.getOwnPropertyDescriptor(process, "platform")!;
+    Object.defineProperty(process, "platform", { value: "darwin", configurable: true });
+    const prevSsh = process.env.SSH_CONNECTION;
+    delete process.env.SSH_CONNECTION;
+
+    try {
+      const handlers: Record<string, Function> = {};
+      const execMock = vi.fn((command: string) => {
+        if (command === "/usr/sbin/ioreg") {
+          return Promise.resolve({ code: 0, stdout: '      "System Capabilities" = 15\n', stderr: "" });
+        }
+        return Promise.resolve({ code: 0, stderr: "" });
+      });
+
+      const piMock = {
+        on: (event: string, handler: Function) => {
+          handlers[event] = handler;
+        },
+        registerCommand: vi.fn(),
+        exec: execMock,
+        getSettings: () => ({}),
+      };
+
+      factory(piMock as any);
+      const ctx = { hasUI: true, ui: { notify: vi.fn() } };
+
+      await handlers.session_start({}, ctx);
+      handlers.agent_settled({}, ctx);
+      await new Promise((r) => setTimeout(r, 15));
+
+      expect(execMock).toHaveBeenCalledWith("/usr/bin/afplay", [expect.stringContaining("done.mp3")], { timeout: 5000 });
+    } finally {
+      if (prevSsh !== undefined) process.env.SSH_CONNECTION = prevSsh;
+      Object.defineProperty(process, "platform", originalPlatform);
+    }
+  });
+
+  it("SSH 会话下跳过远端 afplay 并降级终端响铃", async () => {
+    const originalPlatform = Object.getOwnPropertyDescriptor(process, "platform")!;
+    Object.defineProperty(process, "platform", { value: "darwin", configurable: true });
+    const originalIsTTY = Object.getOwnPropertyDescriptor(process.stdout, "isTTY");
+    Object.defineProperty(process.stdout, "isTTY", { value: true, configurable: true });
+    const writeSpy = vi.spyOn(process.stdout, "write").mockReturnValue(true);
+    const prevSsh = process.env.SSH_CONNECTION;
+    process.env.SSH_CONNECTION = "10.0.0.2 54321 10.0.0.1 22";
+
+    try {
+      const handlers: Record<string, Function> = {};
+      const execMock = vi.fn();
+      const piMock = {
+        on: (event: string, handler: Function) => {
+          handlers[event] = handler;
+        },
+        registerCommand: vi.fn(),
+        exec: execMock,
+        getSettings: () => ({}),
+      };
+
+      factory(piMock as any);
+      const notify = vi.fn();
+      const ctx = { hasUI: true, ui: { notify } };
+
+      await handlers.session_start({}, ctx);
+      handlers.agent_settled({}, ctx);
+      await new Promise((r) => setTimeout(r, 15));
+
+      expect(execMock).not.toHaveBeenCalled();
+      expect(writeSpy).toHaveBeenCalledWith("\x07");
+      expect(notify).not.toHaveBeenCalled();
+    } finally {
+      writeSpy.mockRestore();
+      if (originalIsTTY) Object.defineProperty(process.stdout, "isTTY", originalIsTTY);
+      else Reflect.deleteProperty(process.stdout, "isTTY");
+      if (prevSsh === undefined) delete process.env.SSH_CONNECTION;
+      else process.env.SSH_CONNECTION = prevSsh;
+      Object.defineProperty(process, "platform", originalPlatform);
+    }
+  });
+
+  it("afplay 超时被终止（退出码 143）时给出明确的超时提示", async () => {
+    const originalPlatform = Object.getOwnPropertyDescriptor(process, "platform")!;
+    Object.defineProperty(process, "platform", { value: "darwin", configurable: true });
+    const prevSsh = process.env.SSH_CONNECTION;
+    delete process.env.SSH_CONNECTION;
+
+    try {
+      const handlers: Record<string, Function> = {};
+      const execMock = vi.fn((command: string) => {
+        if (command === "/usr/sbin/ioreg") {
+          return Promise.resolve({ code: 0, stdout: '      "System Capabilities" = 15\n', stderr: "" });
+        }
+        return Promise.resolve({ code: 143, stderr: "", killed: true });
+      });
+
+      const piMock = {
+        on: (event: string, handler: Function) => {
+          handlers[event] = handler;
+        },
+        registerCommand: vi.fn(),
+        exec: execMock,
+        getSettings: () => ({}),
+      };
+
+      factory(piMock as any);
+      const notify = vi.fn();
+      const ctx = { hasUI: true, ui: { notify } };
+
+      await handlers.session_start({}, ctx);
+      handlers.agent_settled({}, ctx);
+      await new Promise((r) => setTimeout(r, 15));
+
+      expect(notify).toHaveBeenCalledWith(expect.stringContaining("播放超时"), "error");
+    } finally {
+      if (prevSsh !== undefined) process.env.SSH_CONNECTION = prevSsh;
+      Object.defineProperty(process, "platform", originalPlatform);
     }
   });
 });
