@@ -1,6 +1,6 @@
 {
   "name": "@shelken/pi-sounds",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Agent 任务完成/事件提示音扩展，内置轻量提示音，开箱即用，支持 macOS afplay 原生播放与自定义配置",
   "type": "module",
   "license": "MIT",
