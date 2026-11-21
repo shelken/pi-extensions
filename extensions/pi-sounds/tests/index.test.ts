@@ -162,6 +162,8 @@ describe("pi-sounds 扩展", () => {
   });
 
   it("异步播放失败且 ctx.ui 已 stale 时不抛出未捕获异常", async () => {
+    const originalPlatform = Object.getOwnPropertyDescriptor(process, "platform")!;
+    Object.defineProperty(process, "platform", { value: "darwin", configurable: true });
     const handlers: Record<string, Function> = {};
     let rejectExec!: (err: Error) => void;
     const execMock = vi.fn(
@@ -204,10 +206,13 @@ describe("pi-sounds 扩展", () => {
       expect(unhandled).toHaveLength(0);
     } finally {
       process.off("unhandledRejection", onUnhandled);
+      Object.defineProperty(process, "platform", originalPlatform);
     }
   });
 
   it("OMP 环境下从 OMP_AGENT_DIR/config.yml 读取配置而非 PI_CODING_AGENT_DIR", async () => {
+    const originalPlatform = Object.getOwnPropertyDescriptor(process, "platform")!;
+    Object.defineProperty(process, "platform", { value: "darwin", configurable: true });
     const prevOmpDir = process.env.OMP_AGENT_DIR;
     const prevPiDir = process.env.PI_CODING_AGENT_DIR;
     const ompDir = mkdtempSync(join(tmpdir(), "pi-sounds-omp-"));
@@ -237,6 +242,7 @@ describe("pi-sounds 扩展", () => {
 
       expect(execMock).not.toHaveBeenCalled();
     } finally {
+      Object.defineProperty(process, "platform", originalPlatform);
       if (prevOmpDir === undefined) delete process.env.OMP_AGENT_DIR;
       else process.env.OMP_AGENT_DIR = prevOmpDir;
       if (prevPiDir === undefined) delete process.env.PI_CODING_AGENT_DIR;
