@@ -22,12 +22,36 @@ export interface Context {
 
 export interface ExtensionAPI {
   on(event: string, handler: (event: unknown, ctx: Context) => Promise<void> | void): void;
-  exec(command: string, args: string[], options: { timeout: number }): Promise<{ code: number; stderr?: string }>;
+  exec(
+    command: string,
+    args: string[],
+    options: { timeout: number }
+  ): Promise<{ code: number; stdout?: string; stderr?: string; killed?: boolean }>;
   registerCommand(name: string, command: {
     description: string;
     handler(args: string, ctx: Context): Promise<void>;
   }): void;
   getSettings?(): Record<string, unknown>;
+}
+
+// IOKit kIOPMSystemCapabilityAudio
+const IOPM_SYSTEM_CAPABILITY_AUDIO = 0x04;
+
+function parseSystemCapabilities(ioregOutput: string): number | undefined {
+  const match = /^\s*"System Capabilities"\s*=\s*(\d+)/m.exec(ioregOutput);
+  if (!match) return undefined;
+  const value = Number.parseInt(match[1], 10);
+  return Number.isNaN(value) ? undefined : value;
+}
+
+function isSshSession(): boolean {
+  return Boolean(process.env.SSH_CONNECTION || process.env.SSH_TTY || process.env.SSH_CLIENT);
+}
+
+function ringTerminalBell(): void {
+  if (process.stdout.isTTY) {
+    process.stdout.write("\x07");
+  }
 }
 
 function expandHome(inputPath: string): string {
@@ -149,12 +173,40 @@ export default function sounds(pi: ExtensionAPI): void {
     throw new Error("agent_end 必须是音频路径、{ path, volume? } 或 false");
   }
 
+  async function hasMacOSAudioCapability(): Promise<boolean> {
+    try {
+      const result = await pi.exec("/usr/sbin/ioreg", ["-r", "-c", "IOPMrootDomain", "-d", "1"], { timeout: 1000 });
+      if (result.code !== 0 || !result.stdout) return true;
+      const caps = parseSystemCapabilities(result.stdout);
+      if (caps === undefined) return true;
+      return (caps & IOPM_SYSTEM_CAPABILITY_AUDIO) !== 0;
+    } catch {
+      return true;
+    }
+  }
+
   async function play(ctx: Context, options?: { interactive?: boolean }): Promise<void> {
     if (activeSound === false) return;
 
     if (process.platform !== "darwin") {
       if (options?.interactive) {
         safeNotify(ctx, "提示音目前仅支持 macOS afplay", "error");
+      }
+      return;
+    }
+
+    if (isSshSession()) {
+      ringTerminalBell();
+      if (options?.interactive) {
+        safeNotify(ctx, "当前为 SSH 会话，已降级为终端响铃", "info");
+      }
+      return;
+    }
+
+    if (!(await hasMacOSAudioCapability())) {
+      ringTerminalBell();
+      if (options?.interactive) {
+        safeNotify(ctx, "当前系统处于暗唤醒/无音频状态，已降级为终端响铃", "info");
       }
       return;
     }
@@ -168,7 +220,14 @@ export default function sounds(pi: ExtensionAPI): void {
       const args = volume === undefined ? [expandedPath] : ["-v", String(volume), expandedPath];
       const result = await pi.exec("/usr/bin/afplay", args, { timeout: 5000 });
       if (result.code !== 0) {
-        throw new Error(result.stderr?.trim() || `afplay 退出码 ${result.code}`);
+        const stderr = result.stderr?.trim();
+        if (stderr) {
+          throw new Error(stderr);
+        }
+        if (result.killed || result.code === 143) {
+          throw new Error(`afplay 播放超时（退出码 ${result.code}）`);
+        }
+        throw new Error(`afplay 退出码 ${result.code}`);
       }
     } catch (error) {
       safeNotify(ctx, `提示音播放失败：${String(error)}`, "error");
