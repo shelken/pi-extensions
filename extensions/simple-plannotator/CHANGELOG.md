@@ -1,5 +1,11 @@
 # @shelken/simple-plannotator
 
+## 0.1.12
+
+### Patch Changes
+
+- [#135](https://github.com/shelken/pi-extensions/pull/135) [`f03d396`](https://github.com/shelken/pi-extensions/commit/f03d396d866d8bf1dbee68b0f8659a299d554b96) Thanks [@renovate](https://github.com/apps/renovate)! - fix(deps): update dependency @plannotator/pi-extension to ^0.29.1
+
 ## 0.1.11
 
 ### Patch Changes
